@@ -1,0 +1,2 @@
+[env]
+LLVM_PROFILE_FILE = { value = "target/llvm-cov-profraw/%m_%p.profraw", relative = true }

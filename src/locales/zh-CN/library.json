@@ -1,0 +1,251 @@
+{
+  "start": {
+    "openWorkspace": "打开工作区",
+    "createWorkspace": "创建工作区",
+    "createReadWrite": "读写工作区",
+    "createReadOnlyWorkspace": "只读工作区",
+    "readOnlyBadge": "只读",
+    "workspacesHeading": "工作区",
+    "pathNotFound": "路径未找到",
+    "removeWorkspace": "移除工作区"
+  },
+  "nav": {
+    "library": "图库",
+    "collection": "收藏夹",
+    "closeWorkspace": "关闭工作区"
+  },
+  "panel": {
+    "library": "图库",
+    "collections": "收藏夹",
+    "albums": "相册",
+    "tags": "标签",
+    "trash": "废纸篓",
+    "deleted": "已删除",
+    "addFolder": "添加文件夹",
+    "connectSmb": "连接 SMB 共享",
+    "newAlbum": "新建相册",
+    "newTag": "新建标签",
+    "newSubtag": "新建子标签",
+    "addSubtag": "添加子标签",
+    "sync": "同步",
+    "relink": "重新定位来源",
+    "badge": {
+      "localFolder": "本地文件夹",
+      "networkSource": "网络来源",
+      "album": "相册",
+      "tag": "标签",
+      "subtag": "子标签",
+      "smartCollection": "收藏夹",
+      "trash": "废纸篓"
+    },
+    "offline": "离线",
+    "items_one": "{{count}} 项",
+    "items_other": "{{count}} 项",
+    "empty": {
+      "sources": "尚无来源",
+      "albums": "尚无相册",
+      "tags": "尚无标签",
+      "collections": "保存筛选条件以创建收藏夹"
+    },
+    "placeholder": {
+      "newAlbum": "新建相册",
+      "newTag": "新建标签",
+      "newSubtag": "新建子标签"
+    }
+  },
+  "filters": {
+    "rating": "星级",
+    "ratingMin": {
+      "1": "★+",
+      "3": "★★★+",
+      "5": "★★★★★"
+    },
+    "sync": "同步",
+    "delete": "删除状态",
+    "camera": "相机",
+    "tag": "标签",
+    "album": "相册",
+    "metadata": "元数据",
+    "date": "日期",
+    "gps": "GPS",
+    "duplicate": "重复",
+    "syncStatus": {
+      "ok": "已同步",
+      "new": "新增",
+      "modified": "已修改",
+      "missing": "缺失"
+    },
+    "deleteStatus": {
+      "deleted": "已删除"
+    },
+    "gpsHasLocation": "有位置信息",
+    "duplicateHas": "有重复项"
+  },
+  "toolbar": {
+    "saveAsCollection": "保存为收藏夹",
+    "slideshow": "幻灯片",
+    "slideshowTitle": "幻灯片 (F12)",
+    "export": "导出"
+  },
+  "stamp": {
+    "label": "快标",
+    "configure": "配置快标",
+    "armed": "快标已启用 — 按 Space 应用",
+    "configuration": "快标配置",
+    "rating": "星级",
+    "tags": "标签",
+    "albums": "相册",
+    "noTags": "无标签",
+    "noAlbums": "无相册"
+  },
+  "statusBar": {
+    "library": "图库",
+    "status": "状态",
+    "ready": "就绪",
+    "working": "处理中",
+    "selected_one": "已选择 {{count}} 项",
+    "selected_other": "已选择 {{count}} 项",
+    "scanning": "正在扫描 {{counts}}",
+    "cataloging": "正在编目 {{counts}}",
+    "generatingPreviews": "正在生成预览 {{counts}}",
+    "exportProgress": "导出 {{done}}/{{total}}",
+    "exportFileProgress": "导出 {{message}}：{{fileName}} {{done}}/{{total}}",
+    "scanningSources_one": "正在扫描 {{count}} 个来源",
+    "scanningSources_other": "正在扫描 {{count}} 个来源",
+    "offline_one": "{{count}} 个来源离线",
+    "offline_other": "{{count}} 个来源离线",
+    "missing_one": "{{count}} 个文件缺失",
+    "missing_other": "{{count}} 个文件缺失"
+  },
+  "inspector": {
+    "metadata": "元数据",
+    "searchMetadata": "搜索元数据",
+    "fileKeywords": "文件关键词",
+    "linkedFiles": "关联文件",
+    "duplicates": "重复项",
+    "purge": "永久删除",
+    "noMetadata": "无元数据",
+    "noMatchingMetadata": "无匹配的元数据",
+    "activity": "活动记录"
+  },
+  "activity": {
+    "asset_metadata_changed": "星级已更改",
+    "asset_tags_added": "已添加标签",
+    "asset_tags_removed": "已移除标签",
+    "asset_soft_deleted": "已移至回收站",
+    "asset_restored": "已恢复",
+    "asset_purged": "已从磁盘删除",
+    "asset_discovered": "已发现",
+    "asset_modified": "文件已修改",
+    "asset_missing": "文件缺失",
+    "scan_completed": "扫描完成",
+    "export_completed": "导出完成",
+    "catalog_rebuilt": "目录已重建"
+  },
+  "slideshow": {
+    "counter": "{{index}} / {{total}} — {{fileName}}",
+    "paused": "已暂停",
+    "reducedMotion": "减弱动态效果",
+    "previous": "上一张",
+    "next": "下一张",
+    "play": "播放",
+    "pause": "暂停",
+    "interval": "间隔：{{seconds}}",
+    "effect": "效果：{{effect}} (T) — 下一张幻灯片生效",
+    "effectsDisabled": "已启用减弱动态效果，效果已禁用",
+    "muteVideos": "静音视频",
+    "unmuteVideos": "取消视频静音",
+    "loop": "循环",
+    "shuffle": "随机",
+    "close": "关闭",
+    "effectDissolve": "溶解",
+    "effectKenBurns": "Ken Burns",
+    "effectPush": "推移",
+    "effectFadeZoom": "淡入缩放"
+  },
+  "selectionBar": {
+    "tag": "标签",
+    "album": "相册",
+    "newTag": "新建标签",
+    "newAlbum": "新建相册",
+    "noneYet": "暂无"
+  },
+  "compare": {
+    "counter": "{{index}} / {{total}} — {{fileName}}"
+  },
+  "fullView": {
+    "counter": "{{index}} / {{total}} — {{fileName}}",
+    "previous": "上一张",
+    "next": "下一张"
+  },
+  "notification": {
+    "addingSmbFolder": "正在添加 SMB 文件夹…",
+    "addedSmbFolder": "已添加 SMB 文件夹 — 正在扫描…",
+    "connectingSmbShare": "正在连接 SMB 共享…",
+    "smbShareConnected": "SMB 共享已连接 — 正在扫描…",
+    "scanning": "正在扫描…",
+    "noSlideshowItems": "没有可播放幻灯片的项目",
+    "selectTwoToCompare": "请至少选择 2 项以进行对比",
+    "selectItemsToStamp": "请选择要应用快标的项目",
+    "catalogRebuildStarted": "目录重建已开始",
+    "scanCancelled": "扫描已取消",
+    "rated": "已为 {{count}} 项设置星级",
+    "rated_one": "已为 {{count}} 项设置星级",
+    "rated_other": "已为 {{count}} 项设置星级",
+    "tagged": "已为 {{count}} 项添加标签",
+    "tagRemoved": "已从 {{count}} 项移除标签",
+    "deleted": "已将 {{count}} 项移至回收站",
+    "undone": "已撤销",
+    "tagged_one": "已为 {{count}} 项添加标签",
+    "tagged_other": "已为 {{count}} 项添加标签",
+    "tagRemoved_one": "已从 {{count}} 项移除标签",
+    "tagRemoved_other": "已从 {{count}} 项移除标签",
+    "filePurged": "文件已永久删除",
+    "purged_one": "已永久删除 {{count}} 项",
+    "purged_other": "已永久删除 {{count}} 项",
+    "restored_one": "已恢复 {{count}} 项",
+    "restored_other": "已恢复 {{count}} 项",
+    "albumCreated": "相册已创建：{{name}}",
+    "albumAdded_one": "已将 {{count}} 项添加到相册",
+    "albumAdded_other": "已将 {{count}} 项添加到相册",
+    "albumRemoved_one": "已从相册移除 {{count}} 项",
+    "albumRemoved_other": "已从相册移除 {{count}} 项",
+    "albumDeleted": "相册已删除",
+    "albumUpdated": "相册已更新：{{name}}",
+    "collectionDeleted": "收藏夹已删除",
+    "collectionSaved": "收藏夹已保存：{{name}}",
+    "rootRelinked": "来源已重新定位",
+    "tagCreated": "标签已创建：{{name}}",
+    "subtagCreated": "子标签已创建：{{name}}",
+    "tagUpdated": "标签已更新：{{name}}",
+    "tagDeleted": "标签已删除",
+    "stamped_one": "已为 {{count}} 项应用快标",
+    "stamped_other": "已为 {{count}} 项应用快标",
+    "unstamped_one": "已取消 {{count}} 项的快标",
+    "unstamped_other": "已取消 {{count}} 项的快标",
+    "removeAlbumFromStamp": "删除前请先从快标中移除相册",
+    "removeTagFromStamp": "删除前请先从快标中移除标签"
+  },
+  "confirm": {
+    "deleteAlbum": {
+      "title": "删除相册",
+      "message": "删除此相册？"
+    },
+    "deleteCollection": {
+      "title": "删除收藏夹",
+      "message": "删除此收藏夹？"
+    },
+    "deleteTag": {
+      "title": "删除标签",
+      "message": "删除此标签？将从所有资源中移除。"
+    },
+    "rebuildCatalog": {
+      "title": "重建目录",
+      "message": "重建目录并重新扫描所有来源？"
+    },
+    "relinkRoot": {
+      "title": "重新定位来源",
+      "message": "重新链接预览：{{matched}}/{{sampled}} 个文件在 {{path}} 匹配。继续？"
+    }
+  }
+}

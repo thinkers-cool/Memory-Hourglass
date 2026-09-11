@@ -1,0 +1,251 @@
+{
+  "start": {
+    "openWorkspace": "Open Workspace",
+    "createWorkspace": "Create Workspace",
+    "createReadWrite": "Read-Write Workspace",
+    "createReadOnlyWorkspace": "Read-Only Workspace",
+    "readOnlyBadge": "Read Only",
+    "workspacesHeading": "Workspaces",
+    "pathNotFound": "Path not found",
+    "removeWorkspace": "Remove workspace"
+  },
+  "nav": {
+    "library": "Library",
+    "collection": "Collection",
+    "closeWorkspace": "Close workspace"
+  },
+  "panel": {
+    "library": "Library",
+    "collections": "Collections",
+    "albums": "Albums",
+    "tags": "Tags",
+    "trash": "Trash",
+    "deleted": "Deleted",
+    "addFolder": "Add folder",
+    "connectSmb": "Connect SMB share",
+    "newAlbum": "New album",
+    "newTag": "New tag",
+    "newSubtag": "New subtag",
+    "addSubtag": "Add subtag",
+    "sync": "Sync",
+    "relink": "Relink",
+    "badge": {
+      "localFolder": "Local folder",
+      "networkSource": "Network source",
+      "album": "Album",
+      "tag": "Tag",
+      "subtag": "Subtag",
+      "smartCollection": "Smart collection",
+      "trash": "Trash"
+    },
+    "offline": "Offline",
+    "items_one": "{{count}} item",
+    "items_other": "{{count}} items",
+    "empty": {
+      "sources": "No sources yet",
+      "albums": "No albums",
+      "tags": "No tags yet",
+      "collections": "Save filters to create one"
+    },
+    "placeholder": {
+      "newAlbum": "New album",
+      "newTag": "New tag",
+      "newSubtag": "New subtag"
+    }
+  },
+  "filters": {
+    "rating": "Rating",
+    "ratingMin": {
+      "1": "★+",
+      "3": "★★★+",
+      "5": "★★★★★"
+    },
+    "sync": "Sync",
+    "delete": "Delete",
+    "camera": "Camera",
+    "tag": "Tag",
+    "album": "Album",
+    "metadata": "Metadata",
+    "date": "Date",
+    "gps": "GPS",
+    "duplicate": "Duplicate",
+    "syncStatus": {
+      "ok": "Ok",
+      "new": "New",
+      "modified": "Modified",
+      "missing": "Missing"
+    },
+    "deleteStatus": {
+      "deleted": "Deleted"
+    },
+    "gpsHasLocation": "Has location",
+    "duplicateHas": "Has duplicates"
+  },
+  "toolbar": {
+    "saveAsCollection": "Save as Collection",
+    "slideshow": "Slideshow",
+    "slideshowTitle": "Slideshow (F12)",
+    "export": "Export"
+  },
+  "stamp": {
+    "label": "Stamp",
+    "configure": "Configure stamp",
+    "armed": "Stamp armed — Space to stamp",
+    "configuration": "Stamp configuration",
+    "rating": "Rating",
+    "tags": "Tags",
+    "albums": "Albums",
+    "noTags": "No tags",
+    "noAlbums": "No albums"
+  },
+  "statusBar": {
+    "library": "Library",
+    "status": "Status",
+    "ready": "Ready",
+    "working": "Working",
+    "selected_one": "{{count}} selected",
+    "selected_other": "{{count}} selected",
+    "scanning": "Scanning {{counts}}",
+    "cataloging": "Cataloging {{counts}}",
+    "generatingPreviews": "Generating previews {{counts}}",
+    "exportProgress": "Export {{done}}/{{total}}",
+    "exportFileProgress": "Export {{message}}: {{fileName}} {{done}}/{{total}}",
+    "scanningSources_one": "Scanning {{count}} source",
+    "scanningSources_other": "Scanning {{count}} sources",
+    "offline_one": "{{count}} offline",
+    "offline_other": "{{count}} offline",
+    "missing_one": "{{count}} missing",
+    "missing_other": "{{count}} missing"
+  },
+  "inspector": {
+    "metadata": "Metadata",
+    "searchMetadata": "Search metadata",
+    "fileKeywords": "File keywords",
+    "linkedFiles": "Linked files",
+    "duplicates": "Duplicates",
+    "purge": "Purge",
+    "noMetadata": "No metadata",
+    "noMatchingMetadata": "No matching metadata",
+    "activity": "Activity"
+  },
+  "activity": {
+    "asset_metadata_changed": "Rating changed",
+    "asset_tags_added": "Tags added",
+    "asset_tags_removed": "Tags removed",
+    "asset_soft_deleted": "Moved to trash",
+    "asset_restored": "Restored",
+    "asset_purged": "Purged from disk",
+    "asset_discovered": "Discovered",
+    "asset_modified": "File modified",
+    "asset_missing": "File missing",
+    "scan_completed": "Scan completed",
+    "export_completed": "Export completed",
+    "catalog_rebuilt": "Catalog rebuilt"
+  },
+  "slideshow": {
+    "counter": "{{index}} / {{total}} — {{fileName}}",
+    "paused": "paused",
+    "reducedMotion": "reduced motion",
+    "previous": "Previous",
+    "next": "Next",
+    "play": "Play",
+    "pause": "Pause",
+    "interval": "Interval: {{seconds}}",
+    "effect": "Effect: {{effect}} (T) — applies on next slide",
+    "effectsDisabled": "Effects disabled while reduce motion is on",
+    "muteVideos": "Mute videos",
+    "unmuteVideos": "Unmute videos",
+    "loop": "Loop",
+    "shuffle": "Shuffle",
+    "close": "Close",
+    "effectDissolve": "Dissolve",
+    "effectKenBurns": "Ken Burns",
+    "effectPush": "Push",
+    "effectFadeZoom": "Fade zoom"
+  },
+  "selectionBar": {
+    "tag": "Tag",
+    "album": "Album",
+    "newTag": "New tag",
+    "newAlbum": "New album",
+    "noneYet": "None yet"
+  },
+  "compare": {
+    "counter": "{{index}} / {{total}} — {{fileName}}"
+  },
+  "fullView": {
+    "counter": "{{index}} / {{total}} — {{fileName}}",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "notification": {
+    "addingSmbFolder": "Adding SMB folder…",
+    "addedSmbFolder": "Added SMB folder — scanning…",
+    "connectingSmbShare": "Connecting SMB share…",
+    "smbShareConnected": "SMB share connected — scanning…",
+    "scanning": "Scanning…",
+    "noSlideshowItems": "No items to slideshow",
+    "selectTwoToCompare": "Select at least 2 items to compare",
+    "selectItemsToStamp": "Select items to stamp",
+    "catalogRebuildStarted": "Catalog rebuild started",
+    "scanCancelled": "Scan cancelled",
+    "rated": "Rated {{count}} items",
+    "rated_one": "Rated {{count}} item",
+    "rated_other": "Rated {{count}} items",
+    "tagged": "Tagged {{count}} items",
+    "tagRemoved": "Removed tag from {{count}} items",
+    "deleted": "Moved {{count}} items to trash",
+    "undone": "Undone",
+    "tagged_one": "Tagged {{count}} item",
+    "tagged_other": "Tagged {{count}} items",
+    "tagRemoved_one": "Removed tag from {{count}} item",
+    "tagRemoved_other": "Removed tag from {{count}} items",
+    "filePurged": "File purged",
+    "purged_one": "Purged {{count}} item",
+    "purged_other": "Purged {{count}} items",
+    "restored_one": "Restored {{count}} item",
+    "restored_other": "Restored {{count}} items",
+    "albumCreated": "Album created: {{name}}",
+    "albumAdded_one": "Added {{count}} item to album",
+    "albumAdded_other": "Added {{count}} items to album",
+    "albumRemoved_one": "Removed {{count}} item from album",
+    "albumRemoved_other": "Removed {{count}} items from album",
+    "albumDeleted": "Album deleted",
+    "albumUpdated": "Album updated: {{name}}",
+    "collectionDeleted": "Collection deleted",
+    "collectionSaved": "Saved collection: {{name}}",
+    "rootRelinked": "Root relinked",
+    "tagCreated": "Tag created: {{name}}",
+    "subtagCreated": "Subtag created: {{name}}",
+    "tagUpdated": "Tag updated: {{name}}",
+    "tagDeleted": "Tag deleted",
+    "stamped_one": "Stamped {{count}} item",
+    "stamped_other": "Stamped {{count}} items",
+    "unstamped_one": "Unstamped {{count}} item",
+    "unstamped_other": "Unstamped {{count}} items",
+    "removeAlbumFromStamp": "Remove album from stamp before deleting",
+    "removeTagFromStamp": "Remove tag from stamp before deleting"
+  },
+  "confirm": {
+    "deleteAlbum": {
+      "title": "Delete album",
+      "message": "Delete this album?"
+    },
+    "deleteCollection": {
+      "title": "Delete collection",
+      "message": "Delete this smart collection?"
+    },
+    "deleteTag": {
+      "title": "Delete tag",
+      "message": "Delete this tag? It will be removed from all assets."
+    },
+    "rebuildCatalog": {
+      "title": "Rebuild catalog",
+      "message": "Rebuild catalog and rescan all sources?"
+    },
+    "relinkRoot": {
+      "title": "Relink root",
+      "message": "Relink preview: {{matched}}/{{sampled}} files match at {{path}}. Continue?"
+    }
+  }
+}

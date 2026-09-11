@@ -1,0 +1,96 @@
+{
+  "generic": {
+    "title": "Error",
+    "message": "Something went wrong. Please try again.",
+    "fallback": "Something went wrong."
+  },
+  "notDesktopApp": "Use the MemHG desktop app (npm run tauri dev), not the browser.",
+  "job_busy": {
+    "title": "Operation in progress",
+    "message": "Another operation is already running. Wait for it to finish."
+  },
+  "catalog": {
+    "title": "Catalog error",
+    "message": "A catalog error occurred. Try rebuilding the catalog."
+  },
+  "library": {
+    "title": "Library error",
+    "message": "A library error occurred."
+  },
+  "scan": {
+    "title": "Scan error",
+    "message": "Scanning failed."
+  },
+  "metadata": {
+    "title": "Metadata error",
+    "message": "Could not read or write metadata."
+  },
+  "query": {
+    "title": "Query error",
+    "message": "Could not query the library."
+  },
+  "export": {
+    "title": "Export error",
+    "message": "Export failed."
+  },
+  "conflict": {
+    "title": "Conflict",
+    "message": "The operation conflicted with another change."
+  },
+  "not_found": {
+    "title": "Not found",
+    "message": "The requested item was not found."
+  },
+  "invalid_input": {
+    "title": "Invalid input",
+    "message": "The input was invalid."
+  },
+  "io": {
+    "title": "File error",
+    "message": "A file system error occurred."
+  },
+  "sql": {
+    "title": "Database error",
+    "message": "A database error occurred."
+  },
+  "migrate": {
+    "title": "Migration error",
+    "message": "Database migration failed."
+  },
+  "json": {
+    "title": "Data error",
+    "message": "Could not parse stored data."
+  },
+  "workspace": {
+    "title": "Workspace error",
+    "message": "A workspace error occurred."
+  },
+  "workspace_path_not_found": {
+    "title": "Folder not found",
+    "message": "That folder could not be found. It may have been moved or deleted."
+  },
+  "workspace_not_a_workspace": {
+    "title": "Not a workspace",
+    "message": "This folder is not a workspace. Use Open Workspace and choose a folder that contains workspace.json."
+  },
+  "workspace_already_exists": {
+    "title": "Already a workspace",
+    "message": "This folder is already a workspace. Use Open Workspace instead of Create."
+  },
+  "workspace_not_empty": {
+    "title": "Folder not empty",
+    "message": "Choose an empty folder to create a new workspace."
+  },
+  "workspace_not_directory": {
+    "title": "Not a folder",
+    "message": "Please choose a folder, not a file."
+  },
+  "workspace_corrupt": {
+    "title": "Corrupt workspace",
+    "message": "This workspace looks corrupted or uses an unsupported version."
+  },
+  "workspace_not_open": {
+    "title": "No workspace open",
+    "message": "No workspace is open."
+  }
+}

@@ -1,0 +1,8 @@
+[report]
+ignore-filename-regex = [
+    "main\\.rs$",
+    "test_support/.*$",
+    "smb/credentials\\.rs$",
+    "commands/.*\\.rs$",
+    "lib\\.rs$",
+]

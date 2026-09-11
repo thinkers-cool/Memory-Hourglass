@@ -1,0 +1,86 @@
+[data-theme] {
+  --mem-hover: color-mix(in oklch, var(--color-base-content) 6%, var(--color-base-200));
+  --mem-hover-strong: color-mix(in oklch, var(--color-base-content) 10%, var(--color-base-200));
+  --mem-selected: color-mix(in oklch, var(--color-primary) 14%, var(--color-base-200));
+  --mem-selected-strong: color-mix(in oklch, var(--color-primary) 22%, var(--color-base-200));
+  --mem-selected-subtle: color-mix(in oklch, var(--color-primary) 8%, var(--color-base-200));
+  --mem-selected-border: color-mix(in oklch, var(--color-primary) 28%, transparent);
+  --mem-control-bg: color-mix(in oklch, var(--color-base-100) 78%, transparent);
+  --mem-control-border: color-mix(in oklch, var(--color-base-content) 12%, transparent);
+  --mem-inset: color-mix(in oklch, var(--color-base-300) 65%, var(--color-base-200));
+  --mem-inset-strong: color-mix(in oklch, var(--color-base-300) 85%, var(--color-base-200));
+  --mem-border-subtle: color-mix(in oklch, var(--color-base-content) 6%, transparent);
+  --mem-border: color-mix(in oklch, var(--color-base-content) 12%, transparent);
+  --mem-badge-idle: color-mix(in oklch, var(--color-base-300) 82%, var(--color-base-200));
+  --mem-badge-hover: var(--color-base-300);
+  --mem-danger-hover: color-mix(in oklch, var(--color-error) 12%, transparent);
+  --mem-danger-text: color-mix(in oklch, var(--color-error) 80%, transparent);
+  --mem-ring-hover: color-mix(in oklch, var(--color-base-content) 22%, transparent);
+  --mem-text-secondary: color-mix(in oklch, var(--color-base-content) 90%, transparent);
+  --mem-text-tertiary: var(
+    --color-content-faint,
+    color-mix(in oklch, var(--color-base-content) 45%, transparent)
+  );
+  --mem-text-quaternary: color-mix(in oklch, var(--color-base-content) 28%, transparent);
+  --mem-placeholder: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  --mem-split-idle: color-mix(in oklch, var(--color-base-content) 5%, transparent);
+  --mem-split-hover: color-mix(in oklch, var(--color-primary) 30%, transparent);
+  --mem-split-active: color-mix(in oklch, var(--color-primary) 50%, transparent);
+  --mem-canvas-bg: var(--mem-surface-panel-bg, var(--color-base-200));
+  --mem-canvas-pattern: radial-gradient(
+    color-mix(in oklch, var(--color-base-content) 5%, transparent) 1px,
+    transparent 1px
+  );
+  --mem-canvas-pattern-size: 20px 20px;
+}
+
+@theme inline {
+  --color-interactive-hover: var(--mem-hover);
+  --color-interactive-hover-strong: var(--mem-hover-strong);
+  --color-interactive-selected: var(--mem-selected);
+  --color-interactive-selected-strong: var(--mem-selected-strong);
+  --color-interactive-selected-subtle: var(--mem-selected-subtle);
+  --color-interactive-selected-border: var(--mem-selected-border);
+  --color-interactive-border: var(--mem-border);
+  --color-divider-subtle: var(--mem-border-subtle);
+  --color-control: var(--mem-control-bg);
+  --color-control-border: var(--mem-control-border);
+  --color-surface-inset: var(--mem-inset);
+  --color-surface-inset-strong: var(--mem-inset-strong);
+  --color-danger-subtle: var(--mem-danger-hover);
+  --color-danger-text: var(--mem-danger-text);
+  --color-content-secondary: var(--mem-text-secondary);
+  --color-content-tertiary: var(--mem-text-tertiary);
+  --color-content-quaternary: var(--mem-text-quaternary);
+  --color-placeholder: var(--mem-placeholder);
+  --color-badge-idle: var(--mem-badge-idle);
+  --color-badge-hover: var(--mem-badge-hover);
+  --color-split-idle: var(--mem-split-idle);
+  --color-split-hover: var(--mem-split-hover);
+  --color-split-active: var(--mem-split-active);
+}
+
+.menu.menu-picker :where(li > button.menu-picker-item-active) {
+  background-color: var(--color-interactive-selected);
+  color: var(--color-primary);
+}
+
+.menu.menu-picker :where(li > button:not(.menu-picker-item-active):hover) {
+  background-color: var(--color-interactive-hover-strong);
+}
+
+.btn.btn-ghost.btn-interactive:not(:disabled):not(.btn-disabled):hover {
+  background-color: var(--mem-selected-subtle);
+  border-color: color-mix(in oklch, var(--mem-selected-border) 65%, transparent);
+  --btn-bg: var(--mem-selected-subtle);
+  --btn-border: color-mix(in oklch, var(--mem-selected-border) 65%, transparent);
+}
+
+.btn.btn-ghost.btn-interactive.text-danger-text:hover,
+.btn.btn-ghost.btn-interactive.hover\:bg-danger-subtle:hover {
+  background-color: var(--mem-danger-hover);
+  border-color: transparent;
+  color: var(--color-error);
+  --btn-bg: var(--mem-danger-hover);
+  --btn-border: transparent;
+}

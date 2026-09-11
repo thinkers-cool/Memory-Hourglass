@@ -1,0 +1,162 @@
+{
+  "app": {
+    "name": "Memory Hourglass",
+    "tagline": "Every moment passes. Every memory stays."
+  },
+  "action": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "confirm": "Confirm",
+    "back": "Back",
+    "browse": "Browse",
+    "remove": "Remove",
+    "delete": "Delete",
+    "export": "Export",
+    "compare": "Compare",
+    "restore": "Restore",
+    "purge": "Purge",
+    "continue": "Continue",
+    "chooseFolder": "Choose folder",
+    "undo": "Undo"
+  },
+  "label": {
+    "emoji": "Emoji",
+    "theme": "Theme",
+    "language": "Language",
+    "username": "Username",
+    "password": "Password",
+    "server": "Server",
+    "progress": "Progress"
+  },
+  "aria": {
+    "close": "Close",
+    "clearSelection": "Clear selection",
+    "selectionActions": "Selection actions",
+    "itemActions": "Item actions",
+    "stamp": "Stamp",
+    "stampConfiguration": "Stamp configuration",
+    "theme": "Theme",
+    "addFilter": "Add filter",
+    "clearAllFilters": "Clear all filters",
+    "gridColumns": "View columns",
+    "gridColumnsValue": "View columns: {{count}}",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fitToView": "Fit to view",
+    "previous": "Previous",
+    "next": "Next",
+    "slideshow": "Slideshow",
+    "saveAsCollection": "Save as Collection",
+    "deleteDuplicate": "Delete duplicate {{fileName}}",
+    "removeFilter": "Remove {{filter}}",
+    "filterChip": "{{filter}}: {{value}}",
+    "filterChipLabel": "{{filter}}"
+  },
+  "sort": {
+    "date": "Date",
+    "name": "Name",
+    "rating": "Rating",
+    "path": "Path",
+    "ascending": "Ascending",
+    "descending": "Descending",
+    "sortBy": "Sort by {{field}}"
+  },
+  "rating": {
+    "aria_one": "Rate {{count}} star",
+    "aria_other": "Rate {{count}} stars",
+    "badge": "Rating {{count}}"
+  },
+  "count": {
+    "selected_one": "{{count}} selected",
+    "selected_other": "{{count}} selected",
+    "item_one": "{{count}} item",
+    "item_other": "{{count}} items",
+    "itemsSelected_one": "{{count}} item selected",
+    "itemsSelected_other": "{{count}} items selected",
+    "source_one": "{{count}} source",
+    "source_other": "{{count}} sources",
+    "library_one": "{{count}} Library",
+    "library_other": "{{count}} Libraries",
+    "album_one": "{{count}} Album",
+    "album_other": "{{count}} Albums",
+    "tag_one": "{{count}} Tag",
+    "tag_other": "{{count}} Tags",
+    "offline_one": "{{count}} offline",
+    "offline_other": "{{count}} offline",
+    "missing_one": "{{count}} missing",
+    "missing_other": "{{count}} missing",
+    "scanningSources_one": "Scanning {{count}} source",
+    "scanningSources_other": "Scanning {{count}} sources"
+  },
+  "empty": {
+    "noneYet": "None yet",
+    "noWorkspaces": "No workspaces yet",
+    "noSources": "No sources yet",
+    "noAlbums": "No albums",
+    "noTags": "No tags yet",
+    "noTagsStamp": "No tags",
+    "noAlbumsStamp": "No albums",
+    "noCollections": "Save filters to create one",
+    "noMetadata": "No metadata",
+    "noMatchingMetadata": "No matching metadata",
+    "noDiskShares": "No disk shares found on this server."
+  },
+  "date": {
+    "from": "From",
+    "to": "To",
+    "range": "{{from}} – {{to}}",
+    "fromDate": "from {{date}}",
+    "toDate": "to {{date}}",
+    "clearDates": "Clear dates"
+  },
+  "theme": {
+    "pulse": "Pulse",
+    "neon": "Neon",
+    "vault": "Vault",
+    "atlas": "Atlas",
+    "slate": "Slate",
+    "sakura": "Sakura",
+    "moss": "Moss",
+    "solar": "Solar",
+    "ink": "Ink",
+    "coral": "Coral",
+    "oxide": "Oxide",
+    "arctic": "Arctic",
+    "prism": "Prism"
+  },
+  "busy": {
+    "openingWorkspace": "Opening workspace…",
+    "creatingWorkspace": "Creating workspace…",
+    "closingWorkspace": "Closing workspace…",
+    "removingWorkspace": "Removing workspace…",
+    "exporting": "Exporting…",
+    "signingIn": "Signing in…",
+    "connecting": "Connecting…"
+  },
+  "folderPicker": {
+    "default": "Choose a folder",
+    "openWorkspace": "Open an existing workspace folder",
+    "createWorkspace": "Choose an empty folder for a new workspace",
+    "mountedSmb": "Choose a mounted SMB folder"
+  },
+  "shortcut": {
+    "space": "Space",
+    "export": "E",
+    "compare": "C",
+    "restore": "R",
+    "delete": "Ctrl+R",
+    "purge": "Ctrl+P",
+    "tag": "T",
+    "album": "A"
+  },
+  "filter": {
+    "add": "Filter",
+    "clearAll": "Clear all",
+    "filterBy": "Filter by {{label}}"
+  },
+  "grid": {
+    "label": "View"
+  },
+  "ready": "Ready"
+}

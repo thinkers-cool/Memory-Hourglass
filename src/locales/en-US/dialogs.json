@@ -1,0 +1,51 @@
+{
+  "export": {
+    "title": "Export files",
+    "selected_one": "{{count}} item selected",
+    "selected_other": "{{count}} items selected",
+    "destination": "Destination",
+    "chooseFolder": "Choose folder…",
+    "layout": "Layout",
+    "layoutFlat": "Flat",
+    "layoutStructured": "Structured",
+    "layoutHintFlat": "Copies all files into the destination folder.",
+    "layoutHintStructured": "Preserves subfolders from the library.",
+    "renameTemplate": "Rename template (optional)",
+    "renameTokens": "Tokens: {name}, {date}, {ext}, {camera}",
+    "format": "Format",
+    "formatOriginal": "Original",
+    "formatJpeg": "JPEG",
+    "formatPng": "PNG",
+    "progress": "Progress",
+    "exporting": "Exporting…"
+  },
+  "smb": {
+    "title": "Add network source",
+    "modeMountedTitle": "Mounted folder",
+    "modeConnectTitle": "Connect SMB",
+    "serverPlaceholder": "192.168.1.10 or smb://nas.local",
+    "signedIn": "Connected to {{host}}",
+    "rescanInterval": "Rescan (seconds)",
+    "signIn": "Sign in",
+    "addSource": "Add",
+    "noDiskShares": "No shares found."
+  },
+  "purge": {
+    "titleFile": "Purge file",
+    "titleItems": "Purge items",
+    "message": "Permanently delete {{target}} from disk. This cannot be undone.",
+    "targetFile": "this file",
+    "targetItems_one": "{{count}} item",
+    "targetItems_other": "{{count}} items",
+    "confirmPrompt": "Type DELETE to confirm",
+    "confirmToken": "DELETE"
+  },
+  "namePrompt": {
+    "collectionTitle": "Save as Collection",
+    "collectionLabel": "Collection name",
+    "collectionSubmit": "Save"
+  },
+  "confirm": {
+    "defaultConfirmLabel": "Confirm"
+  }
+}

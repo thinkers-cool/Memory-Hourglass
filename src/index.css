@@ -1,0 +1,246 @@
+@import "tailwindcss";
+
+@plugin "daisyui" {
+  themes:
+    slate --default,
+    pulse,
+    neon,
+    vault,
+    atlas,
+    sakura,
+    moss,
+    solar,
+    ink,
+    coral,
+    oxide,
+    arctic,
+    prism;
+}
+
+@import "./styles/themes/memhg.css";
+@import "./styles/interaction.css";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --animate-slide-up: slide-up 0.22s ease-out;
+  --animate-fade-in-short: fade-in 0.15s ease-out;
+  --animate-ken-burns-in: ken-burns-in 1ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  --animate-ken-burns-out: ken-burns-out 1ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  --animate-ken-burns-left: ken-burns-left 1ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  --animate-ken-burns-right: ken-burns-right 1ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes ken-burns-in {
+    from {
+      transform: scale(1.04) translate(-1.5%, -1%);
+    }
+    to {
+      transform: scale(1.08) translate(1.5%, 1%);
+    }
+  }
+
+  @keyframes ken-burns-out {
+    from {
+      transform: scale(1.08) translate(1.5%, 1%);
+    }
+    to {
+      transform: scale(1.04) translate(-1.5%, -1%);
+    }
+  }
+
+  @keyframes ken-burns-left {
+    from {
+      transform: scale(1.06) translate(2%, 0);
+    }
+    to {
+      transform: scale(1.06) translate(-2%, 0);
+    }
+  }
+
+  @keyframes ken-burns-right {
+    from {
+      transform: scale(1.06) translate(-2%, 0);
+    }
+    to {
+      transform: scale(1.06) translate(2%, 0);
+    }
+  }
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.35s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(root),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
+
+.app-canvas,
+.grid-canvas {
+  color: var(--color-base-content);
+  background-color: var(--mem-canvas-bg, var(--color-base-200));
+  background-image: var(--mem-canvas-pattern, none), var(--mem-canvas-image, none);
+  background-size: var(--mem-canvas-pattern-size, auto), auto;
+}
+
+.surface-toolbar {
+  background: var(--mem-surface-toolbar-bg, var(--color-base-200));
+  border-color: var(
+    --mem-surface-border,
+    color-mix(in oklch, var(--color-base-content) 8%, transparent)
+  );
+  backdrop-filter: blur(var(--mem-backdrop-blur, var(--glass-blur, 0px)))
+    saturate(var(--mem-backdrop-saturate, 100%));
+  -webkit-backdrop-filter: blur(var(--mem-backdrop-blur, var(--glass-blur, 0px)))
+    saturate(var(--mem-backdrop-saturate, 100%));
+}
+
+.surface-panel {
+  background: var(--mem-surface-panel-bg, var(--color-base-200));
+  border-color: var(
+    --mem-surface-border,
+    color-mix(in oklch, var(--color-base-content) 8%, transparent)
+  );
+  backdrop-filter: blur(var(--mem-backdrop-blur, var(--glass-blur, 0px)))
+    saturate(var(--mem-backdrop-saturate, 100%));
+  -webkit-backdrop-filter: blur(var(--mem-backdrop-blur, var(--glass-blur, 0px)))
+    saturate(var(--mem-backdrop-saturate, 100%));
+}
+
+.surface-card {
+  border-radius: var(--radius-box);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(
+    --mem-surface-border,
+    color-mix(in oklch, var(--color-base-content) 8%, transparent)
+  );
+  background: var(--mem-surface-elevated-bg, var(--color-base-100));
+  box-shadow: var(--mem-shadow-card, 0 4px 16px oklch(0% 0 0 / 0.15));
+  backdrop-filter: blur(var(--mem-backdrop-blur, var(--glass-blur, 0px)))
+    saturate(var(--mem-backdrop-saturate, 100%));
+  -webkit-backdrop-filter: blur(var(--mem-backdrop-blur, var(--glass-blur, 0px)))
+    saturate(var(--mem-backdrop-saturate, 100%));
+}
+
+.surface-float {
+  border-radius: var(--radius-box);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(
+    --mem-float-border,
+    color-mix(in oklch, var(--color-base-content) 10%, transparent)
+  );
+  background: var(--mem-surface-elevated-bg, var(--color-base-100));
+  box-shadow: var(--mem-shadow-float, 0 8px 24px oklch(0% 0 0 / 0.2));
+  backdrop-filter: blur(var(--mem-backdrop-blur, var(--glass-blur, 0px)))
+    saturate(var(--mem-backdrop-saturate, 100%));
+  -webkit-backdrop-filter: blur(var(--mem-backdrop-blur, var(--glass-blur, 0px)))
+    saturate(var(--mem-backdrop-saturate, 100%));
+}
+
+.surface-popover {
+  border-radius: var(--radius-box);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(
+    --mem-surface-border,
+    color-mix(in oklch, var(--color-base-content) 8%, transparent)
+  );
+  background: var(--mem-surface-elevated-bg, var(--color-base-100));
+  box-shadow: var(--mem-shadow-popover, 0 12px 32px oklch(0% 0 0 / 0.25));
+  backdrop-filter: blur(var(--mem-backdrop-blur, var(--glass-blur, 0px)))
+    saturate(var(--mem-backdrop-saturate, 100%));
+  -webkit-backdrop-filter: blur(var(--mem-backdrop-blur, var(--glass-blur, 0px)))
+    saturate(var(--mem-backdrop-saturate, 100%));
+}
+
+.surface-chip {
+  border-radius: var(--radius-selector);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(
+    --mem-surface-border,
+    color-mix(in oklch, var(--color-base-content) 8%, transparent)
+  );
+  background: var(--mem-surface-elevated-bg, var(--color-base-100));
+  box-shadow: var(--mem-shadow-chip, 0 2px 8px oklch(0% 0 0 / 0.12));
+  backdrop-filter: blur(var(--mem-backdrop-blur, var(--glass-blur, 0px)))
+    saturate(var(--mem-backdrop-saturate, 100%));
+  -webkit-backdrop-filter: blur(var(--mem-backdrop-blur, var(--glass-blur, 0px)))
+    saturate(var(--mem-backdrop-saturate, 100%));
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .surface-toolbar,
+  .surface-panel,
+  .surface-card,
+  .surface-float,
+  .surface-popover,
+  .surface-chip {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .surface-toolbar {
+    background: var(--mem-surface-toolbar-solid, var(--color-base-200));
+  }
+
+  .surface-panel {
+    background: var(--mem-surface-panel-solid, var(--color-base-200));
+  }
+
+  .surface-card,
+  .surface-float,
+  .surface-popover,
+  .surface-chip {
+    background: var(--mem-surface-elevated-solid, var(--color-base-100));
+  }
+}
+
+.text-content-muted {
+  color: var(
+    --color-content-muted,
+    color-mix(in oklch, var(--color-base-content) 65%, transparent)
+  );
+}
+
+.text-content-faint {
+  color: var(
+    --color-content-faint,
+    color-mix(in oklch, var(--color-base-content) 45%, transparent)
+  );
+}
+
+.bg-divider {
+  background-color: var(
+    --color-divider,
+    color-mix(in oklch, var(--color-base-content) 10%, transparent)
+  );
+}

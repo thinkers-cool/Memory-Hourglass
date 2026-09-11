@@ -1,0 +1,1024 @@
+@plugin "daisyui/theme" {
+  name: "vault";
+  prefersdark: false;
+  color-scheme: dark;
+
+  --color-base-300: oklch(9.2% 0.004 264);
+  --color-base-200: oklch(11.5% 0.004 264);
+  --color-base-100: oklch(14% 0.005 264);
+  --color-base-content: oklch(92% 0.005 264);
+
+  --color-content-muted: oklch(72% 0.015 264);
+  --color-content-faint: oklch(58% 0.012 264);
+  --color-divider: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+
+  --color-chart-blue: oklch(68% 0.14 240);
+  --color-chart-pink: oklch(68% 0.16 330);
+  --color-chart-cyan: oklch(72% 0.12 200);
+  --color-chart-teal: oklch(72% 0.14 185);
+  --color-chart-violet: oklch(62% 0.2 285);
+  --color-chart-coral: oklch(62% 0.22 20);
+  --color-chart-lime: oklch(78% 0.18 155);
+
+  --color-primary: oklch(84% 0.13 88);
+  --color-primary-content: oklch(16% 0.03 88);
+
+  --color-secondary: oklch(42% 0.03 264);
+  --color-secondary-content: oklch(94% 0.01 264);
+
+  --color-accent: oklch(68% 0.14 240);
+  --color-accent-content: oklch(14% 0.02 240);
+
+  --color-neutral: oklch(16% 0.005 264);
+  --color-neutral-content: oklch(92% 0.005 264);
+
+  --color-info: oklch(66% 0.14 245);
+  --color-info-content: oklch(98% 0.01 245);
+  --color-success: oklch(73% 0.18 152);
+  --color-success-content: oklch(98% 0.01 152);
+  --color-warning: oklch(80% 0.12 85);
+  --color-warning-content: oklch(16% 0.03 85);
+  --color-error: oklch(62% 0.18 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.375rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.5rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+
+  --border: 1px;
+
+  --depth: 1;
+  --noise: 0;
+
+  --glass-blur: 0px;
+  --glass-opacity: 1;
+  --glass-reflect-degree: 120deg;
+  --glass-reflect-opacity: 0;
+  --glass-border-opacity: 0.08;
+  --glass-text-shadow-opacity: 0;
+
+  --mem-canvas-image: none;
+  --mem-backdrop-saturate: 100%;
+  --mem-surface-border: color-mix(in oklch, var(--color-base-content) 6%, transparent);
+  --mem-surface-toolbar-bg: var(--color-base-100);
+  --mem-surface-panel-bg: var(--color-base-200);
+  --mem-surface-elevated-bg: var(--color-base-100);
+  --mem-surface-toolbar-solid: var(--color-base-100);
+  --mem-surface-panel-solid: var(--color-base-200);
+  --mem-surface-elevated-solid: var(--color-base-100);
+  --mem-float-border: color-mix(in oklch, var(--color-base-content) 8%, transparent);
+  --mem-shadow-card: 0 4px 24px oklch(0% 0 0 / 0.35);
+  --mem-shadow-float: 0 8px 32px oklch(0% 0 0 / 0.4);
+  --mem-shadow-popover: 0 12px 40px oklch(0% 0 0 / 0.45);
+  --mem-shadow-chip: 0 2px 12px oklch(0% 0 0 / 0.3);
+}
+
+@plugin "daisyui/theme" {
+  name: "neon";
+  prefersdark: false;
+  color-scheme: dark;
+
+  --color-base-300: oklch(15% 0.07 275);
+  --color-base-200: oklch(22% 0.09 278);
+  --color-base-100: oklch(27% 0.1 282);
+  --color-base-content: oklch(92% 0.01 280);
+
+  --color-content-muted: oklch(72% 0.02 280);
+  --color-content-faint: oklch(58% 0.015 280);
+  --color-divider: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+
+  --color-chart-blue: oklch(70% 0.14 240);
+  --color-chart-pink: oklch(68% 0.18 320);
+  --color-chart-cyan: oklch(72% 0.14 185);
+  --color-chart-teal: oklch(72% 0.14 185);
+  --color-chart-violet: oklch(62% 0.2 285);
+  --color-chart-coral: oklch(62% 0.22 20);
+  --color-chart-lime: oklch(78% 0.18 155);
+
+  --color-primary: oklch(50% 0.21 285);
+  --color-primary-content: oklch(98% 0.01 285);
+
+  --color-secondary: oklch(72% 0.14 185);
+  --color-secondary-content: oklch(16% 0.03 185);
+
+  --color-accent: oklch(68% 0.18 320);
+  --color-accent-content: oklch(98% 0.01 320);
+
+  --color-neutral: oklch(28% 0.06 275);
+  --color-neutral-content: oklch(94% 0.01 280);
+
+  --color-info: oklch(70% 0.14 240);
+  --color-info-content: oklch(98% 0.01 240);
+  --color-success: oklch(78% 0.18 155);
+  --color-success-content: oklch(16% 0.03 155);
+  --color-warning: oklch(72% 0.16 55);
+  --color-warning-content: oklch(16% 0.03 55);
+  --color-error: oklch(62% 0.22 20);
+  --color-error-content: oklch(98% 0.01 20);
+
+  --radius-selector: 0.875rem;
+  --radius-field: 0.875rem;
+  --radius-box: 1.125rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+
+  --border: 1px;
+
+  --depth: 0;
+  --noise: 0;
+
+  --glass-blur: 20px;
+  --glass-opacity: 0.35;
+  --glass-reflect-degree: 140deg;
+  --glass-reflect-opacity: 0.06;
+  --glass-border-opacity: 0.12;
+  --glass-text-shadow-opacity: 0.04;
+
+  --mem-canvas-image:
+    radial-gradient(ellipse 80% 60% at 95% 5%, oklch(55% 0.2 295 / 0.35), transparent 55%),
+    radial-gradient(ellipse 70% 55% at 5% 95%, oklch(50% 0.18 285 / 0.28), transparent 55%),
+    radial-gradient(ellipse 90% 70% at 50% 50%, oklch(25% 0.12 280 / 0.4), transparent 70%),
+    linear-gradient(160deg, oklch(16% 0.08 275) 0%, oklch(20% 0.1 290) 50%, oklch(17% 0.09 265) 100%);
+  --mem-canvas-pattern: none;
+  --mem-backdrop-saturate: 150%;
+  --mem-surface-border: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  --mem-surface-toolbar-bg: var(--color-base-100);
+  --mem-surface-panel-bg: var(--color-base-200);
+  --mem-surface-elevated-bg: var(--color-base-100);
+  --mem-surface-toolbar-solid: var(--color-base-100);
+  --mem-surface-panel-solid: var(--color-base-200);
+  --mem-surface-elevated-solid: var(--color-base-100);
+  --mem-float-border: color-mix(in oklch, var(--color-base-content) 12%, transparent);
+  --mem-shadow-card: 0 8px 40px oklch(20% 0.12 285 / 0.45);
+  --mem-shadow-float: 0 12px 48px oklch(20% 0.14 290 / 0.5);
+  --mem-shadow-popover: 0 16px 56px oklch(15% 0.1 285 / 0.55);
+  --mem-shadow-chip: 0 4px 20px oklch(18% 0.1 285 / 0.35);
+}
+
+@plugin "daisyui/theme" {
+  name: "pulse";
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-300: oklch(12% 0.04 265);
+  --color-base-200: oklch(18% 0.05 268);
+  --color-base-100: oklch(22% 0.06 270);
+  --color-base-content: oklch(92% 0.005 265);
+
+  --color-content-muted: oklch(72% 0.02 265);
+  --color-content-faint: oklch(58% 0.015 265);
+  --color-divider: color-mix(in oklch, var(--color-base-content) 8%, transparent);
+
+  --color-chart-blue: oklch(62% 0.18 264);
+  --color-chart-pink: oklch(68% 0.16 330);
+  --color-chart-cyan: oklch(68% 0.12 180);
+  --color-chart-teal: oklch(68% 0.12 180);
+  --color-chart-violet: oklch(58% 0.24 295);
+  --color-chart-coral: oklch(60% 0.2 25);
+  --color-chart-lime: oklch(68% 0.19 145);
+
+  --color-primary: oklch(53% 0.23 295);
+  --color-primary-content: oklch(98% 0.01 295);
+
+  --color-secondary: oklch(50% 0.19 264);
+  --color-secondary-content: oklch(98% 0.01 264);
+
+  --color-accent: oklch(68% 0.12 180);
+  --color-accent-content: oklch(16% 0.03 180);
+
+  --color-neutral: oklch(26% 0.05 268);
+  --color-neutral-content: oklch(78% 0.025 265);
+
+  --color-info: oklch(62% 0.18 264);
+  --color-info-content: oklch(98% 0.01 264);
+  --color-success: oklch(68% 0.19 145);
+  --color-success-content: oklch(16% 0.03 145);
+  --color-warning: oklch(75% 0.15 70);
+  --color-warning-content: oklch(16% 0.03 70);
+  --color-error: oklch(60% 0.2 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.875rem;
+  --radius-field: 0.875rem;
+  --radius-box: 1rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+
+  --border: 1px;
+
+  --depth: 0;
+  --noise: 0;
+
+  --glass-blur: 18px;
+  --glass-opacity: 0.42;
+  --glass-reflect-degree: 135deg;
+  --glass-reflect-opacity: 0.05;
+  --glass-border-opacity: 0.1;
+  --glass-text-shadow-opacity: 0.03;
+
+  --mem-canvas-image:
+    radial-gradient(ellipse 70% 55% at 100% 0%, oklch(50% 0.22 265 / 0.4), transparent 58%),
+    radial-gradient(ellipse 65% 50% at 0% 100%, oklch(45% 0.2 270 / 0.32), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 20% 30%, oklch(40% 0.18 295 / 0.15), transparent 50%),
+    linear-gradient(180deg, oklch(11% 0.045 265) 0%, oklch(14% 0.05 270) 50%, oklch(12% 0.04 268) 100%);
+  --mem-canvas-pattern: none;
+  --mem-backdrop-saturate: 150%;
+  --mem-surface-border: color-mix(in oklch, var(--color-base-content) 8%, transparent);
+  --mem-surface-toolbar-bg: var(--color-base-100);
+  --mem-surface-panel-bg: var(--color-base-200);
+  --mem-surface-elevated-bg: var(--color-base-100);
+  --mem-surface-toolbar-solid: var(--color-base-100);
+  --mem-surface-panel-solid: var(--color-base-200);
+  --mem-surface-elevated-solid: var(--color-base-100);
+  --mem-float-border: color-mix(in oklch, var(--color-primary) 20%, transparent);
+  --mem-shadow-card: 0 8px 40px oklch(45% 0.2 295 / 0.25);
+  --mem-shadow-float: 0 12px 48px oklch(45% 0.22 295 / 0.35);
+  --mem-shadow-popover: 0 16px 56px oklch(40% 0.18 295 / 0.4);
+  --mem-shadow-chip: 0 4px 20px oklch(38% 0.16 295 / 0.3);
+}
+
+@plugin "daisyui/theme" {
+  name: "atlas";
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-300: oklch(91% 0.016 82);
+  --color-base-200: oklch(95.5% 0.013 85);
+  --color-base-100: oklch(99% 0.006 85);
+  --color-base-content: oklch(28% 0.04 55);
+
+  --color-content-muted: oklch(48% 0.03 55);
+  --color-content-faint: oklch(62% 0.02 70);
+  --color-divider: color-mix(in oklch, var(--color-base-content) 12%, transparent);
+
+  --color-chart-blue: oklch(52% 0.1 240);
+  --color-chart-pink: oklch(58% 0.14 15);
+  --color-chart-cyan: oklch(55% 0.08 200);
+  --color-chart-teal: oklch(50% 0.1 175);
+  --color-chart-violet: oklch(48% 0.12 285);
+  --color-chart-coral: oklch(58% 0.16 30);
+  --color-chart-lime: oklch(58% 0.12 145);
+
+  --color-primary: oklch(38% 0.08 55);
+  --color-primary-content: oklch(98% 0.01 85);
+
+  --color-secondary: oklch(88% 0.02 85);
+  --color-secondary-content: oklch(32% 0.04 55);
+
+  --color-accent: oklch(52% 0.1 240);
+  --color-accent-content: oklch(98% 0.01 240);
+
+  --color-neutral: oklch(90% 0.015 82);
+  --color-neutral-content: oklch(32% 0.04 55);
+
+  --color-info: oklch(52% 0.1 240);
+  --color-info-content: oklch(98% 0.01 240);
+  --color-success: oklch(48% 0.12 145);
+  --color-success-content: oklch(98% 0.01 145);
+  --color-warning: oklch(62% 0.14 75);
+  --color-warning-content: oklch(20% 0.03 75);
+  --color-error: oklch(52% 0.18 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.375rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+
+  --glass-blur: 0px;
+  --glass-opacity: 1;
+  --glass-reflect-degree: 120deg;
+  --glass-reflect-opacity: 0;
+  --glass-border-opacity: 0.06;
+  --glass-text-shadow-opacity: 0;
+
+  --mem-canvas-image: linear-gradient(180deg, oklch(92% 0.014 85) 0%, oklch(90% 0.016 80) 100%);
+  --mem-backdrop-saturate: 100%;
+  --mem-surface-border: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  --mem-surface-toolbar-bg: var(--color-base-100);
+  --mem-surface-panel-bg: var(--color-base-200);
+  --mem-surface-elevated-bg: var(--color-base-100);
+  --mem-surface-toolbar-solid: var(--color-base-100);
+  --mem-surface-panel-solid: var(--color-base-200);
+  --mem-surface-elevated-solid: var(--color-base-100);
+  --mem-float-border: color-mix(in oklch, var(--color-base-content) 12%, transparent);
+  --mem-shadow-card: 0 2px 12px oklch(28% 0.04 55 / 0.08);
+  --mem-shadow-float: 0 4px 20px oklch(28% 0.04 55 / 0.1);
+  --mem-shadow-popover: 0 8px 28px oklch(28% 0.04 55 / 0.12);
+  --mem-shadow-chip: 0 1px 6px oklch(28% 0.04 55 / 0.06);
+}
+
+@plugin "daisyui/theme" {
+  name: "slate";
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-300: oklch(16% 0.02 265);
+  --color-base-200: oklch(20% 0.025 265);
+  --color-base-100: oklch(24% 0.03 265);
+  --color-base-content: oklch(92% 0.01 265);
+
+  --color-content-muted: oklch(68% 0.02 265);
+  --color-content-faint: oklch(54% 0.015 265);
+  --color-divider: color-mix(in oklch, var(--color-base-content) 8%, transparent);
+
+  --color-chart-blue: oklch(62% 0.16 264);
+  --color-chart-pink: oklch(65% 0.14 330);
+  --color-chart-cyan: oklch(68% 0.1 200);
+  --color-chart-teal: oklch(65% 0.12 185);
+  --color-chart-violet: oklch(58% 0.2 285);
+  --color-chart-coral: oklch(62% 0.18 25);
+  --color-chart-lime: oklch(72% 0.16 145);
+
+  --color-primary: oklch(50% 0.18 275);
+  --color-primary-content: oklch(98% 0.01 275);
+
+  --color-secondary: oklch(42% 0.04 265);
+  --color-secondary-content: oklch(92% 0.01 265);
+
+  --color-accent: oklch(72% 0.12 200);
+  --color-accent-content: oklch(16% 0.02 200);
+
+  --color-neutral: oklch(28% 0.03 265);
+  --color-neutral-content: oklch(78% 0.02 265);
+
+  --color-info: oklch(62% 0.16 264);
+  --color-info-content: oklch(98% 0.01 264);
+  --color-success: oklch(68% 0.16 145);
+  --color-success-content: oklch(16% 0.03 145);
+  --color-warning: oklch(75% 0.14 70);
+  --color-warning-content: oklch(16% 0.03 70);
+  --color-error: oklch(60% 0.2 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.625rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+
+  --glass-blur: 4px;
+  --glass-opacity: 0.95;
+  --glass-reflect-degree: 120deg;
+  --glass-reflect-opacity: 0;
+  --glass-border-opacity: 0.06;
+  --glass-text-shadow-opacity: 0;
+
+  --mem-canvas-image: none;
+  --mem-backdrop-saturate: 110%;
+  --mem-surface-border: color-mix(in oklch, var(--color-base-content) 6%, transparent);
+  --mem-surface-toolbar-bg: var(--color-base-100);
+  --mem-surface-panel-bg: var(--color-base-200);
+  --mem-surface-elevated-bg: var(--color-base-100);
+  --mem-surface-toolbar-solid: var(--color-base-100);
+  --mem-surface-panel-solid: var(--color-base-200);
+  --mem-surface-elevated-solid: var(--color-base-100);
+  --mem-float-border: color-mix(in oklch, var(--color-base-content) 8%, transparent);
+  --mem-shadow-card: 0 4px 20px oklch(0% 0 0 / 0.3);
+  --mem-shadow-float: 0 8px 28px oklch(0% 0 0 / 0.35);
+  --mem-shadow-popover: 0 12px 36px oklch(0% 0 0 / 0.4);
+  --mem-shadow-chip: 0 2px 10px oklch(0% 0 0 / 0.25);
+}
+
+@plugin "daisyui/theme" {
+  name: "sakura";
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-300: oklch(93% 0.025 350);
+  --color-base-200: oklch(96.5% 0.02 350);
+  --color-base-100: oklch(99.5% 0.01 350);
+  --color-base-content: oklch(32% 0.06 350);
+
+  --color-content-muted: oklch(52% 0.05 350);
+  --color-content-faint: oklch(66% 0.035 350);
+  --color-divider: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+
+  --color-chart-blue: oklch(58% 0.12 240);
+  --color-chart-pink: oklch(65% 0.18 350);
+  --color-chart-cyan: oklch(62% 0.1 200);
+  --color-chart-teal: oklch(58% 0.12 175);
+  --color-chart-violet: oklch(55% 0.14 300);
+  --color-chart-coral: oklch(62% 0.16 20);
+  --color-chart-lime: oklch(65% 0.14 145);
+
+  --color-primary: oklch(50% 0.18 350);
+  --color-primary-content: oklch(98% 0.01 350);
+
+  --color-secondary: oklch(90% 0.03 350);
+  --color-secondary-content: oklch(35% 0.06 350);
+
+  --color-accent: oklch(72% 0.12 300);
+  --color-accent-content: oklch(98% 0.01 300);
+
+  --color-neutral: oklch(92% 0.02 350);
+  --color-neutral-content: oklch(35% 0.06 350);
+
+  --color-info: oklch(58% 0.12 240);
+  --color-info-content: oklch(98% 0.01 240);
+  --color-success: oklch(55% 0.14 145);
+  --color-success-content: oklch(98% 0.01 145);
+  --color-warning: oklch(72% 0.14 70);
+  --color-warning-content: oklch(20% 0.03 70);
+  --color-error: oklch(58% 0.18 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 1rem;
+  --radius-field: 1rem;
+  --radius-box: 1.25rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+
+  --glass-blur: 8px;
+  --glass-opacity: 0.85;
+  --glass-reflect-degree: 140deg;
+  --glass-reflect-opacity: 0.04;
+  --glass-border-opacity: 0.1;
+  --glass-text-shadow-opacity: 0;
+
+  --mem-canvas-image:
+    radial-gradient(ellipse 80% 60% at 90% 10%, oklch(85% 0.08 350 / 0.4), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 10% 90%, oklch(88% 0.06 320 / 0.3), transparent 50%),
+    linear-gradient(180deg, oklch(94% 0.02 350) 0%, oklch(91% 0.025 350) 100%);
+  --mem-canvas-pattern: none;
+  --mem-backdrop-saturate: 120%;
+  --mem-surface-border: color-mix(in oklch, var(--color-primary) 12%, transparent);
+  --mem-surface-toolbar-bg: var(--color-base-100);
+  --mem-surface-panel-bg: var(--color-base-200);
+  --mem-surface-elevated-bg: var(--color-base-100);
+  --mem-surface-toolbar-solid: var(--color-base-100);
+  --mem-surface-panel-solid: var(--color-base-200);
+  --mem-surface-elevated-solid: var(--color-base-100);
+  --mem-float-border: color-mix(in oklch, var(--color-primary) 15%, transparent);
+  --mem-shadow-card: 0 4px 24px oklch(62% 0.18 350 / 0.12);
+  --mem-shadow-float: 0 8px 32px oklch(62% 0.18 350 / 0.15);
+  --mem-shadow-popover: 0 12px 40px oklch(62% 0.18 350 / 0.18);
+  --mem-shadow-chip: 0 2px 12px oklch(62% 0.18 350 / 0.1);
+}
+
+@plugin "daisyui/theme" {
+  name: "moss";
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-300: oklch(14% 0.04 145);
+  --color-base-200: oklch(18% 0.05 145);
+  --color-base-100: oklch(22% 0.06 145);
+  --color-base-content: oklch(90% 0.02 145);
+
+  --color-content-muted: oklch(68% 0.03 145);
+  --color-content-faint: oklch(54% 0.025 145);
+  --color-divider: color-mix(in oklch, var(--color-base-content) 8%, transparent);
+
+  --color-chart-blue: oklch(62% 0.12 240);
+  --color-chart-pink: oklch(65% 0.14 330);
+  --color-chart-cyan: oklch(68% 0.1 200);
+  --color-chart-teal: oklch(65% 0.14 175);
+  --color-chart-violet: oklch(58% 0.16 285);
+  --color-chart-coral: oklch(62% 0.18 30);
+  --color-chart-lime: oklch(72% 0.18 145);
+
+  --color-primary: oklch(72% 0.16 145);
+  --color-primary-content: oklch(16% 0.04 145);
+
+  --color-secondary: oklch(38% 0.06 145);
+  --color-secondary-content: oklch(90% 0.02 145);
+
+  --color-accent: oklch(65% 0.12 85);
+  --color-accent-content: oklch(16% 0.03 85);
+
+  --color-neutral: oklch(26% 0.05 145);
+  --color-neutral-content: oklch(78% 0.025 145);
+
+  --color-info: oklch(62% 0.12 240);
+  --color-info-content: oklch(98% 0.01 240);
+  --color-success: oklch(72% 0.16 145);
+  --color-success-content: oklch(16% 0.04 145);
+  --color-warning: oklch(75% 0.14 85);
+  --color-warning-content: oklch(16% 0.03 85);
+  --color-error: oklch(60% 0.18 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.625rem;
+  --radius-field: 0.625rem;
+  --radius-box: 0.75rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+
+  --glass-blur: 0px;
+  --glass-opacity: 1;
+  --glass-reflect-degree: 120deg;
+  --glass-reflect-opacity: 0;
+  --glass-border-opacity: 0.08;
+  --glass-text-shadow-opacity: 0;
+
+  --mem-canvas-image:
+    radial-gradient(ellipse 60% 50% at 80% 20%, oklch(35% 0.1 145 / 0.35), transparent 55%),
+    linear-gradient(180deg, oklch(13% 0.04 145) 0%, oklch(16% 0.05 155) 100%);
+  --mem-backdrop-saturate: 100%;
+  --mem-surface-border: color-mix(in oklch, var(--color-base-content) 7%, transparent);
+  --mem-surface-toolbar-bg: var(--color-base-100);
+  --mem-surface-panel-bg: var(--color-base-200);
+  --mem-surface-elevated-bg: var(--color-base-100);
+  --mem-surface-toolbar-solid: var(--color-base-100);
+  --mem-surface-panel-solid: var(--color-base-200);
+  --mem-surface-elevated-solid: var(--color-base-100);
+  --mem-float-border: color-mix(in oklch, var(--color-primary) 18%, transparent);
+  --mem-shadow-card: 0 4px 24px oklch(10% 0.06 145 / 0.5);
+  --mem-shadow-float: 0 8px 32px oklch(10% 0.06 145 / 0.55);
+  --mem-shadow-popover: 0 12px 40px oklch(10% 0.06 145 / 0.6);
+  --mem-shadow-chip: 0 2px 12px oklch(10% 0.06 145 / 0.4);
+}
+
+@plugin "daisyui/theme" {
+  name: "solar";
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-300: oklch(90% 0.038 72);
+  --color-base-200: oklch(94.5% 0.032 75);
+  --color-base-100: oklch(98.5% 0.015 80);
+  --color-base-content: oklch(30% 0.05 55);
+
+  --color-content-muted: oklch(50% 0.04 60);
+  --color-content-faint: oklch(64% 0.03 70);
+  --color-divider: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+
+  --color-chart-blue: oklch(55% 0.12 240);
+  --color-chart-pink: oklch(60% 0.14 20);
+  --color-chart-cyan: oklch(58% 0.1 200);
+  --color-chart-teal: oklch(55% 0.12 175);
+  --color-chart-violet: oklch(52% 0.14 285);
+  --color-chart-coral: oklch(62% 0.18 35);
+  --color-chart-lime: oklch(62% 0.14 100);
+
+  --color-primary: oklch(68% 0.16 65);
+  --color-primary-content: oklch(18% 0.04 65);
+
+  --color-secondary: oklch(88% 0.04 75);
+  --color-secondary-content: oklch(32% 0.05 55);
+
+  --color-accent: oklch(58% 0.14 35);
+  --color-accent-content: oklch(98% 0.01 35);
+
+  --color-neutral: oklch(90% 0.025 75);
+  --color-neutral-content: oklch(32% 0.05 55);
+
+  --color-info: oklch(55% 0.12 240);
+  --color-info-content: oklch(98% 0.01 240);
+  --color-success: oklch(52% 0.14 145);
+  --color-success-content: oklch(98% 0.01 145);
+  --color-warning: oklch(72% 0.16 65);
+  --color-warning-content: oklch(18% 0.04 65);
+  --color-error: oklch(55% 0.18 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+
+  --glass-blur: 0px;
+  --glass-opacity: 1;
+  --glass-reflect-degree: 120deg;
+  --glass-reflect-opacity: 0;
+  --glass-border-opacity: 0.08;
+  --glass-text-shadow-opacity: 0;
+
+  --mem-canvas-image:
+    radial-gradient(ellipse 70% 55% at 100% 0%, oklch(80% 0.12 65 / 0.35), transparent 55%),
+    linear-gradient(180deg, oklch(93% 0.025 80) 0%, oklch(89% 0.038 72) 100%);
+  --mem-backdrop-saturate: 100%;
+  --mem-surface-border: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  --mem-surface-toolbar-bg: var(--color-base-100);
+  --mem-surface-panel-bg: var(--color-base-200);
+  --mem-surface-elevated-bg: var(--color-base-100);
+  --mem-surface-toolbar-solid: var(--color-base-100);
+  --mem-surface-panel-solid: var(--color-base-200);
+  --mem-surface-elevated-solid: var(--color-base-100);
+  --mem-float-border: color-mix(in oklch, var(--color-primary) 20%, transparent);
+  --mem-shadow-card: 0 4px 20px oklch(68% 0.16 65 / 0.15);
+  --mem-shadow-float: 0 8px 28px oklch(68% 0.16 65 / 0.18);
+  --mem-shadow-popover: 0 12px 36px oklch(68% 0.16 65 / 0.2);
+  --mem-shadow-chip: 0 2px 10px oklch(68% 0.16 65 / 0.12);
+}
+
+@plugin "daisyui/theme" {
+  name: "ink";
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-300: oklch(10% 0 0);
+  --color-base-200: oklch(14% 0 0);
+  --color-base-100: oklch(18% 0 0);
+  --color-base-content: oklch(94% 0 0);
+
+  --color-content-muted: oklch(68% 0 0);
+  --color-content-faint: oklch(52% 0 0);
+  --color-divider: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+
+  --color-chart-blue: oklch(70% 0 0);
+  --color-chart-pink: oklch(75% 0 0);
+  --color-chart-cyan: oklch(65% 0 0);
+  --color-chart-teal: oklch(60% 0 0);
+  --color-chart-violet: oklch(55% 0 0);
+  --color-chart-coral: oklch(72% 0 0);
+  --color-chart-lime: oklch(80% 0 0);
+
+  --color-primary: oklch(94% 0 0);
+  --color-primary-content: oklch(10% 0 0);
+
+  --color-secondary: oklch(32% 0 0);
+  --color-secondary-content: oklch(94% 0 0);
+
+  --color-accent: oklch(72% 0 0);
+  --color-accent-content: oklch(12% 0 0);
+
+  --color-neutral: oklch(22% 0 0);
+  --color-neutral-content: oklch(80% 0 0);
+
+  --color-info: oklch(70% 0 0);
+  --color-info-content: oklch(10% 0 0);
+  --color-success: oklch(75% 0 0);
+  --color-success-content: oklch(10% 0 0);
+  --color-warning: oklch(78% 0 0);
+  --color-warning-content: oklch(10% 0 0);
+  --color-error: oklch(65% 0 0);
+  --color-error-content: oklch(10% 0 0);
+
+  --radius-selector: 0.125rem;
+  --radius-field: 0.125rem;
+  --radius-box: 0.25rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+
+  --glass-blur: 0px;
+  --glass-opacity: 1;
+  --glass-reflect-degree: 120deg;
+  --glass-reflect-opacity: 0;
+  --glass-border-opacity: 0.1;
+  --glass-text-shadow-opacity: 0;
+
+  --mem-canvas-image: none;
+  --mem-backdrop-saturate: 100%;
+  --mem-surface-border: color-mix(in oklch, var(--color-base-content) 12%, transparent);
+  --mem-surface-toolbar-bg: var(--color-base-100);
+  --mem-surface-panel-bg: var(--color-base-200);
+  --mem-surface-elevated-bg: var(--color-base-100);
+  --mem-surface-toolbar-solid: var(--color-base-100);
+  --mem-surface-panel-solid: var(--color-base-200);
+  --mem-surface-elevated-solid: var(--color-base-100);
+  --mem-float-border: color-mix(in oklch, var(--color-base-content) 15%, transparent);
+  --mem-shadow-card: 0 2px 8px oklch(0% 0 0 / 0.5);
+  --mem-shadow-float: 0 4px 16px oklch(0% 0 0 / 0.55);
+  --mem-shadow-popover: 0 8px 24px oklch(0% 0 0 / 0.6);
+  --mem-shadow-chip: 0 1px 6px oklch(0% 0 0 / 0.4);
+}
+
+@plugin "daisyui/theme" {
+  name: "coral";
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-300: oklch(91% 0.024 195);
+  --color-base-200: oklch(95.5% 0.02 200);
+  --color-base-100: oklch(99% 0.01 200);
+  --color-base-content: oklch(28% 0.05 220);
+
+  --color-content-muted: oklch(48% 0.04 210);
+  --color-content-faint: oklch(62% 0.03 200);
+  --color-divider: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+
+  --color-chart-blue: oklch(58% 0.14 240);
+  --color-chart-pink: oklch(62% 0.18 350);
+  --color-chart-cyan: oklch(62% 0.12 195);
+  --color-chart-teal: oklch(58% 0.14 175);
+  --color-chart-violet: oklch(55% 0.14 285);
+  --color-chart-coral: oklch(62% 0.2 25);
+  --color-chart-lime: oklch(62% 0.14 145);
+
+  --color-primary: oklch(52% 0.2 25);
+  --color-primary-content: oklch(98% 0.01 25);
+
+  --color-secondary: oklch(88% 0.03 195);
+  --color-secondary-content: oklch(30% 0.05 220);
+
+  --color-accent: oklch(58% 0.14 195);
+  --color-accent-content: oklch(98% 0.01 195);
+
+  --color-neutral: oklch(90% 0.02 200);
+  --color-neutral-content: oklch(30% 0.05 220);
+
+  --color-info: oklch(58% 0.14 240);
+  --color-info-content: oklch(98% 0.01 240);
+  --color-success: oklch(52% 0.14 145);
+  --color-success-content: oklch(98% 0.01 145);
+  --color-warning: oklch(72% 0.14 70);
+  --color-warning-content: oklch(20% 0.03 70);
+  --color-error: oklch(55% 0.2 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.75rem;
+  --radius-field: 0.75rem;
+  --radius-box: 1rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+
+  --glass-blur: 6px;
+  --glass-opacity: 0.9;
+  --glass-reflect-degree: 130deg;
+  --glass-reflect-opacity: 0.03;
+  --glass-border-opacity: 0.1;
+  --glass-text-shadow-opacity: 0;
+
+  --mem-canvas-image:
+    radial-gradient(ellipse 70% 55% at 0% 0%, oklch(75% 0.12 195 / 0.35), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 100% 100%, oklch(78% 0.14 25 / 0.25), transparent 50%),
+    linear-gradient(180deg, oklch(93% 0.018 200) 0%, oklch(90% 0.024 195) 100%);
+  --mem-backdrop-saturate: 115%;
+  --mem-surface-border: color-mix(in oklch, var(--color-accent) 15%, transparent);
+  --mem-surface-toolbar-bg: var(--color-base-100);
+  --mem-surface-panel-bg: var(--color-base-200);
+  --mem-surface-elevated-bg: var(--color-base-100);
+  --mem-surface-toolbar-solid: var(--color-base-100);
+  --mem-surface-panel-solid: var(--color-base-200);
+  --mem-surface-elevated-solid: var(--color-base-100);
+  --mem-float-border: color-mix(in oklch, var(--color-primary) 18%, transparent);
+  --mem-shadow-card: 0 4px 24px oklch(62% 0.2 25 / 0.12);
+  --mem-shadow-float: 0 8px 32px oklch(58% 0.14 195 / 0.15);
+  --mem-shadow-popover: 0 12px 40px oklch(58% 0.14 195 / 0.18);
+  --mem-shadow-chip: 0 2px 12px oklch(62% 0.2 25 / 0.1);
+}
+
+@plugin "daisyui/theme" {
+  name: "oxide";
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-300: oklch(12% 0.02 50);
+  --color-base-200: oklch(16% 0.025 48);
+  --color-base-100: oklch(20% 0.03 45);
+  --color-base-content: oklch(90% 0.02 70);
+
+  --color-content-muted: oklch(68% 0.03 60);
+  --color-content-faint: oklch(54% 0.025 55);
+  --color-divider: color-mix(in oklch, var(--color-base-content) 8%, transparent);
+
+  --color-chart-blue: oklch(62% 0.1 240);
+  --color-chart-pink: oklch(65% 0.12 330);
+  --color-chart-cyan: oklch(65% 0.08 200);
+  --color-chart-teal: oklch(62% 0.1 175);
+  --color-chart-violet: oklch(58% 0.14 285);
+  --color-chart-coral: oklch(65% 0.16 40);
+  --color-chart-lime: oklch(70% 0.14 100);
+
+  --color-primary: oklch(65% 0.14 55);
+  --color-primary-content: oklch(14% 0.03 55);
+
+  --color-secondary: oklch(35% 0.04 48);
+  --color-secondary-content: oklch(90% 0.02 70);
+
+  --color-accent: oklch(55% 0.1 30);
+  --color-accent-content: oklch(98% 0.01 30);
+
+  --color-neutral: oklch(24% 0.03 48);
+  --color-neutral-content: oklch(76% 0.025 60);
+
+  --color-info: oklch(62% 0.1 240);
+  --color-info-content: oklch(98% 0.01 240);
+  --color-success: oklch(68% 0.14 145);
+  --color-success-content: oklch(16% 0.03 145);
+  --color-warning: oklch(72% 0.14 70);
+  --color-warning-content: oklch(16% 0.03 70);
+  --color-error: oklch(58% 0.18 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.375rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+
+  --glass-blur: 0px;
+  --glass-opacity: 1;
+  --glass-reflect-degree: 120deg;
+  --glass-reflect-opacity: 0;
+  --glass-border-opacity: 0.1;
+  --glass-text-shadow-opacity: 0;
+
+  --mem-canvas-image:
+    radial-gradient(ellipse 55% 45% at 75% 25%, oklch(40% 0.1 55 / 0.3), transparent 55%),
+    linear-gradient(180deg, oklch(11% 0.02 50) 0%, oklch(14% 0.025 45) 100%);
+  --mem-backdrop-saturate: 100%;
+  --mem-surface-border: color-mix(in oklch, var(--color-primary) 12%, transparent);
+  --mem-surface-toolbar-bg: var(--color-base-100);
+  --mem-surface-panel-bg: var(--color-base-200);
+  --mem-surface-elevated-bg: var(--color-base-100);
+  --mem-surface-toolbar-solid: var(--color-base-100);
+  --mem-surface-panel-solid: var(--color-base-200);
+  --mem-surface-elevated-solid: var(--color-base-100);
+  --mem-float-border: color-mix(in oklch, var(--color-primary) 20%, transparent);
+  --mem-shadow-card: 0 4px 24px oklch(8% 0.04 50 / 0.55);
+  --mem-shadow-float: 0 8px 32px oklch(8% 0.04 50 / 0.6);
+  --mem-shadow-popover: 0 12px 40px oklch(8% 0.04 50 / 0.65);
+  --mem-shadow-chip: 0 2px 12px oklch(8% 0.04 50 / 0.45);
+}
+
+@plugin "daisyui/theme" {
+  name: "arctic";
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-300: oklch(91% 0.024 235);
+  --color-base-200: oklch(95.5% 0.02 230);
+  --color-base-100: oklch(99.5% 0.01 230);
+  --color-base-content: oklch(28% 0.05 250);
+
+  --color-content-muted: oklch(48% 0.04 240);
+  --color-content-faint: oklch(62% 0.03 235);
+  --color-divider: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+
+  --color-chart-blue: oklch(55% 0.14 240);
+  --color-chart-pink: oklch(58% 0.12 330);
+  --color-chart-cyan: oklch(58% 0.12 200);
+  --color-chart-teal: oklch(52% 0.1 195);
+  --color-chart-violet: oklch(50% 0.12 285);
+  --color-chart-coral: oklch(58% 0.16 25);
+  --color-chart-lime: oklch(58% 0.12 145);
+
+  --color-primary: oklch(52% 0.14 235);
+  --color-primary-content: oklch(98% 0.01 235);
+
+  --color-secondary: oklch(90% 0.025 230);
+  --color-secondary-content: oklch(30% 0.05 250);
+
+  --color-accent: oklch(62% 0.1 200);
+  --color-accent-content: oklch(98% 0.01 200);
+
+  --color-neutral: oklch(92% 0.02 235);
+  --color-neutral-content: oklch(30% 0.05 250);
+
+  --color-info: oklch(52% 0.14 235);
+  --color-info-content: oklch(98% 0.01 235);
+  --color-success: oklch(50% 0.12 145);
+  --color-success-content: oklch(98% 0.01 145);
+  --color-warning: oklch(68% 0.12 75);
+  --color-warning-content: oklch(20% 0.03 75);
+  --color-error: oklch(52% 0.18 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.625rem;
+  --radius-field: 0.625rem;
+  --radius-box: 0.875rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+
+  --glass-blur: 10px;
+  --glass-opacity: 0.88;
+  --glass-reflect-degree: 140deg;
+  --glass-reflect-opacity: 0.05;
+  --glass-border-opacity: 0.12;
+  --glass-text-shadow-opacity: 0;
+
+  --mem-canvas-image:
+    radial-gradient(ellipse 80% 60% at 50% 0%, oklch(88% 0.06 230 / 0.5), transparent 55%),
+    linear-gradient(180deg, oklch(94% 0.018 230) 0%, oklch(90% 0.024 235) 100%);
+  --mem-backdrop-saturate: 130%;
+  --mem-surface-border: color-mix(in oklch, var(--color-primary) 10%, transparent);
+  --mem-surface-toolbar-bg: var(--color-base-100);
+  --mem-surface-panel-bg: var(--color-base-200);
+  --mem-surface-elevated-bg: var(--color-base-100);
+  --mem-surface-toolbar-solid: var(--color-base-100);
+  --mem-surface-panel-solid: var(--color-base-200);
+  --mem-surface-elevated-solid: var(--color-base-100);
+  --mem-float-border: color-mix(in oklch, var(--color-primary) 14%, transparent);
+  --mem-shadow-card: 0 4px 24px oklch(52% 0.14 235 / 0.1);
+  --mem-shadow-float: 0 8px 32px oklch(52% 0.14 235 / 0.12);
+  --mem-shadow-popover: 0 12px 40px oklch(52% 0.14 235 / 0.15);
+  --mem-shadow-chip: 0 2px 12px oklch(52% 0.14 235 / 0.08);
+}
+
+@plugin "daisyui/theme" {
+  name: "prism";
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-300: oklch(13% 0.03 285);
+  --color-base-200: oklch(17% 0.04 285);
+  --color-base-100: oklch(21% 0.05 285);
+  --color-base-content: oklch(92% 0.01 285);
+
+  --color-content-muted: oklch(70% 0.02 285);
+  --color-content-faint: oklch(56% 0.015 285);
+  --color-divider: color-mix(in oklch, var(--color-base-content) 8%, transparent);
+
+  --color-chart-blue: oklch(62% 0.18 264);
+  --color-chart-pink: oklch(65% 0.18 330);
+  --color-chart-cyan: oklch(68% 0.14 195);
+  --color-chart-teal: oklch(65% 0.14 175);
+  --color-chart-violet: oklch(58% 0.22 295);
+  --color-chart-coral: oklch(62% 0.2 25);
+  --color-chart-lime: oklch(72% 0.18 145);
+
+  --color-primary: oklch(58% 0.24 295);
+  --color-primary-content: oklch(98% 0.01 295);
+
+  --color-secondary: oklch(62% 0.18 264);
+  --color-secondary-content: oklch(98% 0.01 264);
+
+  --color-accent: oklch(68% 0.18 330);
+  --color-accent-content: oklch(98% 0.01 330);
+
+  --color-neutral: oklch(25% 0.04 285);
+  --color-neutral-content: oklch(78% 0.02 285);
+
+  --color-info: oklch(62% 0.18 264);
+  --color-info-content: oklch(98% 0.01 264);
+  --color-success: oklch(68% 0.18 145);
+  --color-success-content: oklch(16% 0.03 145);
+  --color-warning: oklch(75% 0.16 70);
+  --color-warning-content: oklch(16% 0.03 70);
+  --color-error: oklch(60% 0.2 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 1rem;
+  --radius-field: 1rem;
+  --radius-box: 1.25rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+
+  --glass-blur: 16px;
+  --glass-opacity: 0.38;
+  --glass-reflect-degree: 150deg;
+  --glass-reflect-opacity: 0.08;
+  --glass-border-opacity: 0.14;
+  --glass-text-shadow-opacity: 0.04;
+
+  --mem-canvas-image:
+    radial-gradient(ellipse 50% 40% at 15% 20%, oklch(55% 0.22 0 / 0.25), transparent 55%),
+    radial-gradient(ellipse 45% 40% at 85% 25%, oklch(55% 0.2 120 / 0.22), transparent 55%),
+    radial-gradient(ellipse 50% 45% at 75% 80%, oklch(55% 0.22 280 / 0.25), transparent 55%),
+    radial-gradient(ellipse 45% 40% at 20% 75%, oklch(55% 0.2 330 / 0.22), transparent 55%),
+    linear-gradient(180deg, oklch(12% 0.035 285) 0%, oklch(15% 0.04 295) 50%, oklch(13% 0.035 275) 100%);
+  --mem-canvas-pattern: none;
+  --mem-backdrop-saturate: 160%;
+  --mem-surface-border: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  --mem-surface-toolbar-bg: var(--color-base-100);
+  --mem-surface-panel-bg: var(--color-base-200);
+  --mem-surface-elevated-bg: var(--color-base-100);
+  --mem-surface-toolbar-solid: var(--color-base-100);
+  --mem-surface-panel-solid: var(--color-base-200);
+  --mem-surface-elevated-solid: var(--color-base-100);
+  --mem-float-border: color-mix(in oklch, var(--color-primary) 25%, transparent);
+  --mem-shadow-card: 0 8px 40px oklch(40% 0.2 295 / 0.3);
+  --mem-shadow-float: 0 12px 48px oklch(35% 0.22 280 / 0.35);
+  --mem-shadow-popover: 0 16px 56px oklch(30% 0.2 295 / 0.4);
+  --mem-shadow-chip: 0 4px 20px oklch(38% 0.18 295 / 0.28);
+}

@@ -1,0 +1,51 @@
+{
+  "export": {
+    "title": "导出文件",
+    "selected_one": "已选择 {{count}} 项",
+    "selected_other": "已选择 {{count}} 项",
+    "destination": "目标位置",
+    "chooseFolder": "选择文件夹…",
+    "layout": "布局",
+    "layoutFlat": "扁平",
+    "layoutStructured": "结构化",
+    "layoutHintFlat": "将所有文件复制到目标文件夹。",
+    "layoutHintStructured": "保留图库中的子文件夹结构。",
+    "renameTemplate": "重命名模板（可选）",
+    "renameTokens": "占位符：{name}、{date}、{ext}、{camera}",
+    "format": "格式",
+    "formatOriginal": "原始",
+    "formatJpeg": "JPEG",
+    "formatPng": "PNG",
+    "progress": "进度",
+    "exporting": "正在导出…"
+  },
+  "smb": {
+    "title": "添加网络来源",
+    "modeMountedTitle": "已挂载文件夹",
+    "modeConnectTitle": "连接 SMB",
+    "serverPlaceholder": "192.168.1.10 或 smb://nas.local",
+    "signedIn": "已连接 {{host}}",
+    "rescanInterval": "重新扫描（秒）",
+    "signIn": "登录",
+    "addSource": "添加",
+    "noDiskShares": "未找到共享。"
+  },
+  "purge": {
+    "titleFile": "永久删除文件",
+    "titleItems": "永久删除项目",
+    "message": "从磁盘永久删除 {{target}}。此操作无法撤销。",
+    "targetFile": "此文件",
+    "targetItems_one": "{{count}} 项",
+    "targetItems_other": "{{count}} 项",
+    "confirmPrompt": "输入 DELETE 以确认",
+    "confirmToken": "DELETE"
+  },
+  "namePrompt": {
+    "collectionTitle": "保存为收藏夹",
+    "collectionLabel": "收藏夹名称",
+    "collectionSubmit": "保存"
+  },
+  "confirm": {
+    "defaultConfirmLabel": "确认"
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "generic": {
+    "title": "错误",
+    "message": "出现问题，请重试。",
+    "fallback": "出现问题。"
+  },
+  "notDesktopApp": "请使用 MemHG 桌面版，不要在浏览器中打开。",
+  "job_busy": {
+    "title": "操作进行中",
+    "message": "已有其他操作正在运行，请等待其完成。"
+  },
+  "catalog": {
+    "title": "目录错误",
+    "message": "发生目录错误，请尝试重建目录。"
+  },
+  "library": {
+    "title": "图库错误",
+    "message": "发生图库错误。"
+  },
+  "scan": {
+    "title": "扫描错误",
+    "message": "扫描失败。"
+  },
+  "metadata": {
+    "title": "元数据错误",
+    "message": "无法读取或写入元数据。"
+  },
+  "query": {
+    "title": "查询错误",
+    "message": "无法查询图库。"
+  },
+  "export": {
+    "title": "导出错误",
+    "message": "导出失败。"
+  },
+  "conflict": {
+    "title": "冲突",
+    "message": "操作与另一项更改发生冲突。"
+  },
+  "not_found": {
+    "title": "未找到",
+    "message": "未找到请求的项目。"
+  },
+  "invalid_input": {
+    "title": "输入无效",
+    "message": "输入无效。"
+  },
+  "io": {
+    "title": "文件错误",
+    "message": "发生文件系统错误。"
+  },
+  "sql": {
+    "title": "数据库错误",
+    "message": "发生数据库错误。"
+  },
+  "migrate": {
+    "title": "迁移错误",
+    "message": "数据库迁移失败。"
+  },
+  "json": {
+    "title": "数据错误",
+    "message": "无法解析存储的数据。"
+  },
+  "workspace": {
+    "title": "工作区错误",
+    "message": "发生工作区错误。"
+  },
+  "workspace_path_not_found": {
+    "title": "文件夹未找到",
+    "message": "找不到该文件夹，可能已被移动或删除。"
+  },
+  "workspace_not_a_workspace": {
+    "title": "非工作区",
+    "message": "此文件夹不是工作区。请使用「打开工作区」并选择包含 workspace.json 的文件夹。"
+  },
+  "workspace_already_exists": {
+    "title": "已是工作区",
+    "message": "此文件夹已是工作区。请使用「打开工作区」而非「创建」。"
+  },
+  "workspace_not_empty": {
+    "title": "文件夹非空",
+    "message": "请选择空文件夹以创建新工作区。"
+  },
+  "workspace_not_directory": {
+    "title": "非文件夹",
+    "message": "请选择文件夹，而非文件。"
+  },
+  "workspace_corrupt": {
+    "title": "工作区损坏",
+    "message": "此工作区似乎已损坏或使用了不支持的版本。"
+  },
+  "workspace_not_open": {
+    "title": "未打开工作区",
+    "message": "当前未打开工作区。"
+  }
+}

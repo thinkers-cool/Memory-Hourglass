@@ -1,0 +1,213 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as api from "../../api/client";
+import {
+  mergeLibraryFilter,
+} from "../../lib/libraryFilters";
+import type { FilterBarState } from "../../lib/libraryActions";
+import { errorNotification } from "../../lib/notification";
+import { DEFAULT_SORT_DIR, encodeSortParam } from "../../lib/sortSettings";
+import type {
+  Album,
+  AssetCard,
+  AssetDetail,
+  AssetFilter,
+  Notification,
+  RootStats,
+  SmartCollection,
+  TagDto,
+} from "../../types";
+import { PAGE } from "./constants";
+
+export function useLibraryQuery(
+  selectedIdRef: React.MutableRefObject<number | null>,
+  setDetail: React.Dispatch<React.SetStateAction<AssetDetail | null>>,
+  setNotification: React.Dispatch<React.SetStateAction<Notification | null>>,
+) {
+  const [roots, setRoots] = useState<RootStats[]>([]);
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [collections, setCollections] = useState<SmartCollection[]>([]);
+  const [tags, setTags] = useState<TagDto[]>([]);
+  const [deletedCount, setDeletedCount] = useState(0);
+  const [items, setItems] = useState<AssetCard[]>([]);
+  const [total, setTotal] = useState(0);
+  const [extraFilter, setExtraFilter] = useState<AssetFilter>({});
+  const [filterBar, setFilterBar] = useState<FilterBarState>({
+    ratingMin: "",
+    syncStates: [],
+    deleteStatus: "",
+    camera: "",
+    tagIds: [],
+    albumIds: [],
+    metaSearch: "",
+    hasGps: false,
+    hasDuplicate: false,
+    captureFrom: "",
+    captureTo: "",
+    sort: "date",
+    sortDir: DEFAULT_SORT_DIR.date,
+  });
+  const [selectedCollectionId, setSelectedCollectionId] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [scanStatus, setScanStatus] = useState("");
+
+  const offsetRef = useRef(0);
+  const filterRef = useRef<AssetFilter>({});
+
+  const filter = useMemo(
+    () => mergeLibraryFilter(filterBar, extraFilter),
+    [filterBar, extraFilter],
+  );
+
+  filterRef.current = filter;
+
+  const sortParam = useMemo(
+    () => encodeSortParam(filterBar.sort, filterBar.sortDir),
+    [filterBar.sort, filterBar.sortDir],
+  );
+
+  const refreshMeta = useCallback(async () => {
+    setRoots(await api.listRootStats());
+    setAlbums(await api.listAlbums());
+    setCollections(await api.listSmartCollections());
+    setTags(await api.listTags());
+    setDeletedCount(await api.countAssets({ deleted_only: true }));
+  }, []);
+
+  const refreshGrid = useCallback(async () => {
+    offsetRef.current = 0;
+    const result = await api.queryAssets(
+      filterRef.current,
+      sortParam,
+      0,
+      PAGE,
+    );
+    setItems(result.items);
+    setTotal(result.total);
+    setHasMore(result.items.length < result.total);
+  }, [sortParam]);
+
+  const refreshAll = useCallback(async () => {
+    await refreshMeta();
+    await refreshGrid();
+  }, [refreshMeta, refreshGrid]);
+
+  useEffect(() => {
+    refreshMeta().catch(console.error);
+  }, [refreshMeta]);
+
+  useEffect(() => {
+    refreshGrid().catch(console.error);
+  }, [filter, sortParam, refreshGrid]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let metaRefreshTimer: number | undefined;
+    let gridRefreshTimer: number | undefined;
+    let lastStatusUpdate = 0;
+
+    void api
+      .onScanProgress((progress) => {
+        const now = Date.now();
+        if (
+          progress.stage === "done" ||
+          progress.stage === "error" ||
+          now - lastStatusUpdate >= 500
+        ) {
+          lastStatusUpdate = now;
+          setScanStatus(`${progress.stage}: ${progress.indexed}/${progress.scanned}`);
+        }
+
+        if (progress.stage === "done" || progress.stage === "error") {
+          window.clearTimeout(metaRefreshTimer);
+          window.clearTimeout(gridRefreshTimer);
+          void refreshAll();
+          const currentSelectedId = selectedIdRef.current;
+          if (currentSelectedId !== null) {
+            void api
+              .getAsset(currentSelectedId)
+              .then(setDetail)
+              .catch(console.error);
+          }
+          return;
+        }
+
+        if (progress.stage === "cataloging" && progress.indexed > 0) {
+          window.clearTimeout(gridRefreshTimer);
+          gridRefreshTimer = window.setTimeout(() => {
+            void refreshGrid();
+          }, 8000);
+        }
+
+        if (progress.stage === "cataloging" || progress.stage === "indexing") {
+          window.clearTimeout(metaRefreshTimer);
+          metaRefreshTimer = window.setTimeout(() => {
+            void refreshMeta();
+          }, 5000);
+        }
+      })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(console.error);
+
+    return () => {
+      unlisten?.();
+      window.clearTimeout(metaRefreshTimer);
+      window.clearTimeout(gridRefreshTimer);
+    };
+  }, [refreshAll, refreshGrid, refreshMeta, selectedIdRef, setDetail]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const nextOffset = offsetRef.current + PAGE;
+      const result = await api.queryAssets(
+        filterRef.current,
+        sortParam,
+        nextOffset,
+        PAGE,
+      );
+      offsetRef.current = nextOffset;
+      setItems((prev) => {
+        const seen = new Set(prev.map((item) => item.id));
+        const nextItems = result.items.filter((item) => !seen.has(item.id));
+        return [...prev, ...nextItems];
+      });
+      setTotal(result.total);
+      setHasMore(nextOffset + result.items.length < result.total);
+    } catch (error) {
+      setNotification(errorNotification(error));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [sortParam, hasMore, loadingMore, setNotification]);
+
+  return {
+    roots,
+    albums,
+    collections,
+    tags,
+    deletedCount,
+    items,
+    setItems,
+    total,
+    extraFilter,
+    setExtraFilter,
+    filterBar,
+    setFilterBar,
+    selectedCollectionId,
+    setSelectedCollectionId,
+    loadingMore,
+    hasMore,
+    scanStatus,
+    setScanStatus,
+    filterRef,
+    sortParam,
+    refreshMeta,
+    refreshGrid,
+    refreshAll,
+    loadMore,
+  };
+}

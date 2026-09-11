@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Frontend build
+dist/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+WixTools/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Test
+coverage/
+*.profraw
+src-tauri/default_*
+src-tauri/target/llvm-cov/
+src-tauri/target/llvm-cov-target/
+src-tauri/target/llvm-cov-profraw/
+
+# TypeScript
+*.tsbuildinfo
+
+# Vite
+*.local
