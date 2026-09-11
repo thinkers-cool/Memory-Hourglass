@@ -20,7 +20,9 @@ describe("usePopoverDismiss", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
 
     onClose.mockClear();
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
     expect(onClose).toHaveBeenCalledTimes(1);
 
     onClose.mockClear();
@@ -34,9 +36,7 @@ describe("usePopoverDismiss", () => {
   it("does nothing when closed", () => {
     const onClose = vi.fn();
     const containerRef = { current: document.createElement("div") };
-    renderHook(() =>
-      usePopoverDismiss({ open: false, onClose, containerRef }),
-    );
+    renderHook(() => usePopoverDismiss({ open: false, onClose, containerRef }));
     document.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     expect(onClose).not.toHaveBeenCalled();
   });

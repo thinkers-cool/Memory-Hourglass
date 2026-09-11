@@ -169,7 +169,10 @@ mod tests {
         assert_eq!(AppError::Job("x".into()).code(), ErrorCode::JobBusy);
         assert_eq!(AppError::Conflict("x".into()).code(), ErrorCode::Conflict);
         assert_eq!(AppError::NotFound("x".into()).code(), ErrorCode::NotFound);
-        assert_eq!(AppError::InvalidInput("x".into()).code(), ErrorCode::InvalidInput);
+        assert_eq!(
+            AppError::InvalidInput("x".into()).code(),
+            ErrorCode::InvalidInput
+        );
         assert_eq!(
             AppError::Workspace("path not found: /x".into()).code(),
             ErrorCode::WorkspacePathNotFound
@@ -202,7 +205,10 @@ mod tests {
             AppError::Workspace("no workspace open".into()).code(),
             ErrorCode::WorkspaceNotOpen
         );
-        assert_eq!(AppError::Workspace("other".into()).code(), ErrorCode::Workspace);
+        assert_eq!(
+            AppError::Workspace("other".into()).code(),
+            ErrorCode::Workspace
+        );
         assert_eq!(
             AppError::Io(std::io::Error::new(std::io::ErrorKind::Other, "io")).code(),
             ErrorCode::Io

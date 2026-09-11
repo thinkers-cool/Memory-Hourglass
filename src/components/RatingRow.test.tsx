@@ -11,10 +11,18 @@ describe("RatingRow", () => {
 
     await user.click(screen.getByRole("button", { name: "Rate 4 stars" }));
     expect(onSelect).toHaveBeenCalledWith(4);
-    expect(screen.getByRole("button", { name: "Rate 1 star" })).toHaveTextContent("★");
-    expect(screen.getByRole("button", { name: "Rate 2 stars" })).toHaveTextContent("★");
-    expect(screen.getByRole("button", { name: "Rate 3 stars" })).toHaveTextContent("☆");
-    expect(screen.getByRole("button", { name: "Rate 4 stars" })).toHaveTextContent("☆");
+    expect(
+      screen.getByRole("button", { name: "Rate 1 star" }),
+    ).toHaveTextContent("★");
+    expect(
+      screen.getByRole("button", { name: "Rate 2 stars" }),
+    ).toHaveTextContent("★");
+    expect(
+      screen.getByRole("button", { name: "Rate 3 stars" }),
+    ).toHaveTextContent("☆");
+    expect(
+      screen.getByRole("button", { name: "Rate 4 stars" }),
+    ).toHaveTextContent("☆");
   });
 
   it("fills stars up to the active rating in compact mode", () => {
@@ -24,15 +32,17 @@ describe("RatingRow", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: "Rate 3 stars" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByRole("button", { name: "Rate 4 stars" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-    expect(screen.getByRole("button", { name: "Rate 1 star" })).toHaveTextContent("★");
-    expect(screen.getByRole("button", { name: "Rate 5 stars" })).toHaveTextContent("☆");
+    expect(
+      screen.getByRole("button", { name: "Rate 3 stars" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("button", { name: "Rate 4 stars" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(
+      screen.getByRole("button", { name: "Rate 1 star" }),
+    ).toHaveTextContent("★");
+    expect(
+      screen.getByRole("button", { name: "Rate 5 stars" }),
+    ).toHaveTextContent("☆");
   });
 });

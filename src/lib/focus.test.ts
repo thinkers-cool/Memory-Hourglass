@@ -40,7 +40,9 @@ describe("isTextEntryElement", () => {
     expect(isTextEntryElement(mockElement("input", { type: "password" }))).toBe(
       true,
     );
-    expect(isTextEntryElement(mockElement("input", { type: "url" }))).toBe(true);
+    expect(isTextEntryElement(mockElement("input", { type: "url" }))).toBe(
+      true,
+    );
     expect(isTextEntryElement(mockElement("input", { type: "tel" }))).toBe(
       true,
     );

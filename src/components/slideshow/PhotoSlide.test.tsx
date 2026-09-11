@@ -63,6 +63,8 @@ describe("PhotoSlide", () => {
         animate
       />,
     );
-    expect(screen.getByAltText("photo.jpg").className).not.toContain("animate-ken-burns");
+    expect(screen.getByAltText("photo.jpg").className).not.toContain(
+      "animate-ken-burns",
+    );
   });
 });

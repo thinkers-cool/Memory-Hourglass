@@ -99,11 +99,19 @@ describe("createLibraryActions", () => {
     actions.openSmbConnect();
     expect(deps.setSmbDialogOpen).toHaveBeenCalledWith(true);
 
-    vi.mocked(api.addSmbSource).mockResolvedValue({ id: 3, path: "/smb", kind: "smb" } as never);
+    vi.mocked(api.addSmbSource).mockResolvedValue({
+      id: 3,
+      path: "/smb",
+      kind: "smb",
+    } as never);
     await actions.addMountedSmbPath("/smb");
     expect(deps.refreshMeta).toHaveBeenCalled();
 
-    vi.mocked(api.connectSmbShare).mockResolvedValue({ id: 4, path: "/smb2", kind: "smb" } as never);
+    vi.mocked(api.connectSmbShare).mockResolvedValue({
+      id: 4,
+      path: "/smb2",
+      kind: "smb",
+    } as never);
     await actions.connectSmbShare({
       host: "h",
       share: "s",
@@ -132,6 +140,7 @@ describe("createLibraryActions", () => {
     actions.filterByTag(7);
     actions.viewTrash();
     actions.viewLibrary();
+    await actions.selectAlbum(3);
     expect(deps.setExtraFilter).toHaveBeenCalled();
     expect(deps.setFilterBar).toHaveBeenCalled();
     expect(deps.setSelectedCollectionId).toHaveBeenCalled();
@@ -141,7 +150,11 @@ describe("createLibraryActions", () => {
     expect(deps.setDetail).toHaveBeenCalled();
 
     const emptyDeps = makeLibraryActionsDeps({ items: [], selectedList: [] });
-    await createLibraryActions(emptyDeps).selectAsset(sampleActionItem, false, false);
+    await createLibraryActions(emptyDeps).selectAsset(
+      sampleActionItem,
+      false,
+      false,
+    );
     expect(emptyDeps.setSelectedIds).not.toHaveBeenCalled();
 
     const clearDeps = makeLibraryActionsDeps({
@@ -151,7 +164,11 @@ describe("createLibraryActions", () => {
         }
       }),
     });
-    await createLibraryActions(clearDeps).selectAsset(sampleActionItem, false, false);
+    await createLibraryActions(clearDeps).selectAsset(
+      sampleActionItem,
+      false,
+      false,
+    );
   });
 
   it("handles full view and linked asset navigation", async () => {
@@ -217,7 +234,10 @@ describe("createLibraryActions", () => {
   });
 
   it("blocks purge actions in read-only workspaces", async () => {
-    const deps = makeLibraryActionsDeps({ purgeTargetIds: [1, 2], readOnly: true });
+    const deps = makeLibraryActionsDeps({
+      purgeTargetIds: [1, 2],
+      readOnly: true,
+    });
     const actions = createLibraryActions(deps);
     actions.purge();
     actions.batchPurge();
@@ -228,7 +248,12 @@ describe("createLibraryActions", () => {
   });
 
   it("creates albums and collections", async () => {
-    vi.mocked(api.createAlbum).mockResolvedValue({ id: 8, name: "a", emoji: null, is_smart: false });
+    vi.mocked(api.createAlbum).mockResolvedValue({
+      id: 8,
+      name: "a",
+      emoji: null,
+      is_smart: false,
+    });
     const deps = makeLibraryActionsDeps();
     const actions = createLibraryActions(deps);
     await actions.createAlbum(" album ", "📷");
@@ -389,7 +414,11 @@ describe("createLibraryActions", () => {
     expect(api.cancelScan).toHaveBeenCalled();
 
     vi.mocked(api.startScan).mockRejectedValue(new Error("scan fail"));
-    vi.mocked(api.addSmbSource).mockResolvedValue({ id: 1, path: "/s", kind: "smb" } as never);
+    vi.mocked(api.addSmbSource).mockResolvedValue({
+      id: 1,
+      path: "/s",
+      kind: "smb",
+    } as never);
     await createLibraryActions(deps).addMountedSmbPath("/s");
   });
 
@@ -414,7 +443,11 @@ describe("createLibraryActions", () => {
     });
     expect(deps.setNotification).toHaveBeenCalled();
 
-    vi.mocked(api.connectSmbShare).mockResolvedValue({ id: 9, path: "/smb", kind: "smb" } as never);
+    vi.mocked(api.connectSmbShare).mockResolvedValue({
+      id: 9,
+      path: "/smb",
+      kind: "smb",
+    } as never);
     vi.mocked(api.startScan).mockRejectedValue(new Error("scan fail"));
     await createLibraryActions(deps).connectSmbShare({
       host: "h",
@@ -439,31 +472,55 @@ describe("createLibraryActions", () => {
     await actions.selectAsset(sampleActionItem2, false, true);
     expect(deps.setSelectedIds).toHaveBeenCalled();
 
-    const emptySelection = makeLibraryActionsDeps({ selectedId: null, selectedIds: new Set(), selectedList: [] });
+    const emptySelection = makeLibraryActionsDeps({
+      selectedId: null,
+      selectedIds: new Set(),
+      selectedList: [],
+    });
     await createLibraryActions(emptySelection).openFullView();
     expect(emptySelection.setFullView).toHaveBeenCalledWith(true);
   });
 
   it("purges multiple files and restores by selected id", async () => {
-    const deps = makeLibraryActionsDeps({ purgeTargetIds: [1, 2], selectedList: [], selectedId: 1 });
+    const deps = makeLibraryActionsDeps({
+      purgeTargetIds: [1, 2],
+      selectedList: [],
+      selectedId: 1,
+    });
     await createLibraryActions(deps).submitPurge();
     expect(api.purgeDelete).toHaveBeenCalled();
 
-    const restoreDeps = makeLibraryActionsDeps({ selectedList: [], selectedId: 2 });
+    const restoreDeps = makeLibraryActionsDeps({
+      selectedList: [],
+      selectedId: 2,
+    });
     await createLibraryActions(restoreDeps).restoreSelected();
     expect(api.restoreAssets).toHaveBeenCalledWith([2]);
   });
 
   it("creates albums and runs collection delete confirm", async () => {
-    vi.mocked(api.createAlbum).mockResolvedValue({ id: 12, name: "a", emoji: null, is_smart: false });
-    const noSelection = makeLibraryActionsDeps({ selectedList: [], selectedId: null, selectedIds: new Set() });
+    vi.mocked(api.createAlbum).mockResolvedValue({
+      id: 12,
+      name: "a",
+      emoji: null,
+      is_smart: false,
+    });
+    const noSelection = makeLibraryActionsDeps({
+      selectedList: [],
+      selectedId: null,
+      selectedIds: new Set(),
+    });
     await createLibraryActions(noSelection).createAlbum("solo");
     expect(api.setAlbumItems).not.toHaveBeenCalled();
 
     const deps = makeLibraryActionsDeps();
     const actions = createLibraryActions(deps);
     await actions.selectAlbum(4);
-    actions.selectCollection({ id: 2, name: "c", filter: { tag_ids: [1] } } as never);
+    actions.selectCollection({
+      id: 2,
+      name: "c",
+      filter: { tag_ids: [1] },
+    } as never);
     actions.deleteCollection(2);
     const [, , onConfirm] = deps.requestConfirm.mock.calls.at(-1)!;
     await onConfirm();
@@ -472,7 +529,11 @@ describe("createLibraryActions", () => {
 
   it("confirms relink, tag delete, and catalog rebuild", async () => {
     vi.mocked(pickFolder).mockResolvedValue("/new");
-    vi.mocked(api.previewRelink).mockResolvedValue({ matched: 2, total_sampled: 2, new_path: "/new" });
+    vi.mocked(api.previewRelink).mockResolvedValue({
+      matched: 2,
+      total_sampled: 2,
+      new_path: "/new",
+    });
     const deps = makeLibraryActionsDeps();
     const actions = createLibraryActions(deps);
     await actions.relinkRoot(1);
@@ -508,7 +569,11 @@ describe("createLibraryActions", () => {
   });
 
   it("toggles fullscreen and navigates from empty selection", () => {
-    const deps = makeLibraryActionsDeps({ selectedId: null, selectedIds: new Set(), selectedList: [] });
+    const deps = makeLibraryActionsDeps({
+      selectedId: null,
+      selectedIds: new Set(),
+      selectedList: [],
+    });
     const actions = createLibraryActions(deps);
     actions.toggleFullscreen();
     expect(deps.setFullView).toHaveBeenCalledWith(true);
@@ -518,12 +583,26 @@ describe("createLibraryActions", () => {
     expect(fullViewDeps.setFullView).toHaveBeenCalledWith(false);
   });
 
+  it("does not enter fullscreen without selection or items", () => {
+    const deps = makeLibraryActionsDeps({
+      selectedId: null,
+      selectedIds: new Set(),
+      selectedList: [],
+      items: [],
+    });
+    createLibraryActions(deps).toggleFullscreen();
+    expect(deps.setFullView).not.toHaveBeenCalled();
+  });
+
   it("updates compare details and deletes compare assets", async () => {
     vi.mocked(runAlbumToggle).mockResolvedValue(0);
     const deps = makeLibraryActionsDeps({
       compareOpen: true,
       compareItems: [sampleActionItem, sampleActionItem2],
-      compareDetails: { 1: { tag_ids: [1], album_ids: [] }, 2: { tag_ids: [], album_ids: [] } },
+      compareDetails: {
+        1: { tag_ids: [1], album_ids: [] },
+        2: { tag_ids: [], album_ids: [] },
+      },
       stampArmed: true,
       stampConfig: { ...EMPTY_STAMP_CONFIG, rating: 4 },
     });
@@ -595,12 +674,21 @@ describe("createLibraryActions", () => {
       selectedList: [1, 2],
       lastSelectedIndexRef: { current: 0 },
     });
-    await createLibraryActions(deps).selectAsset(sampleActionItem2, true, false);
+    await createLibraryActions(deps).selectAsset(
+      sampleActionItem2,
+      true,
+      false,
+    );
     expect(deps.setSelectedId).toHaveBeenCalledWith(1);
   });
 
   it("notifies for single purge and creates album for selected id only", async () => {
-    vi.mocked(api.createAlbum).mockResolvedValue({ id: 8, name: "a", emoji: null, is_smart: false });
+    vi.mocked(api.createAlbum).mockResolvedValue({
+      id: 8,
+      name: "a",
+      emoji: null,
+      is_smart: false,
+    });
     const setFilterBar = vi.fn((updater) => {
       if (typeof updater === "function") {
         updater({
@@ -612,7 +700,10 @@ describe("createLibraryActions", () => {
         } as never);
       }
     });
-    const singlePurge = makeLibraryActionsDeps({ purgeTargetIds: [1], setFilterBar });
+    const singlePurge = makeLibraryActionsDeps({
+      purgeTargetIds: [1],
+      setFilterBar,
+    });
     await createLibraryActions(singlePurge).submitPurge();
     expect(api.purgeDelete).toHaveBeenCalledWith([1], "DELETE");
 
@@ -641,7 +732,11 @@ describe("createLibraryActions", () => {
     const actions = createLibraryActions(deps);
     await actions.toggleAlbumOnSelection(2, false);
     await actions.selectAlbum(4);
-    actions.selectCollection({ id: 2, name: "c", filter: { tag_ids: [1] } } as never);
+    actions.selectCollection({
+      id: 2,
+      name: "c",
+      filter: { tag_ids: [1] },
+    } as never);
     actions.filterByTag(9);
     actions.viewTrash();
     await actions.createTag("top-level");
@@ -668,6 +763,49 @@ describe("createLibraryActions", () => {
     expect(deps.setFullView).not.toHaveBeenCalled();
   });
 
+  it("opens full view when selection exists without grid items", async () => {
+    const deps = makeLibraryActionsDeps({ selectedId: 1, items: [] });
+    await createLibraryActions(deps).openFullView();
+    expect(deps.setFullView).toHaveBeenCalledWith(true);
+  });
+
+  it("skips detail refresh after soft deleting duplicate without selection", async () => {
+    const deps = makeLibraryActionsDeps({ selectedId: null });
+    await createLibraryActions(deps).softDeleteDuplicate(2);
+    expect(api.getAsset).not.toHaveBeenCalled();
+    expect(api.softDeleteAssets).toHaveBeenCalledWith([2]);
+  });
+
+  it("skips detail refresh when creating tag outside selection", async () => {
+    const deps = makeLibraryActionsDeps({
+      selectedId: 1,
+      selectedIds: new Set([2]),
+      selectedList: [2],
+    });
+    await createLibraryActions(deps).createTagOnSelection("new-tag");
+    expect(api.getAsset).not.toHaveBeenCalled();
+  });
+
+  it("skips selected detail refresh when stamping compare targets", async () => {
+    vi.mocked(runStampToggle).mockResolvedValueOnce({
+      applied: 1,
+      unstamped: 0,
+      stampedIds: [1, 2],
+      unstampedIds: [],
+    });
+    const deps = makeLibraryActionsDeps({
+      compareOpen: true,
+      compareItems: [sampleActionItem, sampleActionItem2],
+      selectedId: 99,
+      selectedList: [1, 2],
+      stampArmed: true,
+      stampConfig: { ...EMPTY_STAMP_CONFIG, rating: 4 },
+    });
+    vi.mocked(api.getAsset).mockClear();
+    await createLibraryActions(deps).toggleStampOnTargets();
+    expect(api.getAsset).not.toHaveBeenCalledWith(99);
+  });
+
   it("executes grid and compare state updaters", async () => {
     const setGridColumnCount = vi.fn((updater) => {
       if (typeof updater === "function") updater(5);
@@ -677,7 +815,10 @@ describe("createLibraryActions", () => {
         updater({ 1: { tag_ids: [1], album_ids: [2] } });
       }
     });
-    const deps = makeLibraryActionsDeps({ setGridColumnCount, setCompareDetails });
+    const deps = makeLibraryActionsDeps({
+      setGridColumnCount,
+      setCompareDetails,
+    });
     const actions = createLibraryActions(deps);
     actions.adjustGridSize(1);
     await actions.toggleTagOnAsset(1, 2, true);
@@ -689,8 +830,13 @@ describe("createLibraryActions", () => {
   });
 
   it("returns early from navigation when no card resolves", () => {
-    const navigateSpy = vi.spyOn(gridNavigation, "navigateGridIndex").mockReturnValue(99);
-    const gridDeps = makeLibraryActionsDeps({ selectedId: null, items: [sampleActionItem] });
+    const navigateSpy = vi
+      .spyOn(gridNavigation, "navigateGridIndex")
+      .mockReturnValue(99);
+    const gridDeps = makeLibraryActionsDeps({
+      selectedId: null,
+      items: [sampleActionItem],
+    });
     createLibraryActions(gridDeps).navigateGrid(1, 0);
     expect(gridDeps.setSelectedId).not.toHaveBeenCalled();
     navigateSpy.mockRestore();
@@ -703,30 +849,49 @@ describe("createLibraryActions", () => {
     createLibraryActions(relativeDeps).navigateRelative(1);
     createLibraryActions(relativeDeps).navigateRelative(-1);
 
-    const sparseItems = { length: 2, 1: sampleActionItem } as unknown as typeof relativeDeps.items;
-    const sparseDeps = makeLibraryActionsDeps({ selectedId: null, items: sparseItems });
+    const sparseItems = {
+      length: 2,
+      1: sampleActionItem,
+    } as unknown as typeof relativeDeps.items;
+    const sparseDeps = makeLibraryActionsDeps({
+      selectedId: null,
+      items: sparseItems,
+    });
     createLibraryActions(sparseDeps).navigateRelative(1);
     expect(sparseDeps.setSelectedId).not.toHaveBeenCalled();
   });
 
   it("resolves stamp snapshots and refreshes compare details", async () => {
-    vi.mocked(runStampToggle).mockImplementation(async (targets, _config, loadSnapshot) => {
-      for (const id of targets) {
-        await loadSnapshot(id);
-      }
-      return { applied: 1, unstamped: 0, stampedIds: targets, unstampedIds: [] };
-    });
+    vi.mocked(runStampToggle).mockImplementation(
+      async (targets, _config, loadSnapshot) => {
+        for (const id of targets) {
+          await loadSnapshot(id);
+        }
+        return {
+          applied: 1,
+          unstamped: 0,
+          stampedIds: targets,
+          unstampedIds: [],
+        };
+      },
+    );
 
     const compareDeps = makeLibraryActionsDeps({
       compareOpen: true,
       compareItems: [sampleActionItem, sampleActionItem2],
-      compareDetails: { 1: { tag_ids: [1], album_ids: [2] }, 2: { tag_ids: [], album_ids: [] } },
+      compareDetails: {
+        1: { tag_ids: [1], album_ids: [2] },
+        2: { tag_ids: [], album_ids: [] },
+      },
       selectedList: [1, 2],
       stampArmed: true,
       stampConfig: { ...EMPTY_STAMP_CONFIG, rating: 4 },
       setCompareDetails: vi.fn((updater) => {
         if (typeof updater === "function") {
-          updater({ 1: { tag_ids: [1], album_ids: [2] }, 2: { tag_ids: [], album_ids: [] } });
+          updater({
+            1: { tag_ids: [1], album_ids: [2] },
+            2: { tag_ids: [], album_ids: [] },
+          });
         }
       }),
     });

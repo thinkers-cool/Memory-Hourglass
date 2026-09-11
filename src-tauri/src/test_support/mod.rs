@@ -84,12 +84,10 @@ pub async fn seed_scanned_asset(
 
     let state = fixture.state();
     let handle = fixture.handle();
-    let root = crate::commands::library::add_root(
-        photos_dir.to_string_lossy().to_string(),
-        state.clone(),
-    )
-    .await
-    .expect("add root");
+    let root =
+        crate::commands::library::add_root(photos_dir.to_string_lossy().to_string(), state.clone())
+            .await
+            .expect("add root");
 
     crate::commands::scan::start_scan(root.id, handle, state.clone())
         .await

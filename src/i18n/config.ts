@@ -11,7 +11,12 @@ export const LOCALE_LABELS: Record<AppLocale, string> = {
   "zh-CN": "简体中文",
 };
 
-export const I18N_NAMESPACES = ["common", "library", "dialogs", "errors"] as const;
+export const I18N_NAMESPACES = [
+  "common",
+  "library",
+  "dialogs",
+  "errors",
+] as const;
 
 export type I18nNamespace = (typeof I18N_NAMESPACES)[number];
 

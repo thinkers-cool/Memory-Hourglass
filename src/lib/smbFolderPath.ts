@@ -1,4 +1,7 @@
-export function relativeFolderPath(rootPath: string, absolutePath: string): string {
+export function relativeFolderPath(
+  rootPath: string,
+  absolutePath: string,
+): string {
   const normalizedRoot = rootPath.replace(/\/+$/, "");
   const normalizedAbsolute = absolutePath.replace(/\/+$/, "");
   if (normalizedAbsolute === normalizedRoot) {

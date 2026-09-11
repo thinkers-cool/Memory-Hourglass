@@ -2,11 +2,12 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const jobProgressHandler = vi.fn();
+const unlisten = vi.fn();
 
 vi.mock("../../api/client", () => ({
   onJobProgress: vi.fn((handler: (progress: unknown) => void) => {
     jobProgressHandler.mockImplementation(handler);
-    return Promise.resolve(() => undefined);
+    return Promise.resolve(unlisten);
   }),
   startExport: vi.fn(),
 }));
@@ -182,14 +183,24 @@ describe("useLibraryExport", () => {
     expect(setNotification).not.toHaveBeenCalled();
   });
 
-  it("ignores job progress listener registration failures", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.mocked(api.onJobProgress).mockRejectedValueOnce(new Error("listener failed"));
-    renderHook(() => useLibraryExport(vi.fn()));
+  it("reports job progress listener registration failures", async () => {
+    const setNotification = vi.fn();
+    vi.mocked(api.onJobProgress).mockRejectedValueOnce(
+      new Error("listener failed"),
+    );
+    renderHook(() => useLibraryExport(setNotification));
     await waitFor(() => {
-      expect(errorSpy).toHaveBeenCalled();
+      expect(setNotification).toHaveBeenCalled();
     });
-    errorSpy.mockRestore();
+  });
+
+  it("unsubscribes from job progress on unmount", async () => {
+    const { unmount } = renderHook(() => useLibraryExport(vi.fn()));
+    await waitFor(() => {
+      expect(api.onJobProgress).toHaveBeenCalled();
+    });
+    unmount();
+    expect(unlisten).toHaveBeenCalled();
   });
 
   it("closes export dialog", () => {
@@ -211,7 +222,10 @@ describe("useLibraryExport", () => {
 
     act(() => {
       result.current.openExport([1]);
-      result.current.updateExportDialog({ destination: "/tmp/out", assetIds: [] });
+      result.current.updateExportDialog({
+        destination: "/tmp/out",
+        assetIds: [],
+      });
     });
 
     await act(async () => {

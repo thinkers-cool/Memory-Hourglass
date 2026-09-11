@@ -82,14 +82,14 @@ describe("saveSlideshowSettings", () => {
       shuffle: true,
       muteVideos: false,
     });
-    expect(JSON.parse(localStorage.getItem("memhg.slideshow.settings")!)).toEqual(
-      {
-        theme: "push",
-        intervalMs: 2000,
-        loop: false,
-        shuffle: true,
-        muteVideos: false,
-      },
-    );
+    expect(
+      JSON.parse(localStorage.getItem("memhg.slideshow.settings")!),
+    ).toEqual({
+      theme: "push",
+      intervalMs: 2000,
+      loop: false,
+      shuffle: true,
+      muteVideos: false,
+    });
   });
 });

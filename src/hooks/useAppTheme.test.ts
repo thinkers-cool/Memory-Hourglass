@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { applyTheme, readStoredTheme, setTheme } from "../lib/theme";
 import { syncThemeController, useAppTheme } from "./useAppTheme";
 

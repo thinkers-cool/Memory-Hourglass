@@ -2,12 +2,12 @@
 
 ## Stack
 
-| Layer | Technology |
-|-------|------------|
-| Shell | Tauri 2 (`com.memhg.app`) |
+| Layer    | Technology                                          |
+| -------- | --------------------------------------------------- |
+| Shell    | Tauri 2 (`com.memhg.app`)                           |
 | Frontend | React 19, TypeScript, Vite 6, Tailwind 4, DaisyUI 5 |
-| Backend | Rust 2021, Tokio, SQLx (SQLite) |
-| Media | exiftool-rs, image crate, asset protocol |
+| Backend  | Rust 2021, Tokio, SQLx (SQLite)                     |
+| Media    | exiftool-rs, image crate, asset protocol            |
 
 ## Layers
 
@@ -32,11 +32,11 @@
 
 No client-side router. `useWorkspace` drives phase:
 
-| Phase | UI | Trigger |
-|-------|-----|---------|
-| `loading` | Spinner | Bootstrap |
-| `start` | `StartPage` | No workspace open |
-| `library` | `LibraryApp` | Workspace open |
+| Phase     | UI           | Trigger           |
+| --------- | ------------ | ----------------- |
+| `loading` | Spinner      | Bootstrap         |
+| `start`   | `StartPage`  | No workspace open |
+| `library` | `LibraryApp` | Workspace open    |
 
 Bootstrap calls `try_open_last_workspace`. On success, skips `StartPage`.
 
@@ -59,19 +59,19 @@ No global store. `useWorkspace` (phase, workspace), `useLibrary` (facade), `crea
 
 **Events:**
 
-| Channel | Payload | Source |
-|---------|---------|--------|
-| `scan://progress` | `ScanProgress` | Scan pipeline |
-| `job://progress` | `JobProgress` | Export jobs |
+| Channel            | Payload           | Source             |
+| ------------------ | ----------------- | ------------------ |
+| `scan://progress`  | `ScanProgress`    | Scan pipeline      |
+| `job://progress`   | `JobProgress`     | Export jobs        |
 | `message://notify` | `MessageEnvelope` | User-facing toasts |
 
 **Observability:**
 
-| System | Storage | Role |
-|--------|---------|------|
-| Trace | `{app_data}/logs/memhg.log` | Developer diagnostics |
-| Activity | `activity_log` table | Asset history + undo |
-| Message | Frontend bus + Tauri events | User toasts |
+| System   | Storage                     | Role                  |
+| -------- | --------------------------- | --------------------- |
+| Trace    | `{app_data}/logs/memhg.log` | Developer diagnostics |
+| Activity | `activity_log` table        | Asset history + undo  |
+| Message  | Frontend bus + Tauri events | User toasts           |
 
 All three share `correlation_id` per command.
 
@@ -79,31 +79,40 @@ All three share `correlation_id` per command.
 
 ## Module Map (Backend)
 
-| Module | Path | Role |
-|--------|------|------|
-| `catalog` | `src/catalog/` | SQLite repos, rebuild |
-| `collection` | `src/collection/` | Albums, smart collections |
-| `library` | `src/library/` | Source roots, relink |
-| `scan` | `src/scan/` | Discovery, indexing |
-| `watcher` | `src/watcher/` | Local notify + SMB poll |
-| `workspace` | `src/workspace/` | Lifecycle, registry |
-| `smb` | `src/smb/` | Mount, keyring creds |
-| `export` | `src/export/` | Copy/convert export |
-| `query` | `src/query/` | Asset filter, detail |
-| `metadata` | `src/metadata/` | EXIF/XMP |
-| `link` | `src/link/` | RAW↔JPEG, duplicates |
-| `thumb` | `src/thumb/` | Thumbnail generation |
-| `jobs` | `src/jobs/` | Single-job mutex |
+| Module       | Path              | Role                                             |
+| ------------ | ----------------- | ------------------------------------------------ |
+| `catalog`    | `src/catalog/`    | SQLite repos (`repo/`), rebuild, models          |
+| `collection` | `src/collection/` | Albums, smart collections                        |
+| `library`    | `src/library/`    | Source roots, relink, path sandbox               |
+| `scan`       | `src/scan/`       | Discovery, indexing pipeline                     |
+| `watcher`    | `src/watcher/`    | Local notify + SMB poll                          |
+| `workspace`  | `src/workspace/`  | Lifecycle, registry                              |
+| `smb`        | `src/smb/`        | Mount, keyring creds                             |
+| `export`     | `src/export/`     | Copy/convert export                              |
+| `query`      | `src/query/`      | Asset filter (`filter.rs`), detail, tag keywords |
+| `metadata`   | `src/metadata/`   | EXIF/XMP                                         |
+| `link`       | `src/link/`       | RAW↔JPEG, duplicates                             |
+| `thumb`      | `src/thumb/`      | Thumbnail generation                             |
+| `jobs`       | `src/jobs/`       | Single-job mutex                                 |
+| `activity`   | `src/activity/`   | Activity log, undo/revert                        |
+| `trace`      | `src/trace/`      | Correlation IDs, rotating logs                   |
+| `message`    | `src/message/`    | `message://notify` envelopes                     |
+| `dates`      | `src/dates/`      | Shared SQL date helpers                          |
+| `sort`       | `src/sort.rs`     | Sort string parsing                              |
+| `error`      | `src/error.rs`    | `AppError`, IPC error payloads                   |
+| `commands`   | `src/commands/`   | Thin Tauri handlers (`trace_command`)            |
 
 ## Module Map (Frontend)
 
-| Path | Role |
-|------|------|
-| `src/components/layout/` | Shell: NavRail, LibraryPanel, InspectorPanel, dialogs |
-| `src/components/shared/` | Reusable controls, filters, pickers |
-| `src/components/slideshow/` | Gallery playback |
-| `src/hooks/library/` | Decomposed `useLibrary` internals |
-| `src/lib/` | Pure utilities, filters, theme, slideshow engine |
+| Path                                   | Role                                                          |
+| -------------------------------------- | ------------------------------------------------------------- |
+| `src/components/layout/`               | Shell: NavRail, InspectorPanel, dialogs                       |
+| `src/components/layout/library-panel/` | Library sidebar (sources, tags, albums, collections)          |
+| `src/components/shared/`               | Reusable controls, filters, pickers, stamp UI                 |
+| `src/components/slideshow/`            | Gallery playback                                              |
+| `src/hooks/library/`                   | Decomposed `useLibrary` internals                             |
+| `src/hooks/library/actions/`           | `createLibraryActions` domain modules                         |
+| `src/lib/`                             | Pure utilities, filters, theme, slideshow engine, message bus |
 
 ## On-Disk Layout
 

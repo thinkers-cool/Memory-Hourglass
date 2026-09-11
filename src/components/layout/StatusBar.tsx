@@ -46,11 +46,15 @@ export function StatusBar({
     <footer className="surface-toolbar shrink-0 border-t">
       <div className="stats stats-horizontal w-full bg-transparent shadow-none">
         <div className="stat py-1 px-4">
-          <div className="stat-title text-[10px]">{t("library:statusBar.library")}</div>
+          <div className="stat-title text-[10px]">
+            {t("library:statusBar.library")}
+          </div>
           <div className="stat-value text-xs">{total.toLocaleString()}</div>
         </div>
         <div className="stat min-w-0 flex-1 py-1 px-4 place-items-end">
-          <div className="stat-title text-[10px]">{t("library:statusBar.status")}</div>
+          <div className="stat-title text-[10px]">
+            {t("library:statusBar.status")}
+          </div>
           <div
             className={`stat-value flex max-w-full items-center gap-2 truncate text-xs ${
               isError ? "text-error" : isSuccess ? "text-success" : ""

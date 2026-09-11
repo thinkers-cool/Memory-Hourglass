@@ -1,9 +1,7 @@
 import { useEffect } from "react";
 import type { LibraryActions } from "../lib/libraryActions";
 import { isTextEntryElement } from "../lib/focus";
-import {
-  handleSelectionShortcuts,
-} from "../lib/keyboardShortcuts";
+import { handleSelectionShortcuts } from "../lib/keyboardShortcuts";
 
 export function useKeyboard(
   actions: LibraryActions,

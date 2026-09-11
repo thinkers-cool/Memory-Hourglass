@@ -15,7 +15,7 @@ Files: `src-tauri/src/workspace/`, `src/hooks/useWorkspace.ts`.
 
 **SMB:** `add_smb_source(SmbSourceInput)` — pre-mounted path or `Connect` with keyring credentials (`com.memhg.app`, key `smb:{host}:{share}:{user}`).
 
-Mount dirs: `{app_data}/mounts/{ws-id}/_browse/` (browse), `_shares/` (library). Platforms: macOS (`mount_smbfs`), Linux (`mount -t cifs`), Windows (`net use`).
+Mount dirs: `{app_data}/mounts/{ws-id}/_browse/` (browse), `_shares/` (library). Platforms: macOS (`mount_smbfs`), Linux (`mount -t cifs`), Windows (`net use`). Read-only workspaces mount SMB shares read-only on macOS (`-o ro`) and Linux (`ro` mount option); read-write workspaces mount without that restriction.
 
 Files: `src-tauri/src/library/`, `src-tauri/src/smb/`, `src/components/layout/SmbConnectDialog.tsx`.
 
@@ -31,7 +31,7 @@ Discovery (WalkDir)
   → Link pass (RAW↔JPEG, hashes, duplicates)
 ```
 
-Sync states: `new`, `modified`, `ok`. Indexing: thumbnail + metadata → `asset_meta`, `asset_raw_tag`, `thumb_key`. Progress: `scan://progress`. Controls: pause, resume, cancel, status.
+Sync states: `new`, `modified`, `ok`. Indexing: thumbnail + metadata → `asset_meta`, `asset_raw_tag`, `thumb_key`. Progress: `scan://progress`. Controls: `cancel_scan`, `get_scan_status` (UI); `pause_scan`, `resume_scan` (backend IPC, no UI yet).
 
 Files: `src-tauri/src/scan/`, `src-tauri/src/commands/scan.rs`.
 
@@ -53,7 +53,7 @@ Files: `src-tauri/src/query/`.
 
 ## Metadata Edit
 
-`update_asset_meta(id, patch)` or `batch_update_asset_meta(ids, patch)`. Patches: rating, tags, keywords.
+`update_asset_meta(id, patch)` or `batch_update_asset_meta(ids, patch)` patch rating only. Tags use `batch_append_tags` / `batch_remove_tags`.
 
 Files: `src-tauri/src/commands/asset.rs`, `src-tauri/src/metadata/`, `src/hooks/library/createLibraryActions.ts`.
 

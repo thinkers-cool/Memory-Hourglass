@@ -17,8 +17,14 @@ export function themeLabel(theme: AppTheme): string {
   return theme.charAt(0).toUpperCase() + theme.slice(1);
 }
 
-export function isAppTheme(value: string | null | undefined): value is AppTheme {
-  return value !== null && value !== undefined && APP_THEMES.includes(value as AppTheme);
+export function isAppTheme(
+  value: string | null | undefined,
+): value is AppTheme {
+  return (
+    value !== null &&
+    value !== undefined &&
+    APP_THEMES.includes(value as AppTheme)
+  );
 }
 
 export function readStoredTheme(): AppTheme {

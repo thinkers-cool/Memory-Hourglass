@@ -3,9 +3,7 @@ pub mod rebuild;
 pub mod repo;
 pub mod tables;
 
-use crate::catalog::repo::{
-    AssetMetaRepo, AssetRepo, RawTagRepo, SourceRootRepo, TagRepo,
-};
+use crate::catalog::repo::{AssetMetaRepo, AssetRepo, RawTagRepo, SourceRootRepo, TagRepo};
 use crate::error::Result;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::path::Path;
@@ -123,7 +121,12 @@ mod tests {
         assert!(catalog.collection().list_albums().await.unwrap().is_empty());
         assert_eq!(catalog.roots().get_root(root.id).await.unwrap().id, root.id);
         assert!(catalog.asset_meta().get(root.id).await.unwrap().is_none());
-        assert!(catalog.raw_tags().list_for_asset(root.id).await.unwrap().is_empty());
+        assert!(catalog
+            .raw_tags()
+            .list_for_asset(root.id)
+            .await
+            .unwrap()
+            .is_empty());
     }
 
     #[cfg(unix)]

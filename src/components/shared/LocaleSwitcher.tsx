@@ -4,7 +4,10 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useAppLocale } from "../../hooks/useAppLocale";
 import { usePopoverDismiss } from "../../hooks/usePopoverDismiss";
-import { computeFloatingMenuPlacement } from "../../lib/anchoredPopover";
+import {
+  computeFloatingMenuPlacement,
+  resolveMeasuredMenuDimensions,
+} from "../../lib/anchoredPopover";
 import { ghostBtnClass } from "../../lib/buttonClass";
 import type { AppLocale } from "../../i18n/config";
 import { optionRowClass } from "../../lib/optionRowClass";
@@ -36,9 +39,10 @@ export function LocaleSwitcher({
   const { t } = useTranslation("common");
   const { locale, setLocale, locales, localeLabel } = useAppLocale();
   const [open, setOpen] = useState(false);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(
-    null,
-  );
+  const [menuPosition, setMenuPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
   const anchorRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -51,13 +55,11 @@ export function LocaleSwitcher({
       return;
     }
     const anchor = anchorRef.current.getBoundingClientRect();
-    const menuEl = menuRef.current;
-    let width = MENU_WIDTH;
-    let height = MENU_MAX_HEIGHT;
-    if (menuEl) {
-      width = menuEl.offsetWidth;
-      height = menuEl.offsetHeight;
-    }
+    const { width, height } = resolveMeasuredMenuDimensions(
+      menuRef.current,
+      MENU_WIDTH,
+      MENU_MAX_HEIGHT,
+    );
     setMenuPosition(
       computeFloatingMenuPlacement(
         anchor,
@@ -97,7 +99,9 @@ export function LocaleSwitcher({
         className={
           iconOnly
             ? TRIGGER_CLASS[size]
-            : ghostBtnClass("btn-sm h-8 min-h-0 max-w-32 gap-1 truncate text-xs font-normal")
+            : ghostBtnClass(
+                "btn-sm h-8 min-h-0 max-w-32 gap-1 truncate text-xs font-normal",
+              )
         }
         title={t("label.language")}
         aria-label={t("label.language")}
@@ -105,7 +109,9 @@ export function LocaleSwitcher({
         onClick={() => setOpen((prev) => !prev)}
       >
         <Languages className={ICON_CLASS[size]} />
-        {!iconOnly ? <span className="truncate">{localeLabel(locale)}</span> : null}
+        {!iconOnly ? (
+          <span className="truncate">{localeLabel(locale)}</span>
+        ) : null}
       </button>
       {open &&
         createPortal(
@@ -137,7 +143,9 @@ export function LocaleSwitcher({
                         close();
                       }}
                     />
-                    <span className="min-w-0 flex-1 text-sm">{localeLabel(option)}</span>
+                    <span className="min-w-0 flex-1 text-sm">
+                      {localeLabel(option)}
+                    </span>
                   </label>
                 </li>
               ))}

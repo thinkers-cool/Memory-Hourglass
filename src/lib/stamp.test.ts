@@ -17,8 +17,12 @@ describe("stamp", () => {
   it("validates config requires at least one field", () => {
     expect(isStampConfigValid(EMPTY_STAMP_CONFIG)).toBe(false);
     expect(isStampConfigValid({ ...EMPTY_STAMP_CONFIG, rating: 3 })).toBe(true);
-    expect(isStampConfigValid({ ...EMPTY_STAMP_CONFIG, tag_ids: [1] })).toBe(true);
-    expect(isStampConfigValid({ ...EMPTY_STAMP_CONFIG, album_ids: [2] })).toBe(true);
+    expect(isStampConfigValid({ ...EMPTY_STAMP_CONFIG, tag_ids: [1] })).toBe(
+      true,
+    );
+    expect(isStampConfigValid({ ...EMPTY_STAMP_CONFIG, album_ids: [2] })).toBe(
+      true,
+    );
   });
 
   it("detects tag and album references", () => {
@@ -29,13 +33,29 @@ describe("stamp", () => {
     expect(stampReferencesAlbum(config, 9)).toBe(false);
   });
 
+  it("matches tag-only stamp config without rating", () => {
+    const config = { rating: null, tag_ids: [1], album_ids: [] };
+    expect(isAssetStamped(assetSnapshotFromParts(null, [1], []), config)).toBe(
+      true,
+    );
+    expect(isAssetStamped(assetSnapshotFromParts(null, [], []), config)).toBe(
+      false,
+    );
+  });
+
   it("matches stamped assets across rating tags and albums", () => {
     const config = { rating: 4, tag_ids: [1], album_ids: [2] };
     const snapshot = assetSnapshotFromParts(4, [1, 5], [2]);
     expect(isAssetStamped(snapshot, config)).toBe(true);
-    expect(isAssetStamped(assetSnapshotFromParts(3, [1], [2]), config)).toBe(false);
-    expect(isAssetStamped(assetSnapshotFromParts(4, [], [2]), config)).toBe(false);
-    expect(isAssetStamped(assetSnapshotFromParts(4, [1], []), config)).toBe(false);
+    expect(isAssetStamped(assetSnapshotFromParts(3, [1], [2]), config)).toBe(
+      false,
+    );
+    expect(isAssetStamped(assetSnapshotFromParts(4, [], [2]), config)).toBe(
+      false,
+    );
+    expect(isAssetStamped(assetSnapshotFromParts(4, [1], []), config)).toBe(
+      false,
+    );
   });
 
   it("resolves targets by view context", () => {
@@ -133,12 +153,12 @@ describe("stamp", () => {
 
   it("derives grid stamp indicator states", () => {
     const config = { rating: 4, tag_ids: [], album_ids: [] };
-    expect(
-      stampIndicatorState(sampleCard, config, false, new Set()),
-    ).toBe("none");
-    expect(
-      stampIndicatorState(sampleCard, config, true, new Set()),
-    ).toBe("none");
+    expect(stampIndicatorState(sampleCard, config, false, new Set())).toBe(
+      "none",
+    );
+    expect(stampIndicatorState(sampleCard, config, true, new Set())).toBe(
+      "none",
+    );
     expect(
       stampIndicatorState(
         { ...sampleCard, rating: 4 },

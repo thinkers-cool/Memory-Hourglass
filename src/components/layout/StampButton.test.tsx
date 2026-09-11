@@ -23,7 +23,9 @@ describe("StampButton", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Stamp" }));
-    expect(screen.getByRole("dialog", { name: "Stamp configuration" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Stamp configuration" }),
+    ).toBeInTheDocument();
   });
 
   it("disarms on click when armed", async () => {
@@ -46,7 +48,9 @@ describe("StampButton", () => {
 
     await user.click(screen.getByRole("button", { name: "Stamp" }));
     expect(onDisarm).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("dialog", { name: "Stamp configuration" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Stamp configuration" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows space hint when armed", () => {
@@ -93,9 +97,13 @@ describe("StampButton", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Stamp" }));
-    expect(screen.getByRole("dialog", { name: "Stamp configuration" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Stamp configuration" }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Outside" }));
-    expect(screen.queryByRole("dialog", { name: "Stamp configuration" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Stamp configuration" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders compact mode armed and disarmed", async () => {
@@ -117,7 +125,9 @@ describe("StampButton", () => {
     );
     expect(screen.queryByText("Stamp")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Stamp" }));
-    expect(screen.getByRole("dialog", { name: "Stamp configuration" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Stamp configuration" }),
+    ).toBeInTheDocument();
 
     rerender(
       <StampButton
@@ -155,6 +165,8 @@ describe("StampButton", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Stamp" }));
-    expect(screen.queryByRole("dialog", { name: "Stamp configuration" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Stamp configuration" }),
+    ).not.toBeInTheDocument();
   });
 });

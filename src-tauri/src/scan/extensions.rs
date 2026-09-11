@@ -1,7 +1,6 @@
 pub const MEDIA_EXTENSIONS: &[&str] = &[
-    "jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "tif", "tiff",
-    "arw", "cr2", "cr3", "nef", "dng", "orf", "raf", "rw2", "pef", "srw",
-    "mp4", "mov", "m4v", "avi", "mkv",
+    "jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "tif", "tiff", "arw", "cr2", "cr3", "nef",
+    "dng", "orf", "raf", "rw2", "pef", "srw", "mp4", "mov", "m4v", "avi", "mkv",
 ];
 
 pub fn is_media_file(path: &std::path::Path) -> bool {

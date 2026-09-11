@@ -55,9 +55,7 @@ describe("resolveNextIndex", () => {
   });
 
   it("returns null when no playable items exist", () => {
-    expect(
-      resolveNextIndex([card(1, "missing")], 0, 1, true),
-    ).toBeNull();
+    expect(resolveNextIndex([card(1, "missing")], 0, 1, true)).toBeNull();
   });
 
   it("anchors to first playable item when current is missing", () => {

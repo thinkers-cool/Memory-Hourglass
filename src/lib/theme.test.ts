@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
 import {
-  APP_THEMES,
   DEFAULT_THEME,
   initTheme,
   isAppTheme,

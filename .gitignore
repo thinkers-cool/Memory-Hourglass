@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 
 # Frontend build
 dist/
@@ -44,3 +43,4 @@ src-tauri/target/llvm-cov-profraw/
 
 # Vite
 *.local
+package-lock.json

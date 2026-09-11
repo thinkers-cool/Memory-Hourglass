@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "../api/client";
-import {
-  loadGridColumnCount,
-  saveGridColumnCount,
-} from "../lib/gridSettings";
+import { loadGridColumnCount, saveGridColumnCount } from "../lib/gridSettings";
+import i18n from "../i18n";
 import { infoNotification, errorNotification } from "../lib/notification";
 import { pickFolder } from "../lib/pickFolder";
 import { createLibraryActions } from "./library/createLibraryActions";
@@ -43,6 +41,7 @@ export function useLibrary(readOnly = false) {
     }
   }, [
     query.items,
+    selection,
     selection.selectedId,
     selection.setSelectedId,
     selection.setSelectedIds,
@@ -80,7 +79,7 @@ export function useLibrary(readOnly = false) {
       await undoActivityBase(activityId);
       await query.refreshAll();
     },
-    [undoActivityBase, query.refreshAll],
+    [undoActivityBase, query],
   );
 
   const addRootAndScan = useCallback(
@@ -97,13 +96,15 @@ export function useLibrary(readOnly = false) {
       await withBusy(async () => {
         const root = await add(path);
         await query.refreshMeta();
-        setNotification(infoNotification("Added folder — scanning…"));
+        setNotification(
+          infoNotification(i18n.t("library:notification.addedFolderScanning")),
+        );
         void api.startScan(root.id).catch((error) => {
           setNotification(errorNotification(error));
         });
       });
     },
-    [query.refreshMeta, setNotification, withBusy],
+    [query, setNotification, withBusy],
   );
 
   const actions = useMemo(
@@ -166,7 +167,6 @@ export function useLibrary(readOnly = false) {
       addRootAndScan,
       fullView,
       gridColumnCount,
-      inspectorVisible,
       stamp.armed,
       stamp.config,
       stamp.markStampResults,
@@ -213,6 +213,11 @@ export function useLibrary(readOnly = false) {
     setCollectionDialogOpen(false);
   }, []);
 
+  const closePurgeDialog = useCallback(() => {
+    setPurgeDialogOpen(false);
+    setPurgeTargetIds([]);
+  }, []);
+
   return {
     roots: query.roots,
     albums: query.albums,
@@ -244,10 +249,7 @@ export function useLibrary(readOnly = false) {
     setAlbumMenuOpen,
     purgeDialogOpen,
     purgeTargetIds,
-    closePurgeDialog: () => {
-      setPurgeDialogOpen(false);
-      setPurgeTargetIds([]);
-    },
+    closePurgeDialog,
     loadingMore: query.loadingMore,
     hasMore: query.hasMore,
     filterBar: query.filterBar,

@@ -24,7 +24,11 @@ describe("ThemeSwitcher", () => {
     const user = userEvent.setup();
     render(
       <>
-        <ThemeSwitcher iconOnly={false} size="nav" menuPlacement="float-top-end" />
+        <ThemeSwitcher
+          iconOnly={false}
+          size="nav"
+          menuPlacement="float-top-end"
+        />
         <button type="button">Outside</button>
       </>,
     );
@@ -33,15 +37,17 @@ describe("ThemeSwitcher", () => {
     await user.click(screen.getByRole("button", { name: "Theme" }));
     expect(screen.getByRole("radio", { name: "Neon" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Outside" }));
-    expect(screen.queryByRole("radio", { name: "Neon" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("radio", { name: "Neon" }),
+    ).not.toBeInTheDocument();
   });
 
   it("positions menu using fallback dimensions before measure", async () => {
     const user = userEvent.setup();
-    render(<ThemeSwitcher />);
+    render(<ThemeSwitcher menuPlacement="float-bottom-end" />);
     await user.click(screen.getByRole("button", { name: "Theme" }));
+    window.dispatchEvent(new Event("scroll"));
     expect(screen.getByRole("radio", { name: "Neon" })).toBeInTheDocument();
-    window.dispatchEvent(new Event("resize"));
   });
 
   it("positions menu using measured dimensions", async () => {
@@ -52,8 +58,14 @@ describe("ThemeSwitcher", () => {
       expect(document.body.querySelector(".surface-popover")).toBeTruthy();
     });
     const menu = document.body.querySelector(".surface-popover") as HTMLElement;
-    Object.defineProperty(menu, "offsetWidth", { configurable: true, value: 220 });
-    Object.defineProperty(menu, "offsetHeight", { configurable: true, value: 280 });
+    Object.defineProperty(menu, "offsetWidth", {
+      configurable: true,
+      value: 220,
+    });
+    Object.defineProperty(menu, "offsetHeight", {
+      configurable: true,
+      value: 280,
+    });
     await act(async () => {
       window.dispatchEvent(new Event("resize"));
     });

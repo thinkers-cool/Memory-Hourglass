@@ -39,8 +39,12 @@ describe("App start page", () => {
       removeRecent: vi.fn(),
     });
     render(<App />);
-    expect(screen.getByRole("heading", { name: "Memory Hourglass" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open Workspace" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Memory Hourglass" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open Workspace" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("/tmp/old")).toBeInTheDocument();
   });
 
@@ -83,7 +87,9 @@ describe("App start page", () => {
     expect(pickAndOpenWorkspace).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByRole("button", { name: "Create Workspace" }));
-    await user.click(screen.getByRole("menuitem", { name: "Read-Write Workspace" }));
+    await user.click(
+      screen.getByRole("menuitem", { name: "Read-Write Workspace" }),
+    );
     expect(pickAndCreateWorkspace).toHaveBeenCalledWith(false);
 
     await user.click(screen.getByText("/tmp/old"));
@@ -109,6 +115,8 @@ describe("App start page", () => {
       removeRecent: vi.fn(),
     });
     render(<App />);
-    expect(screen.getByRole("heading", { name: "Memory Hourglass" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Memory Hourglass" }),
+    ).toBeInTheDocument();
   });
 });

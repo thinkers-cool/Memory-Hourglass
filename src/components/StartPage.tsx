@@ -6,7 +6,10 @@ import { StartStatusStrip } from "./layout/StartStatusStrip";
 import { AppearanceControls } from "./shared/AppearanceControls";
 import type { RecentWorkspace } from "../types";
 import { ghostBtnClass } from "../lib/buttonClass";
-import { MENU_ITEM_BUTTON_CLASS, MENU_POPOVER_CLASS } from "../lib/formControlClass";
+import {
+  MENU_ITEM_BUTTON_CLASS,
+  MENU_POPOVER_CLASS,
+} from "../lib/formControlClass";
 import { listRowClass, listRowTitleClass } from "../lib/interactionClass";
 import { workspaceContextLabel } from "../lib/workspaceContext";
 import { usePopoverDismiss } from "../hooks/usePopoverDismiss";
@@ -40,7 +43,9 @@ function StartLeftPanel({
       <div className="flex w-full max-w-sm flex-col items-center gap-4 text-center">
         <MemHG size={72} title="Memory Hourglass" />
         <div className="space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight">{t("common:app.name")}</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            {t("common:app.name")}
+          </h1>
           <p className="text-sm text-content-muted">
             {t("common:app.tagline")}
           </p>
@@ -119,46 +124,46 @@ function RegisteredWorkspaces({
 
       <ul className="flex flex-col gap-1.5 overflow-y-auto">
         {recent.map((entry) => (
-            <li key={entry.path} className="group relative">
-              <button
-                type="button"
-                className={`${ghostBtnClass("flex h-auto min-h-10 w-full flex-col items-start justify-center gap-1 rounded-lg px-2.5 py-2 text-left font-normal")} ${listRowClass()} pr-10`}
-                disabled={busy}
-                onClick={() => onOpenRecent(entry.path)}
+          <li key={entry.path} className="group relative">
+            <button
+              type="button"
+              className={`${ghostBtnClass("flex h-auto min-h-10 w-full flex-col items-start justify-center gap-1 rounded-lg px-2.5 py-2 text-left font-normal")} ${listRowClass()} pr-10`}
+              disabled={busy}
+              onClick={() => onOpenRecent(entry.path)}
+            >
+              <span
+                className={`flex w-full min-w-0 items-center gap-2 text-xs leading-snug ${listRowTitleClass(entry.valid)}`}
+                title={entry.path}
               >
-                <span
-                  className={`flex w-full min-w-0 items-center gap-2 text-xs leading-snug ${listRowTitleClass(entry.valid)}`}
-                  title={entry.path}
-                >
-                  <span className="min-w-0 truncate">{entry.path}</span>
-                  {entry.read_only ? (
-                    <span className="badge badge-outline badge-xs shrink-0 font-normal normal-case">
-                      {t("start.readOnlyBadge")}
-                    </span>
-                  ) : null}
+                <span className="min-w-0 truncate">{entry.path}</span>
+                {entry.read_only ? (
+                  <span className="badge badge-outline badge-xs shrink-0 font-normal normal-case">
+                    {t("start.readOnlyBadge")}
+                  </span>
+                ) : null}
+              </span>
+              {entry.valid ? (
+                <span className="block w-full truncate text-[10px] leading-snug text-content-tertiary">
+                  {workspaceContextLabel(entry)}
                 </span>
-                {entry.valid ? (
-                  <span className="block w-full truncate text-[10px] leading-snug text-content-tertiary">
-                    {workspaceContextLabel(entry)}
-                  </span>
-                ) : (
-                  <span className="flex w-full items-center gap-1 text-[10px] leading-snug text-warning">
-                    <AlertTriangle className="h-3 w-3 shrink-0" />
-                    <span>{t("start.pathNotFound")}</span>
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-interactive btn-square btn-xs absolute right-1 top-1/2 h-7 min-h-0 w-7 shrink-0 -translate-y-1/2 opacity-60 group-hover:opacity-100"
-                title={t("start.removeWorkspace")}
-                disabled={busy}
-                onClick={() => onRemoveRecent(entry.path)}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </li>
-          ))}
+              ) : (
+                <span className="flex w-full items-center gap-1 text-[10px] leading-snug text-warning">
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  <span>{t("start.pathNotFound")}</span>
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-interactive btn-square btn-xs absolute right-1 top-1/2 h-7 min-h-0 w-7 shrink-0 -translate-y-1/2 opacity-60 group-hover:opacity-100"
+              title={t("start.removeWorkspace")}
+              disabled={busy}
+              onClick={() => onRemoveRecent(entry.path)}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </li>
+        ))}
       </ul>
     </section>
   );
@@ -190,7 +195,10 @@ export function StartPage({
   return (
     <div className="relative flex min-h-screen app-canvas">
       <header className="absolute right-4 top-4 z-50">
-        <AppearanceControls menuPlacement="float-bottom-end" layout="horizontal" />
+        <AppearanceControls
+          menuPlacement="float-bottom-end"
+          layout="horizontal"
+        />
       </header>
 
       <StartLeftPanel busy={busy} onOpen={onOpen} onCreate={onCreate} />

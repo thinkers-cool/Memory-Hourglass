@@ -36,9 +36,9 @@ describe("pickFolder", () => {
     vi.mocked(isTauri).mockReturnValue(true);
     vi.mocked(homeDir).mockResolvedValue("/Users/me");
     vi.mocked(open).mockResolvedValue("/Users/me/Pictures");
-    await expect(pickFolder({ title: "Pick", createDirectory: true })).resolves.toBe(
-      "/Users/me/Pictures",
-    );
+    await expect(
+      pickFolder({ title: "Pick", createDirectory: true }),
+    ).resolves.toBe("/Users/me/Pictures");
     expect(open).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "Pick",
@@ -54,7 +54,8 @@ describe("pickFolder", () => {
     vi.mocked(homeDir).mockRejectedValue(new Error("no home"));
     vi.mocked(open).mockResolvedValue("/tmp");
     await expect(pickFolder()).resolves.toBe("/tmp");
-    expect(open).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: undefined }));
+    expect(open).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultPath: undefined }),
+    );
   });
 });
-

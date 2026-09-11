@@ -20,9 +20,10 @@ export function unifiedToEmoji(unified: string): string {
 export async function loadEmojiCatalog(): Promise<string[]> {
   if (emojiCatalogCache) return emojiCatalogCache;
 
-  const { default: data } = (await import(
-    "emoji-picker-react/dist/data/emojis-en.json"
-  )) as { default: EmojiDataset };
+  const { default: data } =
+    (await import("emoji-picker-react/dist/data/emojis-en.json")) as {
+      default: EmojiDataset;
+    };
 
   const emojis: string[] = [];
   const seen = new Set<string>();

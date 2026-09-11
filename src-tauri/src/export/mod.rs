@@ -99,7 +99,19 @@ impl ExportService {
                     on_progress(processed, total, None, "failed");
                 }
                 Some(r) => {
-                    let src = PathBuf::from(&r.root_path).join(&r.rel_path);
+                    let root = PathBuf::from(&r.root_path);
+                    let src = match crate::library::resolve_path_under_root(&root, &r.rel_path) {
+                        Ok(path) => path,
+                        Err(error) => {
+                            failed.push(ExportFailure {
+                                source: format!("{}/{}", r.root_path, r.rel_path),
+                                error: error.to_string(),
+                            });
+                            processed += 1;
+                            on_progress(processed, total, Some(&r.file_name), "failed");
+                            continue;
+                        }
+                    };
                     let out_name = match resolve_export_name(
                         options.rename_template.as_deref(),
                         &r.file_name,
@@ -118,9 +130,31 @@ impl ExportService {
                         }
                     };
                     let dst = if options.flat {
-                        destination.join(&out_name)
+                        match crate::library::validate_file_name(&out_name) {
+                            Ok(()) => destination.join(&out_name),
+                            Err(error) => {
+                                failed.push(ExportFailure {
+                                    source: src.to_string_lossy().to_string(),
+                                    error: error.to_string(),
+                                });
+                                processed += 1;
+                                on_progress(processed, total, Some(&r.file_name), "failed");
+                                continue;
+                            }
+                        }
                     } else {
-                        destination.join(&r.rel_path)
+                        match crate::library::resolve_path_under_root(destination, &r.rel_path) {
+                            Ok(path) => path,
+                            Err(error) => {
+                                failed.push(ExportFailure {
+                                    source: src.to_string_lossy().to_string(),
+                                    error: error.to_string(),
+                                });
+                                processed += 1;
+                                on_progress(processed, total, Some(&r.file_name), "failed");
+                                continue;
+                            }
+                        }
                     };
                     ensure_export_parent(&dst)?;
                     work_items.push(ExportWorkItem {
@@ -192,14 +226,12 @@ impl ExportService {
             "partial"
         };
 
-        sqlx::query(
-            "INSERT INTO export_job (status, manifest_json, created_at) VALUES (?, ?, ?)",
-        )
-        .bind(status)
-        .bind(serde_json::to_string(&manifest).unwrap())
-        .bind(chrono::Utc::now().timestamp())
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("INSERT INTO export_job (status, manifest_json, created_at) VALUES (?, ?, ?)")
+            .bind(status)
+            .bind(serde_json::to_string(&manifest).unwrap())
+            .bind(chrono::Utc::now().timestamp())
+            .execute(&self.pool)
+            .await?;
 
         Ok(manifest)
     }
@@ -265,7 +297,9 @@ enum ExportWorkOutcome {
 }
 
 fn ensure_export_parent(path: &Path) -> Result<()> {
-    if let Some(parent) = path.parent() { std::fs::create_dir_all(parent)?; }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
     Ok(())
 }
 
@@ -278,7 +312,10 @@ fn parallel_export_item(
     total: u64,
     on_progress: &ExportProgressFn,
 ) -> Option<ExportWorkOutcome> {
-    if cancel.map(|flag| flag.load(Ordering::SeqCst)).unwrap_or(false) {
+    if cancel
+        .map(|flag| flag.load(Ordering::SeqCst))
+        .unwrap_or(false)
+    {
         return None;
     }
     let outcome = export_one(work, format);
@@ -381,7 +418,12 @@ fn convert_and_write(src: &Path, dst: &Path, format: &str) -> std::result::Resul
             img.save_with_format(&out, image::ImageFormat::Png)
                 .map_err(|e| AppError::Export(e.to_string()))?;
         }
-        other => return Err(AppError::InvalidInput(format!("unsupported format: {}", other))),
+        other => {
+            return Err(AppError::InvalidInput(format!(
+                "unsupported format: {}",
+                other
+            )))
+        }
     }
     Ok(())
 }
@@ -442,50 +484,28 @@ mod tests {
 
     #[test]
     fn resolve_export_name_adds_extension_when_missing() {
-        let name = resolve_export_name(
-            Some("{camera}_{name}"),
-            "photo.jpg",
-            None,
-            Some("Canon"),
-        )
-        .unwrap();
+        let name =
+            resolve_export_name(Some("{camera}_{name}"), "photo.jpg", None, Some("Canon")).unwrap();
         assert!(name.ends_with(".jpg"));
         assert!(name.contains("Canon"));
     }
 
     #[test]
     fn resolve_export_name_keeps_extension_in_template() {
-        let name = resolve_export_name(
-            Some("archive.{ext}"),
-            "photo.jpg",
-            None,
-            None,
-        )
-        .unwrap();
+        let name = resolve_export_name(Some("archive.{ext}"), "photo.jpg", None, None).unwrap();
         assert_eq!(name, "archive.jpg");
     }
 
     #[test]
     fn resolve_export_name_fails_without_required_capture_date() {
-        let err = resolve_export_name(
-            Some("{date}_{name}"),
-            "photo.jpg",
-            None,
-            None,
-        )
-        .unwrap_err();
+        let err = resolve_export_name(Some("{date}_{name}"), "photo.jpg", None, None).unwrap_err();
         assert!(err.contains("capture date"));
     }
 
     #[test]
     fn resolve_export_name_fails_without_required_camera() {
-        let err = resolve_export_name(
-            Some("{camera}_{name}"),
-            "photo.jpg",
-            None,
-            None,
-        )
-        .unwrap_err();
+        let err =
+            resolve_export_name(Some("{camera}_{name}"), "photo.jpg", None, None).unwrap_err();
         assert!(err.contains("camera"));
     }
 
@@ -710,7 +730,12 @@ mod tests {
         let dir = tempdir().unwrap();
         let src = dir.path().join("src.jpg");
         std::fs::write(&src, include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
-        for (format, ext) in [("jpeg", "jpg"), ("jpg", "jpg"), ("webp", "webp"), ("png", "png")] {
+        for (format, ext) in [
+            ("jpeg", "jpg"),
+            ("jpg", "jpg"),
+            ("webp", "webp"),
+            ("png", "png"),
+        ] {
             let dst = dir.path().join(format!("out.{}", ext));
             convert_and_write(&src, &dst, format).unwrap();
             assert!(dst.with_extension(ext).is_file());
@@ -722,8 +747,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let src = dir.path().join("src.jpg");
         std::fs::write(&src, include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
-        let err = convert_and_write(&src, &dir.path().join("out.tiff"), "tiff")
-            .unwrap_err();
+        let err = convert_and_write(&src, &dir.path().join("out.tiff"), "tiff").unwrap_err();
         assert!(err.to_string().contains("unsupported format"));
     }
 
@@ -735,7 +759,10 @@ mod tests {
             src: dir.path().join("missing.jpg"),
             dst: dir.path().join("out.jpg"),
         };
-        assert!(matches!(export_one(&work, None), ExportWorkOutcome::Failed(_)));
+        assert!(matches!(
+            export_one(&work, None),
+            ExportWorkOutcome::Failed(_)
+        ));
         assert!(matches!(
             export_one(&work, Some("jpeg")),
             ExportWorkOutcome::Failed(_)
@@ -1037,15 +1064,13 @@ mod tests {
     async fn latest_job_tolerates_corrupt_manifest_json() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        sqlx::query(
-            "INSERT INTO export_job (status, manifest_json, created_at) VALUES (?, ?, ?)",
-        )
-        .bind("completed")
-        .bind("{bad-json")
-        .bind(1_i64)
-        .execute(catalog.pool())
-        .await
-        .unwrap();
+        sqlx::query("INSERT INTO export_job (status, manifest_json, created_at) VALUES (?, ?, ?)")
+            .bind("completed")
+            .bind("{bad-json")
+            .bind(1_i64)
+            .execute(catalog.pool())
+            .await
+            .unwrap();
         let export = ExportService::new(catalog.pool().clone());
         let latest = export.latest_job().await.unwrap().unwrap();
         assert_eq!(latest.1, "completed");
@@ -1068,18 +1093,16 @@ mod tests {
         let cancel = Arc::new(AtomicBool::new(true));
         let processed = AtomicU64::new(0);
         let progress: ExportProgressFn = Arc::new(noop_export_progress);
-        assert!(
-            parallel_export_item(
-                &work,
-                None,
-                Some(&cancel),
-                "copied",
-                &processed,
-                1,
-                &progress,
-            )
-            .is_none()
-        );
+        assert!(parallel_export_item(
+            &work,
+            None,
+            Some(&cancel),
+            "copied",
+            &processed,
+            1,
+            &progress,
+        )
+        .is_none());
         noop_export_progress(0, 1, Some("src.jpg"), "failed");
     }
 
@@ -1255,7 +1278,11 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(converted_phases.lock().unwrap().iter().any(|p| p == "converted"));
+        assert!(converted_phases
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|p| p == "converted"));
     }
 
     #[test]
@@ -1414,21 +1441,19 @@ mod tests {
             .unwrap();
         pool.close().await;
         let export = ExportService::new(pool);
-        assert!(
-            export
-                .export_assets(
-                    &[asset.id],
-                    &dir.path().join("closed-out"),
-                    &ExportOptions {
-                        flat: true,
-                        rename_template: None,
-                        format: None,
-                    },
-                    None,
-                )
-                .await
-                .is_err()
-        );
+        assert!(export
+            .export_assets(
+                &[asset.id],
+                &dir.path().join("closed-out"),
+                &ExportOptions {
+                    flat: true,
+                    rename_template: None,
+                    format: None,
+                },
+                None,
+            )
+            .await
+            .is_err());
         assert!(export.latest_job().await.is_err());
         assert!(export.list_jobs().await.is_err());
     }

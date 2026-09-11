@@ -1,12 +1,24 @@
 import { Palette } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { useAppTheme, syncThemeController } from "../../hooks/useAppTheme";
 import { usePopoverDismiss } from "../../hooks/usePopoverDismiss";
-import { computeFloatingMenuPlacement } from "../../lib/anchoredPopover";
+import {
+  computeFloatingMenuPlacement,
+  resolveMeasuredMenuDimensions,
+} from "../../lib/anchoredPopover";
 import { APP_THEMES, themeLabel, type AppTheme } from "../../lib/theme";
-import { readAllThemePreviewColors, type ThemePreviewColors } from "../../lib/themePreview";
+import {
+  readAllThemePreviewColors,
+  type ThemePreviewColors,
+} from "../../lib/themePreview";
 import { ghostBtnClass } from "../../lib/buttonClass";
 import { optionRowClass } from "../../lib/optionRowClass";
 import { ThemePreviewSwatches } from "./ThemePreviewSwatches";
@@ -38,12 +50,13 @@ export function ThemeSwitcher({
   const { t } = useTranslation("common");
   const { theme, setTheme } = useAppTheme();
   const [open, setOpen] = useState(false);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(
-    null,
-  );
-  const [previewColors, setPreviewColors] = useState<Partial<Record<AppTheme, ThemePreviewColors>>>(
-    {},
-  );
+  const [menuPosition, setMenuPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  const [previewColors, setPreviewColors] = useState<
+    Partial<Record<AppTheme, ThemePreviewColors>>
+  >({});
   const anchorRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -64,13 +77,11 @@ export function ThemeSwitcher({
       return;
     }
     const anchor = anchorRef.current.getBoundingClientRect();
-    const menuEl = menuRef.current;
-    let width = MENU_WIDTH;
-    let height = MENU_MAX_HEIGHT;
-    if (menuEl) {
-      width = menuEl.offsetWidth;
-      height = menuEl.offsetHeight;
-    }
+    const { width, height } = resolveMeasuredMenuDimensions(
+      menuRef.current,
+      MENU_WIDTH,
+      MENU_MAX_HEIGHT,
+    );
     setMenuPosition(
       computeFloatingMenuPlacement(
         anchor,
@@ -110,7 +121,9 @@ export function ThemeSwitcher({
         className={
           iconOnly
             ? TRIGGER_CLASS[size]
-            : ghostBtnClass("btn-sm h-8 min-h-0 max-w-32 gap-1 truncate text-xs font-normal")
+            : ghostBtnClass(
+                "btn-sm h-8 min-h-0 max-w-32 gap-1 truncate text-xs font-normal",
+              )
         }
         title={t("label.theme")}
         aria-label={t("aria.theme")}
@@ -118,7 +131,9 @@ export function ThemeSwitcher({
         onClick={() => setOpen((prev) => !prev)}
       >
         <Palette className={ICON_CLASS[size]} />
-        {!iconOnly ? <span className="truncate">{themeLabel(theme)}</span> : null}
+        {!iconOnly ? (
+          <span className="truncate">{themeLabel(theme)}</span>
+        ) : null}
       </button>
       {open &&
         createPortal(
@@ -150,8 +165,13 @@ export function ThemeSwitcher({
                         close();
                       }}
                     />
-                    <span className="min-w-0 flex-1 text-sm">{themeLabel(option)}</span>
-                    <ThemePreviewSwatches theme={option} colors={previewColors[option]} />
+                    <span className="min-w-0 flex-1 text-sm">
+                      {themeLabel(option)}
+                    </span>
+                    <ThemePreviewSwatches
+                      theme={option}
+                      colors={previewColors[option]}
+                    />
                   </label>
                 </li>
               ))}

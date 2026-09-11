@@ -20,7 +20,10 @@ function oklchChroma(color: string): number {
   return parsed.c ?? 0;
 }
 
-export function pickStrongThemeColor(secondary: string, accent: string): string {
+export function pickStrongThemeColor(
+  secondary: string,
+  accent: string,
+): string {
   if (!secondary) return accent;
   if (!accent) return secondary;
   return oklchChroma(accent) >= oklchChroma(secondary) ? accent : secondary;
@@ -41,7 +44,9 @@ export function readThemePreviewColors(theme: AppTheme): ThemePreviewColors {
   const el = getThemeProbe();
   el.setAttribute("data-theme", theme);
   const style = getComputedStyle(el);
-  const background = style.getPropertyValue(THEME_PREVIEW_VARS.background).trim();
+  const background = style
+    .getPropertyValue(THEME_PREVIEW_VARS.background)
+    .trim();
   const primary = style.getPropertyValue(THEME_PREVIEW_VARS.primary).trim();
   const secondary = style.getPropertyValue(THEME_PREVIEW_VARS.secondary).trim();
   const accent = style.getPropertyValue(THEME_PREVIEW_VARS.accent).trim();

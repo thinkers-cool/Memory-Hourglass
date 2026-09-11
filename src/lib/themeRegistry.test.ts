@@ -17,7 +17,10 @@ describe("theme registry", () => {
   });
 
   it("defines every theme in memhg.css", () => {
-    const memhgCss = readFileSync(resolve(root, "src/styles/themes/memhg.css"), "utf8");
+    const memhgCss = readFileSync(
+      resolve(root, "src/styles/themes/memhg.css"),
+      "utf8",
+    );
     for (const themeId of THEME_IDS) {
       expect(memhgCss).toContain(`name: "${themeId}"`);
     }
@@ -25,7 +28,10 @@ describe("theme registry", () => {
 
   it("marks default theme only in index.css plugin config", () => {
     const indexCss = readFileSync(resolve(root, "src/index.css"), "utf8");
-    const memhgCss = readFileSync(resolve(root, "src/styles/themes/memhg.css"), "utf8");
+    const memhgCss = readFileSync(
+      resolve(root, "src/styles/themes/memhg.css"),
+      "utf8",
+    );
     expect(indexCss).toContain(`${DEFAULT_THEME_ID} --default`);
     expect(memhgCss).not.toContain("default: true");
   });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import * as api from "../../api/client";
+import i18n from "../../i18n";
 import {
   DEFAULT_EXPORT_OPTIONS,
   type ExportDialogState,
@@ -25,24 +26,40 @@ export function useLibraryExport(
   });
 
   useEffect(() => {
-    api.onJobProgress((progress) => {
-      setExportDialog((prev) => {
-        if (prev.jobId === null || progress.job_id !== String(prev.jobId)) {
-          return prev;
+    let unlisten: (() => void) | undefined;
+    void api
+      .onJobProgress((progress) => {
+        setExportDialog((prev) => {
+          if (prev.jobId === null || progress.job_id !== String(prev.jobId)) {
+            return prev;
+          }
+          const finished = isJobFinished(progress.phase);
+          return {
+            ...prev,
+            jobId: finished ? null : prev.jobId,
+            progress: toExportProgress(progress),
+          };
+        });
+        if (isJobFinished(progress.phase)) {
+          setNotification(
+            successNotification(
+              i18n.t("library:statusBar.exportProgress", {
+                done: progress.done,
+                total: progress.total,
+              }),
+            ),
+          );
         }
-        const finished = isJobFinished(progress.phase);
-        return {
-          ...prev,
-          jobId: finished ? null : prev.jobId,
-          progress: toExportProgress(progress),
-        };
+      })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch((error: unknown) => {
+        setNotification(errorNotification(error));
       });
-      if (isJobFinished(progress.phase)) {
-        setNotification(
-          successNotification(`Export: ${progress.done}/${progress.total} files`),
-        );
-      }
-    }).catch(console.error);
+    return () => {
+      unlisten?.();
+    };
   }, [setNotification]);
 
   const openExport = useCallback((assetIds: number[]) => {
@@ -67,7 +84,7 @@ export function useLibraryExport(
           done: 0,
           total: assetIds.length,
           phase: "started",
-          message: "export started",
+          message: i18n.t("dialogs:export.started"),
         },
       }));
       await api.startExport(assetIds, destination, options, jobId);
@@ -94,7 +111,9 @@ export function useLibraryExport(
   const startExportFromDialog = useCallback(async () => {
     const { assetIds, destination, options } = exportDialog;
     if (!destination || assetIds.length === 0) {
-      setNotification(infoNotification("Select a destination folder"));
+      setNotification(
+        infoNotification(i18n.t("dialogs:export.selectDestination")),
+      );
       return;
     }
     await runExport(assetIds, destination, options).catch((error: unknown) => {

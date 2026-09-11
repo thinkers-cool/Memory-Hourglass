@@ -8,7 +8,10 @@ describe("theme contrast", () => {
     describe(theme, () => {
       for (const pair of THEME_CONTRAST_PAIRS[theme]) {
         it(`${pair.label} meets WCAG AA`, () => {
-          const ratio = wcagContrast(oklch(pair.foreground), oklch(pair.background));
+          const ratio = wcagContrast(
+            oklch(pair.foreground),
+            oklch(pair.background),
+          );
           expect(ratio).toBeGreaterThanOrEqual(pair.minRatio);
         });
       }

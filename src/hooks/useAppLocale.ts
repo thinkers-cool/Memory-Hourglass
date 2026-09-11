@@ -1,10 +1,7 @@
 import { useCallback, useSyncExternalStore } from "react";
 import i18n, { changeLocale } from "../i18n";
 import { LOCALE_CHANGE_EVENT } from "../i18n/events";
-import {
-  APP_LOCALES,
-  type AppLocale,
-} from "../i18n/config";
+import { APP_LOCALES, type AppLocale } from "../i18n/config";
 import { isAppLocale, localeLabel, readStoredLocale } from "../lib/locale";
 
 function subscribe(onStoreChange: () => void) {
@@ -26,7 +23,11 @@ function getLocaleSnapshot(): AppLocale {
 }
 
 export function useAppLocale() {
-  const locale = useSyncExternalStore(subscribe, getLocaleSnapshot, getLocaleSnapshot);
+  const locale = useSyncExternalStore(
+    subscribe,
+    getLocaleSnapshot,
+    getLocaleSnapshot,
+  );
 
   const setLocale = useCallback((next: AppLocale) => {
     void changeLocale(next);

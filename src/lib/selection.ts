@@ -28,11 +28,7 @@ export function resolveSelectionAnchor(
   selectedId: number | null,
   lastIndex: number | null,
 ): number | null {
-  if (
-    lastIndex !== null &&
-    lastIndex >= 0 &&
-    lastIndex < items.length
-  ) {
+  if (lastIndex !== null && lastIndex >= 0 && lastIndex < items.length) {
     return lastIndex;
   }
   if (selectedId !== null) {

@@ -1,11 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ALBUM_EMOJI, DEFAULT_TAG_COLOR } from "../../lib/libraryIndicators";
 import {
-  emptyFilterBar,
-  mockLibraryActions,
-} from "../../test/fixtures";
+  DEFAULT_ALBUM_EMOJI,
+  DEFAULT_TAG_COLOR,
+} from "../../lib/libraryIndicators";
+import { emptyFilterBar, mockLibraryActions } from "../../test/fixtures";
 import type { RootStats } from "../../types";
 import { LibraryPanel } from "./LibraryPanel";
 
@@ -270,7 +270,10 @@ describe("LibraryPanel", () => {
     await user.click(screen.getByTitle("New album"));
     await user.type(screen.getByPlaceholderText("New album"), "Trips");
     await user.click(screen.getByTitle("Save"));
-    expect(actions.createAlbum).toHaveBeenCalledWith("Trips", DEFAULT_ALBUM_EMOJI);
+    expect(actions.createAlbum).toHaveBeenCalledWith(
+      "Trips",
+      DEFAULT_ALBUM_EMOJI,
+    );
   });
 
   it("switches to trash and back", async () => {
@@ -433,7 +436,10 @@ describe("LibraryPanel", () => {
     await user.click(screen.getByTitle("New album"));
     const input = screen.getByPlaceholderText("New album");
     await user.type(input, "Trips{Enter}");
-    expect(actions.createAlbum).toHaveBeenCalledWith("Trips", DEFAULT_ALBUM_EMOJI);
+    expect(actions.createAlbum).toHaveBeenCalledWith(
+      "Trips",
+      DEFAULT_ALBUM_EMOJI,
+    );
     await user.click(screen.getByTitle("New album"));
     await user.type(screen.getByPlaceholderText("New album"), "Draft");
     await user.keyboard("{Escape}");
@@ -457,7 +463,11 @@ describe("LibraryPanel", () => {
     expect(actions.filterByTag).toHaveBeenCalledWith(7);
     await user.click(screen.getByTitle("New tag"));
     await user.type(screen.getByPlaceholderText("New tag"), "nature{Enter}");
-    expect(actions.createTag).toHaveBeenCalledWith("nature", undefined, DEFAULT_TAG_COLOR);
+    expect(actions.createTag).toHaveBeenCalledWith(
+      "nature",
+      undefined,
+      DEFAULT_TAG_COLOR,
+    );
   });
 
   it("edits tags on double click", async () => {

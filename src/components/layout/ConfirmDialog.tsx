@@ -27,7 +27,11 @@ export function ConfirmDialog({
         <h3 className="font-semibold text-lg mb-2">{title}</h3>
         <p className="text-sm text-content-muted mb-4">{message}</p>
         <div className="modal-action">
-          <button type="button" className="btn btn-ghost btn-interactive btn-sm" onClick={onClose}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-interactive btn-sm"
+            onClick={onClose}
+          >
             {t("common:action.cancel")}
           </button>
           <button
@@ -41,7 +45,9 @@ export function ConfirmDialog({
         </div>
       </div>
       <form method="dialog" className="modal-backdrop">
-        <button type="button" className="sr-only" onClick={onClose}>{t("common:action.close")}</button>
+        <button type="button" className="sr-only" onClick={onClose}>
+          {t("common:action.close")}
+        </button>
       </form>
     </dialog>
   );

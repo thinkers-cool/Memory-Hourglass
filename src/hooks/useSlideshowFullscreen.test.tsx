@@ -64,7 +64,10 @@ describe("useSlideshowFullscreen", () => {
 
     unmount();
     expect(exitWindowFullscreen).toHaveBeenCalled();
-    expect(removeListener).toHaveBeenCalledWith("fullscreenchange", expect.any(Function));
+    expect(removeListener).toHaveBeenCalledWith(
+      "fullscreenchange",
+      expect.any(Function),
+    );
   });
 
   it("uses tauri resize listener when in desktop app", async () => {

@@ -83,7 +83,9 @@ export function useWorkspace() {
   const pickAndOpenWorkspace = useCallback(async () => {
     let path: string | null;
     try {
-      path = await pickFolder({ title: i18n.t("common:folderPicker.openWorkspace") });
+      path = await pickFolder({
+        title: i18n.t("common:folderPicker.openWorkspace"),
+      });
     } catch (err) {
       reportError(err);
       return;
@@ -92,20 +94,23 @@ export function useWorkspace() {
     await openWorkspacePath(path);
   }, [openWorkspacePath, reportError]);
 
-  const pickAndCreateWorkspace = useCallback(async (readOnly = false) => {
-    let path: string | null;
-    try {
-      path = await pickFolder({
-        title: i18n.t("common:folderPicker.createWorkspace"),
-        createDirectory: true,
-      });
-    } catch (err) {
-      reportError(err);
-      return;
-    }
-    if (!path) return;
-    await createWorkspaceAt(path, readOnly);
-  }, [createWorkspaceAt, reportError]);
+  const pickAndCreateWorkspace = useCallback(
+    async (readOnly = false) => {
+      let path: string | null;
+      try {
+        path = await pickFolder({
+          title: i18n.t("common:folderPicker.createWorkspace"),
+          createDirectory: true,
+        });
+      } catch (err) {
+        reportError(err);
+        return;
+      }
+      if (!path) return;
+      await createWorkspaceAt(path, readOnly);
+    },
+    [createWorkspaceAt, reportError],
+  );
 
   const closeWorkspace = useCallback(async () => {
     setBusyMessage(i18n.t("common:busy.closingWorkspace"));

@@ -126,7 +126,15 @@ mod tests {
         rebuild_and_rescan(pool.clone(), thumb_dir).await.unwrap();
 
         let assets = AssetRepo::new(pool);
-        assert!(assets.find_by_path(first_root.id, "one.jpg").await.unwrap().is_some());
-        assert!(assets.find_by_path(second_root.id, "two.jpg").await.unwrap().is_some());
+        assert!(assets
+            .find_by_path(first_root.id, "one.jpg")
+            .await
+            .unwrap()
+            .is_some());
+        assert!(assets
+            .find_by_path(second_root.id, "two.jpg")
+            .await
+            .unwrap()
+            .is_some());
     }
 }

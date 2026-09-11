@@ -5,7 +5,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function optionalNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function optionalString(value: unknown): string | undefined {
@@ -16,7 +18,9 @@ function optionalStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
   }
-  const items = value.filter((entry): entry is string => typeof entry === "string");
+  const items = value.filter(
+    (entry): entry is string => typeof entry === "string",
+  );
   return items.length > 0 ? items : undefined;
 }
 
@@ -25,7 +29,8 @@ function optionalNumberArray(value: unknown): number[] | undefined {
     return undefined;
   }
   const items = value.filter(
-    (entry): entry is number => typeof entry === "number" && Number.isFinite(entry),
+    (entry): entry is number =>
+      typeof entry === "number" && Number.isFinite(entry),
   );
   return items.length > 0 ? items : undefined;
 }
@@ -72,7 +77,9 @@ export function parseAssetFilter(value: unknown): AssetFilter | null {
   return filter;
 }
 
-export function parseSmartCollectionFilter(filterJson: string): AssetFilter | null {
+export function parseSmartCollectionFilter(
+  filterJson: string,
+): AssetFilter | null {
   try {
     const parsed: unknown = JSON.parse(filterJson);
     return parseAssetFilter(parsed);

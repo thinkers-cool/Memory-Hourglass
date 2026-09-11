@@ -84,8 +84,7 @@ mod tests {
 
     #[test]
     fn with_activity_sets_id() {
-        let envelope = MessageEnvelope::success("library:notification.rated")
-            .with_activity(42);
+        let envelope = MessageEnvelope::success("library:notification.rated").with_activity(42);
         assert_eq!(envelope.activity_id, Some(42));
     }
 

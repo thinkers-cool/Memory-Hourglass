@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { computeAnchoredPopoverPlacement, computeFloatingMenuPlacement } from "./anchoredPopover";
+import {
+  computeAnchoredPopoverPlacement,
+  computeFloatingMenuPlacement,
+  resolveMeasuredMenuDimensions,
+} from "./anchoredPopover";
 
 describe("computeAnchoredPopoverPlacement", () => {
   it("opens below the anchor when there is enough space", () => {
@@ -93,5 +97,30 @@ describe("computeFloatingMenuPlacement", () => {
     );
     expect(position.top).toBe(64);
     expect(position.left).toBe(952);
+  });
+});
+
+describe("resolveMeasuredMenuDimensions", () => {
+  it("uses fallback dimensions when menu element is missing", () => {
+    expect(resolveMeasuredMenuDimensions(null, 200, 160)).toEqual({
+      width: 200,
+      height: 160,
+    });
+  });
+
+  it("uses measured dimensions when menu element is present", () => {
+    const menu = document.createElement("div");
+    Object.defineProperty(menu, "offsetWidth", {
+      configurable: true,
+      value: 180,
+    });
+    Object.defineProperty(menu, "offsetHeight", {
+      configurable: true,
+      value: 120,
+    });
+    expect(resolveMeasuredMenuDimensions(menu, 200, 160)).toEqual({
+      width: 180,
+      height: 120,
+    });
   });
 });

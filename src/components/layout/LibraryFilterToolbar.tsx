@@ -1,10 +1,6 @@
 import { useMemo, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  BookmarkPlus,
-  Presentation,
-  Upload,
-} from "lucide-react";
+import { BookmarkPlus, Presentation, Upload } from "lucide-react";
 import { FilterChipBar } from "../shared/FilterChipBar";
 import { StampButton } from "./StampButton";
 import { GridSizeControl } from "../shared/GridSizeControl";
@@ -30,7 +26,6 @@ const toolbarActionButtonClass = (compact: boolean) =>
     : ghostBtnClass("btn-sm h-8 min-h-0 gap-1 text-xs font-normal");
 
 export function LibraryFilterToolbar({
-  busy: _busy,
   tags,
   albums,
   filterBar,

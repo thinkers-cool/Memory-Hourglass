@@ -6,14 +6,7 @@ import { usePopoverDismiss } from "../../hooks/usePopoverDismiss";
 import { ghostBtnClass } from "../../lib/buttonClass";
 import type { Album, TagDto } from "../../types";
 import type { StampConfig } from "../../lib/stamp";
-
-function ShortcutHint({ children }: { children: string }) {
-  return (
-    <span className="ml-1 text-[10px] font-normal uppercase tracking-wide text-content-faint">
-      {children}
-    </span>
-  );
-}
+import { ShortcutHint } from "../shared/ShortcutHint";
 
 export function StampButton({
   compact,
@@ -83,7 +76,9 @@ export function StampButton({
         {!compact ? (
           <>
             {t("library:stamp.label")}
-            {armed ? <ShortcutHint>{t("common:shortcut.space")}</ShortcutHint> : null}
+            {armed ? (
+              <ShortcutHint>{t("common:shortcut.space")}</ShortcutHint>
+            ) : null}
           </>
         ) : null}
       </button>

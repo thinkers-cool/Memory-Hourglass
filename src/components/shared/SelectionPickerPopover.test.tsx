@@ -56,7 +56,9 @@ describe("SelectionPickerPopover", () => {
         onToggle={vi.fn()}
       />,
     );
-    expect(screen.getByText("travel").closest("button")).not.toHaveClass("bg-interactive-selected");
+    expect(screen.getByText("travel").closest("button")).not.toHaveClass(
+      "bg-interactive-selected",
+    );
   });
 
   it("creates items from input", async () => {

@@ -13,7 +13,10 @@ export function useStamp(tags: TagDto[], albums: Album[]) {
   const [matchedIds, setMatchedIds] = useState<Set<number>>(() => new Set());
 
   const tagIdSet = useMemo(() => new Set(tags.map((tag) => tag.id)), [tags]);
-  const albumIdSet = useMemo(() => new Set(albums.map((album) => album.id)), [albums]);
+  const albumIdSet = useMemo(
+    () => new Set(albums.map((album) => album.id)),
+    [albums],
+  );
 
   useEffect(() => {
     setConfig((prev) => pruneStampConfig(prev, tagIdSet, albumIdSet));

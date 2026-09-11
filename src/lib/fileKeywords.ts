@@ -14,5 +14,7 @@ export function fileKeywordsNotInCatalog(
   catalogTagNames: string[],
 ): string[] {
   const catalog = new Set(catalogTagNames);
-  return parseKeywordsJson(keywordsJson).filter((keyword) => !catalog.has(keyword));
+  return parseKeywordsJson(keywordsJson).filter(
+    (keyword) => !catalog.has(keyword),
+  );
 }

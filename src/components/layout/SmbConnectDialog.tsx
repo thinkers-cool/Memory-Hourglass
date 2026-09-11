@@ -177,7 +177,9 @@ export function SmbConnectDialog({
   };
 
   const submitMounted = async () => {
-    const path = await pickFolder({ title: t("common:folderPicker.mountedSmb") });
+    const path = await pickFolder({
+      title: t("common:folderPicker.mountedSmb"),
+    });
     if (!path) return;
     onAddMountedPath(path);
   };
@@ -205,7 +207,9 @@ export function SmbConnectDialog({
         {mode === "mounted" ? null : connectStep === "credentials" ? (
           <div className="space-y-3">
             <fieldset className="fieldset">
-              <legend className="fieldset-legend">{t("common:label.server")}</legend>
+              <legend className="fieldset-legend">
+                {t("common:label.server")}
+              </legend>
               <input
                 type="text"
                 className={`${INPUT_CONTROL_FULL_CLASS} w-full font-mono text-xs`}
@@ -216,7 +220,9 @@ export function SmbConnectDialog({
             </fieldset>
 
             <fieldset className="fieldset">
-              <legend className="fieldset-legend">{t("common:label.username")}</legend>
+              <legend className="fieldset-legend">
+                {t("common:label.username")}
+              </legend>
               <input
                 type="text"
                 className={`${INPUT_CONTROL_FULL_CLASS} w-full`}
@@ -228,7 +234,9 @@ export function SmbConnectDialog({
             </fieldset>
 
             <fieldset className="fieldset">
-              <legend className="fieldset-legend">{t("common:label.password")}</legend>
+              <legend className="fieldset-legend">
+                {t("common:label.password")}
+              </legend>
               <input
                 type="password"
                 className={`${INPUT_CONTROL_FULL_CLASS} w-full`}
@@ -239,9 +247,7 @@ export function SmbConnectDialog({
               />
             </fieldset>
 
-            {listError && (
-              <p className="text-xs text-error">{listError}</p>
-            )}
+            {listError && <p className="text-xs text-error">{listError}</p>}
           </div>
         ) : connectStep === "shares" ? (
           <div className="space-y-3">
@@ -258,9 +264,7 @@ export function SmbConnectDialog({
                 />
               ))}
             </div>
-            {listError && (
-              <p className="text-xs text-error">{listError}</p>
-            )}
+            {listError && <p className="text-xs text-error">{listError}</p>}
           </div>
         ) : (
           <div className="space-y-3">
@@ -271,7 +275,9 @@ export function SmbConnectDialog({
               onSelect={setSelectedFolderPath}
             />
             <fieldset className="fieldset">
-              <legend className="fieldset-legend">{t("dialogs:smb.rescanInterval")}</legend>
+              <legend className="fieldset-legend">
+                {t("dialogs:smb.rescanInterval")}
+              </legend>
               <input
                 type="number"
                 min={30}
@@ -310,7 +316,11 @@ export function SmbConnectDialog({
               {t("common:action.back")}
             </button>
           )}
-          <button type="button" className="btn btn-ghost btn-interactive btn-sm" onClick={onClose}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-interactive btn-sm"
+            onClick={onClose}
+          >
             {t("common:action.cancel")}
           </button>
           {mode === "connect" ? (
@@ -330,7 +340,9 @@ export function SmbConnectDialog({
                 disabled={busy || listing || !canContinueShare}
                 onClick={() => void continueToFolders()}
               >
-                {listing ? t("common:busy.connecting") : t("common:action.continue")}
+                {listing
+                  ? t("common:busy.connecting")
+                  : t("common:action.continue")}
               </button>
             ) : (
               <button
@@ -355,7 +367,9 @@ export function SmbConnectDialog({
         </div>
       </div>
       <form method="dialog" className="modal-backdrop">
-        <button type="button" className="sr-only" onClick={onClose}>{t("common:action.close")}</button>
+        <button type="button" className="sr-only" onClick={onClose}>
+          {t("common:action.close")}
+        </button>
       </form>
     </dialog>
   );

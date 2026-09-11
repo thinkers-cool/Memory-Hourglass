@@ -83,3 +83,17 @@ export function computeFloatingMenuPlacement(
 
   return { top, left };
 }
+
+export function resolveMeasuredMenuDimensions(
+  menuEl: HTMLElement | null,
+  fallbackWidth: number,
+  fallbackHeight: number,
+): { width: number; height: number } {
+  if (!menuEl) {
+    return { width: fallbackWidth, height: fallbackHeight };
+  }
+  return {
+    width: menuEl.offsetWidth,
+    height: menuEl.offsetHeight,
+  };
+}

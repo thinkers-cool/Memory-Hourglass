@@ -1,9 +1,14 @@
 import type { FilterDef } from "../components/shared/FilterChipBar";
 import i18n from "../i18n";
 
-export function getMultiDisplayValue(filter: FilterDef, values: string[]): string {
+export function getMultiDisplayValue(
+  filter: FilterDef,
+  values: string[],
+): string {
   if (values.length === 0) return "";
-  const labels = values.map((value) => filter.statusOptionLabels?.[value] ?? value);
+  const labels = values.map(
+    (value) => filter.statusOptionLabels?.[value] ?? value,
+  );
   if (labels.length <= 2) return labels.join(", ");
   return `${labels[0]}, +${labels.length - 1}`;
 }

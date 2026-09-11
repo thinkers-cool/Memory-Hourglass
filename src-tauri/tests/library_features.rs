@@ -24,7 +24,10 @@ async fn albums_smart_collections_and_raw_link() {
     let thumb_dir = dir.path().join("thumbs");
 
     let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
-    let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
+    let root = library
+        .add_local_root(photos.to_str().unwrap())
+        .await
+        .unwrap();
     let smb_photos = dir.path().join("smb_photos");
     std::fs::create_dir_all(&smb_photos).unwrap();
     std::fs::write(smb_photos.join("net.jpg"), jpeg).unwrap();
@@ -48,17 +51,29 @@ async fn albums_smart_collections_and_raw_link() {
     assert_eq!(linked, 1);
 
     let query = QueryService::new(pool.clone(), thumb_dir.clone());
-    let assets = query.query(&AssetFilter::default(), "date:desc", 0, 50).await.unwrap();
+    let assets = query
+        .query(&AssetFilter::default(), "date:desc", 0, 50)
+        .await
+        .unwrap();
     assert_eq!(assets.total, 2);
 
     let collection = CollectionRepo::new(pool.clone());
     let smart = collection
-        .save_smart_collection("high rated", &AssetFilter { kind: Some("raw".into()), ..Default::default() })
+        .save_smart_collection(
+            "high rated",
+            &AssetFilter {
+                kind: Some("raw".into()),
+                ..Default::default()
+            },
+        )
         .await
         .unwrap();
     assert!(smart.id > 0);
 
-    let album = collection.create_album("trip", "date:desc", None).await.unwrap();
+    let album = collection
+        .create_album("trip", "date:desc", None)
+        .await
+        .unwrap();
     let ids = assets.items.iter().map(|a| a.id).collect::<Vec<_>>();
     collection.set_album_items(album.id, &ids).await.unwrap();
     let album_ids = collection.album_asset_ids(album.id).await.unwrap();
@@ -84,7 +99,10 @@ async fn duplicates_batch_meta_export_and_relink() {
     let thumb_dir = dir.path().join("thumbs");
 
     let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
-    let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
+    let root = library
+        .add_local_root(photos.to_str().unwrap())
+        .await
+        .unwrap();
     let ctrl = ScanControl::noop();
     ScanService::new(pool.clone(), thumb_dir.clone())
         .scan_root(root.id, &ctrl)
@@ -92,23 +110,24 @@ async fn duplicates_batch_meta_export_and_relink() {
         .unwrap();
 
     let link = LinkService::new(pool.clone());
-    let hashed = link.compute_hashes_for_root(root.id, &photos).await.unwrap();
+    let hashed = link
+        .compute_hashes_for_root(root.id, &photos)
+        .await
+        .unwrap();
     assert_eq!(hashed, 0);
     let dups = link.find_duplicates_by_hash(Some(root.id)).await.unwrap();
     assert_eq!(dups.len(), 1);
     assert_eq!(dups[0].len(), 2);
 
     let query = QueryService::new(pool.clone(), thumb_dir.clone());
-    let listed = query.query(&AssetFilter::default(), "date:desc", 0, 50).await.unwrap();
+    let listed = query
+        .query(&AssetFilter::default(), "date:desc", 0, 50)
+        .await
+        .unwrap();
     let ids = listed.items.iter().map(|a| a.id).collect::<Vec<_>>();
 
     let updated = query
-        .batch_apply_meta(
-            &ids,
-            AssetMetaPatch {
-                rating: Some(3),
-            },
-        )
+        .batch_apply_meta(&ids, AssetMetaPatch { rating: Some(3) })
         .await
         .unwrap();
     assert_eq!(updated, 2);
@@ -133,23 +152,38 @@ async fn duplicates_batch_meta_export_and_relink() {
     std::fs::copy(photos.join("dup.jpg"), moved.join("dup.jpg")).unwrap();
     std::fs::copy(photos.join("copy.jpg"), moved.join("copy.jpg")).unwrap();
 
-    let preview = library.preview_relink(root.id, moved.to_str().unwrap()).await.unwrap();
+    let preview = library
+        .preview_relink(root.id, moved.to_str().unwrap())
+        .await
+        .unwrap();
     assert_eq!(preview.matched, preview.total_sampled);
 
-    library.relink_root(root.id, moved.to_str().unwrap()).await.unwrap();
+    library
+        .relink_root(root.id, moved.to_str().unwrap())
+        .await
+        .unwrap();
     ScanService::new(pool.clone(), thumb_dir.clone())
         .scan_root(root.id, &ctrl)
         .await
         .unwrap();
 
-    let after = query.query(&AssetFilter::default(), "date:desc", 0, 50).await.unwrap();
+    let after = query
+        .query(&AssetFilter::default(), "date:desc", 0, 50)
+        .await
+        .unwrap();
     assert_eq!(after.total, 2);
 
     let assets = AssetRepo::new(pool.clone());
     let purge_id = ids[0];
     let paths = WorkspacePaths::new(dir.path().to_path_buf());
-    assets.purge_assets(&[purge_id], &paths, false).await.unwrap();
-    let remaining = query.query(&AssetFilter::default(), "date:desc", 0, 50).await.unwrap();
+    assets
+        .purge_assets(&[purge_id], &paths, false)
+        .await
+        .unwrap();
+    let remaining = query
+        .query(&AssetFilter::default(), "date:desc", 0, 50)
+        .await
+        .unwrap();
     assert_eq!(remaining.total, 1);
 }
 
@@ -158,7 +192,11 @@ async fn offline_root_returns_without_error() {
     let dir = tempdir().unwrap();
     let photos = dir.path().join("photos");
     std::fs::create_dir_all(&photos).unwrap();
-    std::fs::write(photos.join("one.jpg"), include_bytes!("../tests/fixtures/minimal.jpg")).unwrap();
+    std::fs::write(
+        photos.join("one.jpg"),
+        include_bytes!("../tests/fixtures/minimal.jpg"),
+    )
+    .unwrap();
 
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
     let pool = catalog.pool().clone();

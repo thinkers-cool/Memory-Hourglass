@@ -46,11 +46,9 @@ impl MetadataContext {
     pub fn write_sidecar_path(&self) -> PathBuf {
         match self.policy {
             MetadataPolicy::InPlace => xmp_sidecar_path(&self.media_path),
-            MetadataPolicy::WorkspaceSidecar => workspace_sidecar_path(
-                &self.workspace_xmp_dir,
-                self.root_id,
-                &self.rel_path,
-            ),
+            MetadataPolicy::WorkspaceSidecar => {
+                workspace_sidecar_path(&self.workspace_xmp_dir, self.root_id, &self.rel_path)
+            }
         }
     }
 
@@ -95,12 +93,8 @@ mod tests {
         assert_eq!(in_place.colocated_sidecar_path(), xmp_sidecar_path(&media));
 
         let xmp_dir = PathBuf::from("/xmp");
-        let workspace = MetadataContext::workspace_sidecar(
-            media.clone(),
-            9,
-            "a.jpg".into(),
-            xmp_dir.clone(),
-        );
+        let workspace =
+            MetadataContext::workspace_sidecar(media.clone(), 9, "a.jpg".into(), xmp_dir.clone());
         assert!(workspace.is_read_only_workspace());
         assert_eq!(
             workspace.write_sidecar_path(),

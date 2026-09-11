@@ -24,7 +24,11 @@ export function handleSelectionShortcuts(
     actions.openAlbumMenu();
     return true;
   }
-  if ((event.key === "e" || event.key === "E") && !event.metaKey && !event.ctrlKey) {
+  if (
+    (event.key === "e" || event.key === "E") &&
+    !event.metaKey &&
+    !event.ctrlKey
+  ) {
     event.preventDefault();
     if (options.selectionExportIds.length > 0) {
       actions.openExport(options.selectionExportIds);
@@ -37,7 +41,11 @@ export function handleSelectionShortcuts(
     return true;
   }
   if (options.trashMode) {
-    if ((event.key === "r" || event.key === "R") && !event.metaKey && !event.ctrlKey) {
+    if (
+      (event.key === "r" || event.key === "R") &&
+      !event.metaKey &&
+      !event.ctrlKey
+    ) {
       event.preventDefault();
       actions.restoreSelected();
       return true;

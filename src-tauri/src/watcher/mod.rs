@@ -34,11 +34,7 @@ fn smb_poller_select_duration() -> Duration {
 }
 
 fn log_background_scan_failure(root_id: i64, error: &crate::error::AppError) {
-    tracing::warn!(
-        "background scan failed for root {}: {}",
-        root_id,
-        error
-    );
+    tracing::warn!("background scan failed for root {}: {}", root_id, error);
 }
 
 async fn smb_poller_await_shutdown_or_timeout(shutdown: &mut watch::Receiver<bool>) -> bool {
@@ -102,10 +98,16 @@ impl WatcherService {
         let debounce = self.debounce.clone();
 
         std::thread::spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread()
+            let rt = match tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
-                .expect("watcher runtime");
+            {
+                Ok(runtime) => runtime,
+                Err(error) => {
+                    tracing::error!(error = %error, "watcher runtime failed");
+                    return;
+                }
+            };
 
             rt.block_on(async {
                 let mut generation = *roots_refresh.borrow();
@@ -136,21 +138,25 @@ impl WatcherService {
                     }
 
                     let (tx, rx) = mpsc::channel();
-                    let mut watcher = RecommendedWatcher::new(
+                    let mut watcher = match RecommendedWatcher::new(
                         move |res: Result<notify::Event, notify::Error>| {
                             if res.is_ok() {
                                 let _ = tx.send(());
                             }
                         },
                         Config::default(),
-                    )
-                    .expect("notify watcher");
+                    ) {
+                        Ok(watcher) => watcher,
+                        Err(error) => {
+                            tracing::error!(error = %error, "notify watcher failed");
+                            tokio::time::sleep(Duration::from_secs(5)).await;
+                            continue;
+                        }
+                    };
 
                     for root in &local_roots {
-                        let _ = watcher.watch(
-                            std::path::Path::new(&root.path),
-                            RecursiveMode::Recursive,
-                        );
+                        let _ = watcher
+                            .watch(std::path::Path::new(&root.path), RecursiveMode::Recursive);
                     }
 
                     while !*shutdown.borrow() && *roots_refresh.borrow() == generation {
@@ -239,11 +245,7 @@ pub(crate) async fn poll_smb_roots_once(
             media_settings.clone(),
         );
         if let Err(error) = scanner.scan_root(root.id, &ScanControl::noop()).await {
-            tracing::warn!(
-                "SMB background scan failed for root {}: {}",
-                root.id,
-                error
-            );
+            tracing::warn!("SMB background scan failed for root {}: {}", root.id, error);
         }
         jobs.finish().await;
     }
@@ -257,7 +259,11 @@ mod tests {
     #[test]
     fn debounce_allows_first_scan() {
         let now = Instant::now();
-        assert!(should_rescan_after_debounce(None, now, Duration::from_secs(3)));
+        assert!(should_rescan_after_debounce(
+            None,
+            now,
+            Duration::from_secs(3)
+        ));
     }
 
     #[test]
@@ -289,8 +295,8 @@ mod tests {
 
     #[tokio::test]
     async fn poll_smb_roots_once_scans_due_root() {
-        use crate::catalog::Catalog;
         use crate::catalog::repo::SourceRootRepo;
+        use crate::catalog::Catalog;
         use tempfile::tempdir;
 
         let dir = tempdir().unwrap();
@@ -313,13 +319,7 @@ mod tests {
             workspace_xmp_dir: dir.path().join("xmp"),
         };
         let jobs = JobQueue::new();
-        poll_smb_roots_once(
-            &pool,
-            &dir.path().join("thumbs"),
-            &media_settings,
-            &jobs,
-        )
-        .await;
+        poll_smb_roots_once(&pool, &dir.path().join("thumbs"), &media_settings, &jobs).await;
     }
 
     #[tokio::test]
@@ -383,8 +383,8 @@ mod tests {
 
     #[tokio::test]
     async fn poll_smb_roots_once_skips_recently_scanned_root() {
-        use crate::catalog::Catalog;
         use crate::catalog::repo::SourceRootRepo;
+        use crate::catalog::Catalog;
         use tempfile::tempdir;
 
         let dir = tempdir().unwrap();
@@ -404,20 +404,14 @@ mod tests {
             workspace_xmp_dir: dir.path().join("xmp"),
         };
         let jobs = JobQueue::new();
-        poll_smb_roots_once(
-            &pool,
-            &dir.path().join("thumbs"),
-            &media_settings,
-            &jobs,
-        )
-        .await;
+        poll_smb_roots_once(&pool, &dir.path().join("thumbs"), &media_settings, &jobs).await;
         assert!(jobs.current().await.is_none());
     }
 
     #[tokio::test]
     async fn poll_smb_roots_once_skips_when_jobs_busy() {
-        use crate::catalog::Catalog;
         use crate::catalog::repo::SourceRootRepo;
+        use crate::catalog::Catalog;
         use tempfile::tempdir;
 
         let dir = tempdir().unwrap();
@@ -433,22 +427,16 @@ mod tests {
         };
         let jobs = JobQueue::new();
         jobs.try_start("background-scan").await.unwrap();
-        poll_smb_roots_once(
-            &pool,
-            &dir.path().join("thumbs"),
-            &media_settings,
-            &jobs,
-        )
-        .await;
+        poll_smb_roots_once(&pool, &dir.path().join("thumbs"), &media_settings, &jobs).await;
         assert_eq!(jobs.current().await.as_deref(), Some("background-scan"));
         jobs.finish().await;
     }
 
     #[tokio::test]
     async fn poll_smb_roots_once_handles_scan_errors() {
-        use crate::catalog::Catalog;
         use crate::catalog::repo::SourceRootRepo;
-        use crate::scan::test_hooks::{FINALIZE_SCAN_LINKS_FAIL, reset as reset_scan_hooks};
+        use crate::catalog::Catalog;
+        use crate::scan::test_hooks::{reset as reset_scan_hooks, FINALIZE_SCAN_LINKS_FAIL};
         use std::sync::atomic::Ordering;
         use tempfile::tempdir;
 
@@ -473,13 +461,7 @@ mod tests {
             workspace_xmp_dir: dir.path().join("xmp"),
         };
         let jobs = JobQueue::new();
-        poll_smb_roots_once(
-            &pool,
-            &dir.path().join("thumbs"),
-            &media_settings,
-            &jobs,
-        )
-        .await;
+        poll_smb_roots_once(&pool, &dir.path().join("thumbs"), &media_settings, &jobs).await;
         assert!(jobs.current().await.is_none());
         reset_scan_hooks();
     }
@@ -507,9 +489,9 @@ mod tests {
 
     #[tokio::test]
     async fn local_watcher_logs_background_scan_errors() {
-        use crate::catalog::Catalog;
         use crate::catalog::repo::SourceRootRepo;
-        use crate::scan::test_hooks::{FINALIZE_SCAN_LINKS_FAIL, reset as reset_scan_hooks};
+        use crate::catalog::Catalog;
+        use crate::scan::test_hooks::{reset as reset_scan_hooks, FINALIZE_SCAN_LINKS_FAIL};
         use std::sync::atomic::Ordering;
         use tempfile::tempdir;
 
@@ -657,16 +639,13 @@ mod tests {
 
     #[test]
     fn log_background_scan_failure_emits_warning() {
-        log_background_scan_failure(
-            7,
-            &crate::error::AppError::Scan("test scan failure".into()),
-        );
+        log_background_scan_failure(7, &crate::error::AppError::Scan("test scan failure".into()));
     }
 
     #[tokio::test]
     async fn local_watcher_skips_scan_when_jobs_busy() {
-        use crate::catalog::Catalog;
         use crate::catalog::repo::SourceRootRepo;
+        use crate::catalog::Catalog;
         use tempfile::tempdir;
 
         let dir = tempdir().unwrap();
@@ -708,8 +687,8 @@ mod tests {
 
     #[tokio::test]
     async fn local_watcher_restarts_when_roots_refresh_generation_changes() {
-        use crate::catalog::Catalog;
         use crate::catalog::repo::SourceRootRepo;
+        use crate::catalog::Catalog;
         use tempfile::tempdir;
 
         let dir = tempdir().unwrap();
@@ -744,8 +723,8 @@ mod tests {
 
     #[tokio::test]
     async fn local_watcher_triggers_on_file_change() {
-        use crate::catalog::Catalog;
         use crate::catalog::repo::SourceRootRepo;
+        use crate::catalog::Catalog;
         use tempfile::tempdir;
 
         let dir = tempdir().unwrap();

@@ -17,7 +17,9 @@
     "formatJpeg": "JPEG",
     "formatPng": "PNG",
     "progress": "进度",
-    "exporting": "正在导出…"
+    "exporting": "正在导出…",
+    "selectDestination": "请选择目标文件夹",
+    "started": "导出已开始"
   },
   "smb": {
     "title": "添加网络来源",

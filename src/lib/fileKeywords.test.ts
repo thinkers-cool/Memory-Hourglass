@@ -3,7 +3,10 @@ import { fileKeywordsNotInCatalog, parseKeywordsJson } from "./fileKeywords";
 
 describe("fileKeywords", () => {
   it("parses keyword json arrays", () => {
-    expect(parseKeywordsJson('["travel", "family"]')).toEqual(["travel", "family"]);
+    expect(parseKeywordsJson('["travel", "family"]')).toEqual([
+      "travel",
+      "family",
+    ]);
     expect(parseKeywordsJson(null)).toEqual([]);
     expect(parseKeywordsJson("")).toEqual([]);
     expect(parseKeywordsJson("not-json")).toEqual([]);

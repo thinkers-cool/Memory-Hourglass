@@ -1,10 +1,6 @@
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import {
-  resolveStatusDisplay,
-  resolveStatusLine,
-} from "../../lib/statusBar";
-import { isErrorNotification } from "../../lib/notification";
+import { resolveStatusDisplay, resolveStatusLine } from "../../lib/statusBar";
 import type { Notification } from "../../types";
 
 export function StartStatusStrip({

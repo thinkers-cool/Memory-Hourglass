@@ -37,11 +37,13 @@ export function useMessageSystem() {
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    void api.onMessageNotify((envelope) => {
-      dispatchMessage(envelopeToMessage(envelope));
-    }).then((fn) => {
-      unlisten = fn;
-    });
+    void api
+      .onMessageNotify((envelope) => {
+        dispatchMessage(envelopeToMessage(envelope));
+      })
+      .then((fn) => {
+        unlisten = fn;
+      });
     return () => unlisten?.();
   }, []);
 
@@ -58,17 +60,20 @@ export function useMessageSystem() {
     });
   }, []);
 
-  const withBusy = useCallback(async (fn: () => Promise<void>) => {
-    setBusyState(true);
-    try {
-      await fn();
-    } catch (error) {
-      reportError(error);
-      throw error;
-    } finally {
-      setBusyState(false);
-    }
-  }, [reportError]);
+  const withBusy = useCallback(
+    async (fn: () => Promise<void>) => {
+      setBusyState(true);
+      try {
+        await fn();
+      } catch (error) {
+        reportError(error);
+        throw error;
+      } finally {
+        setBusyState(false);
+      }
+    },
+    [reportError],
+  );
 
   const undoActivity = useCallback(
     async (activityId: number) => {

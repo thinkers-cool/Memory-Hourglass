@@ -20,9 +20,8 @@ pub async fn refresh_asset_after_metadata_write(
     let link = LinkService::new(pool.clone());
 
     let file_meta = std::fs::metadata(abs_path)?;
-    let mtime_ns = file_mtime_ns(&file_meta).ok_or_else(|| {
-        AppError::Metadata(format!("missing mtime for {}", abs_path.display()))
-    })?;
+    let mtime_ns = file_mtime_ns(&file_meta)
+        .ok_or_else(|| AppError::Metadata(format!("missing mtime for {}", abs_path.display())))?;
     let size = file_meta.len() as i64;
 
     if !read_only {
@@ -71,8 +70,11 @@ mod tests {
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
         let file_path = photos.join("rated.jpg");
-        std::fs::write(&file_path, include_bytes!("../../tests/fixtures/minimal.jpg"))
-            .unwrap();
+        std::fs::write(
+            &file_path,
+            include_bytes!("../../tests/fixtures/minimal.jpg"),
+        )
+        .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let pool = catalog.pool().clone();
@@ -106,22 +108,20 @@ mod tests {
             .expect("meta");
         assert_eq!(meta.rating, Some(4));
 
-        let tags = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM asset_raw_tag WHERE asset_id = ?",
-        )
-        .bind(asset_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let tags =
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM asset_raw_tag WHERE asset_id = ?")
+                .bind(asset_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert!(tags > 0);
 
-        let hash: Option<String> = sqlx::query_scalar(
-            "SELECT content_hash FROM asset WHERE id = ?",
-        )
-        .bind(asset_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let hash: Option<String> =
+            sqlx::query_scalar("SELECT content_hash FROM asset WHERE id = ?")
+                .bind(asset_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert!(hash.is_some());
 
         let assets = AssetRepo::new(pool.clone());
@@ -135,8 +135,11 @@ mod tests {
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
         let file_path = photos.join("readonly.jpg");
-        std::fs::write(&file_path, include_bytes!("../../tests/fixtures/minimal.jpg"))
-            .unwrap();
+        std::fs::write(
+            &file_path,
+            include_bytes!("../../tests/fixtures/minimal.jpg"),
+        )
+        .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let pool = catalog.pool().clone();
@@ -170,13 +173,11 @@ mod tests {
             .await
             .unwrap();
 
-        let hash: String = sqlx::query_scalar(
-            "SELECT content_hash FROM asset WHERE id = ?",
-        )
-        .bind(asset_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let hash: String = sqlx::query_scalar("SELECT content_hash FROM asset WHERE id = ?")
+            .bind(asset_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         assert_eq!(hash, "seed-hash");
     }
 
@@ -186,9 +187,15 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let pool = catalog.pool().clone();
         let ctx = MetadataContext::in_place(dir.path().join("missing.jpg"));
-        let err = refresh_asset_after_metadata_write(&pool, 1, &dir.path().join("missing.jpg"), &ctx, false)
-            .await
-            .unwrap_err();
+        let err = refresh_asset_after_metadata_write(
+            &pool,
+            1,
+            &dir.path().join("missing.jpg"),
+            &ctx,
+            false,
+        )
+        .await
+        .unwrap_err();
         assert!(!err.to_string().is_empty());
     }
 
@@ -198,8 +205,11 @@ mod tests {
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
         let file_path = photos.join("stats.jpg");
-        std::fs::write(&file_path, include_bytes!("../../tests/fixtures/minimal.jpg"))
-            .unwrap();
+        std::fs::write(
+            &file_path,
+            include_bytes!("../../tests/fixtures/minimal.jpg"),
+        )
+        .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let pool = catalog.pool().clone();
@@ -224,8 +234,11 @@ mod tests {
             .fetch_one(&pool)
             .await
             .unwrap();
-        std::fs::write(&file_path, include_bytes!("../../tests/fixtures/minimal.jpg"))
-            .unwrap();
+        std::fs::write(
+            &file_path,
+            include_bytes!("../../tests/fixtures/minimal.jpg"),
+        )
+        .unwrap();
         let ctx = MetadataContext::in_place(file_path.clone());
         MetadataService::write_rating(&ctx, 1).unwrap();
 
@@ -239,13 +252,12 @@ mod tests {
             .await
             .unwrap();
         assert!(after_size >= before_size);
-        let raw_tags: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM asset_raw_tag WHERE asset_id = ?",
-        )
-        .bind(asset_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let raw_tags: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM asset_raw_tag WHERE asset_id = ?")
+                .bind(asset_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert!(raw_tags > 0);
     }
 
@@ -255,8 +267,11 @@ mod tests {
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
         let file_path = photos.join("mtime.jpg");
-        std::fs::write(&file_path, include_bytes!("../../tests/fixtures/minimal.jpg"))
-            .unwrap();
+        std::fs::write(
+            &file_path,
+            include_bytes!("../../tests/fixtures/minimal.jpg"),
+        )
+        .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let pool = catalog.pool().clone();
@@ -275,8 +290,11 @@ mod tests {
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
         let file_path = photos.join("panic.jpg");
-        std::fs::write(&file_path, include_bytes!("../../tests/fixtures/minimal.jpg"))
-            .unwrap();
+        std::fs::write(
+            &file_path,
+            include_bytes!("../../tests/fixtures/minimal.jpg"),
+        )
+        .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let pool = catalog.pool().clone();
         let thumb_dir = dir.path().join("thumbs");
@@ -308,8 +326,11 @@ mod tests {
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
         let file_path = photos.join("pool.jpg");
-        std::fs::write(&file_path, include_bytes!("../../tests/fixtures/minimal.jpg"))
-            .unwrap();
+        std::fs::write(
+            &file_path,
+            include_bytes!("../../tests/fixtures/minimal.jpg"),
+        )
+        .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let pool = catalog.pool().clone();

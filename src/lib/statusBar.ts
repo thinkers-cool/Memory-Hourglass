@@ -41,15 +41,21 @@ export function isActiveScan(scanStatus: string): boolean {
 export function formatScanStatus(scanStatus: string): string {
   if (scanStatus.startsWith("cataloging:")) {
     const [, counts] = scanStatus.split(": ");
-    return i18n.t("library:statusBar.cataloging", { counts: counts ?? "" }).trim();
+    return i18n
+      .t("library:statusBar.cataloging", { counts: counts ?? "" })
+      .trim();
   }
   if (scanStatus.startsWith("indexing:")) {
     const [, counts] = scanStatus.split(": ");
-    return i18n.t("library:statusBar.generatingPreviews", { counts: counts ?? "" }).trim();
+    return i18n
+      .t("library:statusBar.generatingPreviews", { counts: counts ?? "" })
+      .trim();
   }
   if (scanStatus.startsWith("scanning:")) {
     const [, counts] = scanStatus.split(": ");
-    return i18n.t("library:statusBar.scanning", { counts: counts ?? "" }).trim();
+    return i18n
+      .t("library:statusBar.scanning", { counts: counts ?? "" })
+      .trim();
   }
   return scanStatus;
 }
@@ -79,7 +85,9 @@ function formatSourceHealth(roots: RootStats[]): string | null {
 
   const parts: string[] = [];
   if (scanning > 0) {
-    parts.push(i18n.t("library:statusBar.scanningSources", { count: scanning }));
+    parts.push(
+      i18n.t("library:statusBar.scanningSources", { count: scanning }),
+    );
   }
   if (offline > 0) {
     parts.push(i18n.t("library:statusBar.offline", { count: offline }));
@@ -90,7 +98,9 @@ function formatSourceHealth(roots: RootStats[]): string | null {
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-export function resolveProgressStatus(input: StatusInput): StatusProgress | null {
+export function resolveProgressStatus(
+  input: StatusInput,
+): StatusProgress | null {
   if (input.busy && input.busyMessage?.trim()) {
     return { text: input.busyMessage.trim() };
   }

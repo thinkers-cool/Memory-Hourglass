@@ -29,9 +29,22 @@ describe("useProgressiveImage", () => {
 
     const { result } = renderHook(() => useProgressiveImage(card));
     expect(result.current).toBe("asset:///tmp/1.webp");
-    await waitFor(() =>
-      expect(result.current).toBe("asset:///tmp/1.jpg"),
-    );
+    await waitFor(() => expect(result.current).toBe("asset:///tmp/1.jpg"));
+    vi.unstubAllGlobals();
+  });
+
+  it("upgrades using onload when decode is unavailable", async () => {
+    class MockImage {
+      onload: (() => void) | null = null;
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal("Image", MockImage as unknown as typeof Image);
+
+    const { result } = renderHook(() => useProgressiveImage(card));
+    expect(result.current).toBe("asset:///tmp/1.webp");
+    await waitFor(() => expect(result.current).toBe("asset:///tmp/1.jpg"));
     vi.unstubAllGlobals();
   });
 

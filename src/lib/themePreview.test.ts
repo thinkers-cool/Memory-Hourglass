@@ -17,8 +17,12 @@ describe("themePreview", () => {
   });
 
   it("falls back when one color is missing", () => {
-    expect(pickStrongThemeColor("", "oklch(50% 0.2 285)")).toBe("oklch(50% 0.2 285)");
-    expect(pickStrongThemeColor("oklch(42% 0.04 265)", "")).toBe("oklch(42% 0.04 265)");
+    expect(pickStrongThemeColor("", "oklch(50% 0.2 285)")).toBe(
+      "oklch(50% 0.2 285)",
+    );
+    expect(pickStrongThemeColor("oklch(42% 0.04 265)", "")).toBe(
+      "oklch(42% 0.04 265)",
+    );
   });
 
   it("treats non-oklch colors as zero chroma", () => {
@@ -34,9 +38,9 @@ describe("themePreview", () => {
   });
 
   it("handles oklch colors without chroma values", () => {
-    expect(pickStrongThemeColor("oklch(50% none 90)", "oklch(60% 0.1 180)")).toBe(
-      "oklch(60% 0.1 180)",
-    );
+    expect(
+      pickStrongThemeColor("oklch(50% none 90)", "oklch(60% 0.1 180)"),
+    ).toBe("oklch(60% 0.1 180)");
   });
 
   it("reads preview colors from themed probe elements", () => {

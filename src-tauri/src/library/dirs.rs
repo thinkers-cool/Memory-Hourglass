@@ -45,10 +45,7 @@ pub fn list_child_directories(path: &Path) -> Result<Vec<FolderEntry>> {
     Ok(entries)
 }
 
-pub fn resolve_share_subfolder(
-    mount_path: &Path,
-    sub_path: Option<&str>,
-) -> Result<PathBuf> {
+pub fn resolve_share_subfolder(mount_path: &Path, sub_path: Option<&str>) -> Result<PathBuf> {
     let mount_path = mount_path
         .canonicalize()
         .map_err(|_| AppError::Library("SMB mount is not available".into()))?;
@@ -69,21 +66,80 @@ pub fn resolve_share_subfolder(
     };
 
     if !library_path.is_dir() {
-        return Err(AppError::Library("selected folder is not a directory".into()));
+        return Err(AppError::Library(
+            "selected folder is not a directory".into(),
+        ));
     }
 
     Ok(library_path)
 }
 
 fn validate_sub_path(sub_path: &str) -> Result<()> {
-    if sub_path.contains("..")
-        || sub_path.starts_with('/')
-        || sub_path.starts_with('\\')
-        || sub_path.contains('\\')
+    validate_rel_path(sub_path)
+}
+
+pub fn validate_rel_path(rel_path: &str) -> Result<()> {
+    if rel_path.is_empty() {
+        return Err(AppError::InvalidInput("invalid path".into()));
+    }
+    if rel_path.contains("..")
+        || rel_path.starts_with('/')
+        || rel_path.starts_with('\\')
+        || rel_path.contains('\\')
     {
-        return Err(AppError::InvalidInput("invalid folder path".into()));
+        return Err(AppError::InvalidInput("invalid path".into()));
     }
     Ok(())
+}
+
+pub fn validate_file_name(file_name: &str) -> Result<()> {
+    if file_name.is_empty()
+        || file_name.contains('/')
+        || file_name.contains('\\')
+        || file_name.contains("..")
+    {
+        return Err(AppError::InvalidInput("invalid file name".into()));
+    }
+    Ok(())
+}
+
+pub fn resolve_path_under_root(root: &Path, rel_path: &str) -> Result<PathBuf> {
+    validate_rel_path(rel_path)?;
+    let root_canonical = root
+        .canonicalize()
+        .map_err(|_| AppError::Library(format!("root path not available: {}", root.display())))?;
+
+    let mut resolved = root_canonical.clone();
+    for component in Path::new(rel_path).components() {
+        match component {
+            std::path::Component::ParentDir
+            | std::path::Component::RootDir
+            | std::path::Component::Prefix(_) => {
+                return Err(AppError::InvalidInput("invalid path".into()));
+            }
+            std::path::Component::CurDir => {}
+            std::path::Component::Normal(part) => resolved.push(part),
+        }
+    }
+
+    if resolved.exists() {
+        let canonical = resolved.canonicalize().map_err(AppError::from)?;
+        if !canonical.starts_with(&root_canonical) {
+            return Err(AppError::InvalidInput("invalid path".into()));
+        }
+        return Ok(canonical);
+    }
+
+    if let Some(parent) = resolved.parent() {
+        if parent.exists() {
+            let canonical_parent = parent.canonicalize().map_err(AppError::from)?;
+            if !canonical_parent.starts_with(&root_canonical) {
+                return Err(AppError::InvalidInput("invalid path".into()));
+            }
+        }
+    }
+
+    Ok(resolved)
 }
 
 #[cfg(test)]
@@ -118,6 +174,52 @@ mod tests {
     fn rejects_invalid_sub_path() {
         let dir = tempdir().unwrap();
         assert!(resolve_share_subfolder(dir.path(), Some("../etc/passwd")).is_err());
+    }
+
+    #[test]
+    fn validate_rel_path_rejects_traversal_and_absolute() {
+        for rel in ["../secret", "/abs", "\\win", "a\\b", ""] {
+            assert!(validate_rel_path(rel).is_err());
+        }
+    }
+
+    #[test]
+    fn validate_file_name_rejects_path_separators() {
+        for name in ["../x.jpg", "a/b.jpg", "a\\b.jpg", ""] {
+            assert!(validate_file_name(name).is_err());
+        }
+    }
+
+    #[test]
+    fn resolve_path_under_root_accepts_nested_file() {
+        let dir = tempdir().unwrap();
+        let nested = dir.path().join("photos/vacation");
+        std::fs::create_dir_all(&nested).unwrap();
+        let file = nested.join("shot.jpg");
+        std::fs::write(&file, b"x").unwrap();
+        let resolved = resolve_path_under_root(dir.path(), "photos/vacation/shot.jpg").unwrap();
+        assert!(resolved.ends_with("shot.jpg"));
+    }
+
+    #[test]
+    fn resolve_path_under_root_rejects_traversal() {
+        let dir = tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("photos")).unwrap();
+        assert!(resolve_path_under_root(dir.path(), "../outside.jpg").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_path_under_root_rejects_symlink_escape() {
+        let dir = tempdir().unwrap();
+        let mount = dir.path().join("root");
+        let nested = mount.join("photos");
+        std::fs::create_dir_all(&nested).unwrap();
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let link = nested.join("escape");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        assert!(resolve_path_under_root(&mount, "photos/escape").is_err());
     }
 
     #[test]
@@ -161,10 +263,8 @@ mod tests {
 
     #[test]
     fn resolve_share_subfolder_rejects_unavailable_mount() {
-        let missing = std::path::PathBuf::from(format!(
-            "/tmp/memhg-missing-mount-{}",
-            std::process::id()
-        ));
+        let missing =
+            std::path::PathBuf::from(format!("/tmp/memhg-missing-mount-{}", std::process::id()));
         let err = resolve_share_subfolder(&missing, None).unwrap_err();
         assert!(err.to_string().contains("not available"));
     }

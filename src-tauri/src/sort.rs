@@ -36,12 +36,22 @@ impl SortSpec {
             "name" => SortField::Name,
             "rating" => SortField::Rating,
             "path" => SortField::Path,
-            other => return Err(AppError::InvalidInput(format!("invalid sort field: {}", other))),
+            other => {
+                return Err(AppError::InvalidInput(format!(
+                    "invalid sort field: {}",
+                    other
+                )))
+            }
         };
         let dir = match direction.to_ascii_lowercase().as_str() {
             "asc" => SortDir::Asc,
             "desc" => SortDir::Desc,
-            other => return Err(AppError::InvalidInput(format!("invalid sort dir: {}", other))),
+            other => {
+                return Err(AppError::InvalidInput(format!(
+                    "invalid sort dir: {}",
+                    other
+                )))
+            }
         };
         Ok(Self { field, dir })
     }

@@ -42,7 +42,10 @@ describe("useAppLocale", () => {
     const off = vi.spyOn(i18n, "off");
     const { unmount } = renderHook(() => useAppLocale());
     unmount();
-    expect(removeListener).toHaveBeenCalledWith(LOCALE_CHANGE_EVENT, expect.any(Function));
+    expect(removeListener).toHaveBeenCalledWith(
+      LOCALE_CHANGE_EVENT,
+      expect.any(Function),
+    );
     expect(off).toHaveBeenCalledWith("languageChanged", expect.any(Function));
     removeListener.mockRestore();
     off.mockRestore();

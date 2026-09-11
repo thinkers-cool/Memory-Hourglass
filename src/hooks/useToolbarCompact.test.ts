@@ -42,9 +42,15 @@ describe("useToolbarCompact", () => {
   });
 
   it("updates from resize observer callbacks", async () => {
-    const callbacks: Array<(entries: Array<{ contentRect: { width: number } }>) => void> = [];
+    const callbacks: Array<
+      (entries: Array<{ contentRect: { width: number } }>) => void
+    > = [];
     class MockResizeObserver {
-      constructor(private callback: (entries: Array<{ contentRect: { width: number } }>) => void) {
+      constructor(
+        private callback: (
+          entries: Array<{ contentRect: { width: number } }>,
+        ) => void,
+      ) {
         callbacks.push(callback);
       }
       observe = vi.fn();

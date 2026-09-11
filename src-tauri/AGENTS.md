@@ -93,7 +93,9 @@ One workspace open at a time. Close sends `shutdown_tx` to stop watcher/poller.
 
 | File | Role |
 |------|------|
-| `tests/e2e_workflow.rs` | Scan → query → meta → tags → export |
+| `tests/e2e_workflow.rs` | Full service paths: scan, filters, purge, rebuild, RAW link, duplicates |
+| `tests/command_handlers/command_workflows.rs` | Focused command workflows: tag/undo, smart collection, purge, rebuild, export, rescan, remove root |
+| `tests/command_handlers/multi_asset.rs` | Multi-asset batch meta, album filter, partial restore |
 | `tests/library_features.rs` | Albums, SMB, duplicates, relink |
 | `tests/collection_workflow.rs` | Smart collection roundtrip |
 | `tests/workspace_workflow.rs` | Workspace isolation |

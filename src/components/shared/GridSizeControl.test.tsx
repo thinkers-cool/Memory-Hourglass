@@ -50,9 +50,7 @@ describe("GridSizeControl", () => {
 
   it("disables minus at minimum column count", async () => {
     const user = userEvent.setup();
-    render(
-      <GridSizeControl value={2} onChange={vi.fn()} onAdjust={vi.fn()} />,
-    );
+    render(<GridSizeControl value={2} onChange={vi.fn()} onAdjust={vi.fn()} />);
     await user.click(screen.getByTitle("View columns: 2"));
     const buttons = screen.getAllByRole("button");
     expect(buttons[1]).toBeDisabled();

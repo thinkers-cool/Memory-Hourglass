@@ -1,14 +1,14 @@
 use crate::activity::record::record_scan_completed;
 use crate::activity::ActivityRecorder;
-use crate::commands::context::begin_command;
+use crate::commands::context::trace_command;
 use crate::error::Result;
 use crate::jobs::JobQueue;
 use crate::scan::ScanControl;
 use crate::scan::ScanService;
 use crate::state::AppState;
 use serde::Serialize;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Runtime, State};
 use tokio::sync::RwLock;
 
@@ -65,24 +65,20 @@ pub(crate) async fn run_scan_job<R: Runtime>(params: ScanJobParams<R>) {
     };
 
     let inventory = match scanner
-        .scan_root_with_progress(
-            root_id,
-            &ctrl,
-            |scanned, indexed| emit_progress("cataloging", scanned, indexed),
-        )
+        .scan_root_with_progress(root_id, &ctrl, |scanned, indexed| {
+            emit_progress("cataloging", scanned, indexed)
+        })
         .await
     {
         Ok(inventory) => inventory,
-        Err(_) => {
-            settle_scan_progress(
-                &progress_settled,
-                &scan_status_final,
-                "error",
-                0,
-                0,
-                false,
-            )
-            .await;
+        Err(error) => {
+            tracing::error!(
+                root_id,
+                correlation_id = %correlation_id,
+                error = %error,
+                "scan failed"
+            );
+            settle_scan_progress(&progress_settled, &scan_status_final, "error", 0, 0, false).await;
             emit_progress("error", 0, 0);
             jobs.finish().await;
             return;
@@ -101,13 +97,8 @@ pub(crate) async fn run_scan_job<R: Runtime>(params: ScanJobParams<R>) {
         {
             emit_progress("done", summary.scanned, summary.indexed);
             let recorder = ActivityRecorder::new(activity_pool.clone());
-            let _ = record_scan_completed(
-                &recorder,
-                Some(&correlation_id),
-                root_id,
-                &summary,
-            )
-            .await;
+            let _ =
+                record_scan_completed(&recorder, Some(&correlation_id), root_id, &summary).await;
             settle_scan_progress(
                 &progress_settled,
                 &scan_status_final,
@@ -117,7 +108,6 @@ pub(crate) async fn run_scan_job<R: Runtime>(params: ScanJobParams<R>) {
                 false,
             )
             .await;
-            emit_progress("done", summary.scanned, summary.indexed);
         } else {
             settle_scan_progress(
                 &progress_settled,
@@ -137,11 +127,9 @@ pub(crate) async fn run_scan_job<R: Runtime>(params: ScanJobParams<R>) {
     emit_progress("cataloging", summary.scanned, summary.indexed);
 
     if scanner
-        .process_index_queue(
-            &ctrl,
-            &index_queue,
-            |indexed, total| emit_progress("indexing", total, indexed),
-        )
+        .process_index_queue(&ctrl, &index_queue, |indexed, total| {
+            emit_progress("indexing", total, indexed)
+        })
         .await
         .is_err()
     {
@@ -159,16 +147,14 @@ pub(crate) async fn run_scan_job<R: Runtime>(params: ScanJobParams<R>) {
         return;
     }
 
-    if scanner.finalize_scan_links(root_id, &root_path).await.is_ok() {
+    if scanner
+        .finalize_scan_links(root_id, &root_path)
+        .await
+        .is_ok()
+    {
         emit_progress("done", summary.scanned, summary.indexed);
         let recorder = ActivityRecorder::new(activity_pool.clone());
-        let _ = record_scan_completed(
-            &recorder,
-            Some(&correlation_id),
-            root_id,
-            &summary,
-        )
-        .await;
+        let _ = record_scan_completed(&recorder, Some(&correlation_id), root_id, &summary).await;
         settle_scan_progress(
             &progress_settled,
             &scan_status_final,
@@ -178,7 +164,6 @@ pub(crate) async fn run_scan_job<R: Runtime>(params: ScanJobParams<R>) {
             false,
         )
         .await;
-        emit_progress("done", summary.scanned, summary.indexed);
     } else {
         settle_scan_progress(
             &progress_settled,
@@ -230,82 +215,101 @@ async fn settle_scan_progress(
     status.indexed = indexed;
 }
 
-#[tauri::command] pub async fn start_scan<R: Runtime>(
+#[tauri::command]
+pub async fn start_scan<R: Runtime>(
     root_id: i64,
     app: AppHandle<R>,
     state: State<'_, AppState>,
 ) -> Result<()> {
-    let correlation_id = begin_command("start_scan");
-    let (scanner, ctrl, jobs, scan_status, activity_pool) = state
-        .with_active(|ws| async move {
-            ws.jobs.try_start("scan").await?;
-            ws.resume_scan();
-            {
-                let mut status = ws.scan_status.write().await;
-                status.root_id = Some(root_id);
-                status.stage = "cataloging".into();
-                status.running = true;
-                status.scanned = 0;
-                status.indexed = 0;
-            }
-            Ok((
-                ws.scan_service(),
-                ws.scan_control(),
-                ws.jobs.clone(),
-                ws.scan_status.clone(),
-                ws.catalog.pool().clone(),
-            ))
-        })
-        .await?;
+    trace_command("start_scan", |correlation_id| async move {
+        let (scanner, ctrl, jobs, scan_status, activity_pool) = state
+            .with_active(|ws| async move {
+                ws.jobs.try_start("scan").await?;
+                ws.resume_scan();
+                {
+                    let mut status = ws.scan_status.write().await;
+                    status.root_id = Some(root_id);
+                    status.stage = "cataloging".into();
+                    status.running = true;
+                    status.scanned = 0;
+                    status.indexed = 0;
+                }
+                Ok((
+                    ws.scan_service(),
+                    ws.scan_control(),
+                    ws.jobs.clone(),
+                    ws.scan_status.clone(),
+                    ws.catalog.pool().clone(),
+                ))
+            })
+            .await?;
 
-    tauri::async_runtime::spawn(run_scan_job(ScanJobParams {
-        root_id,
-        correlation_id,
-        app,
-        scanner,
-        ctrl,
-        jobs,
-        scan_status,
-        activity_pool,
-    }));
+        tauri::async_runtime::spawn(run_scan_job(ScanJobParams {
+            root_id,
+            correlation_id,
+            app,
+            scanner,
+            ctrl,
+            jobs,
+            scan_status,
+            activity_pool,
+        }));
 
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
-#[tauri::command] pub async fn pause_scan(state: State<'_, AppState>) -> Result<()> {
-    state
-        .with_active(|ws| async move {
-            ws.pause_scan();
-            Ok(())
-        })
-        .await
+#[tauri::command]
+pub async fn pause_scan(state: State<'_, AppState>) -> Result<()> {
+    trace_command("pause_scan", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move {
+                ws.pause_scan();
+                Ok(())
+            })
+            .await
+    })
+    .await
 }
 
-#[tauri::command] pub async fn resume_scan(state: State<'_, AppState>) -> Result<()> {
-    state
-        .with_active(|ws| async move {
-            ws.resume_scan();
-            Ok(())
-        })
-        .await
+#[tauri::command]
+pub async fn resume_scan(state: State<'_, AppState>) -> Result<()> {
+    trace_command("resume_scan", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move {
+                ws.resume_scan();
+                Ok(())
+            })
+            .await
+    })
+    .await
 }
 
-#[tauri::command] pub async fn cancel_scan(state: State<'_, AppState>) -> Result<()> {
-    state
-        .with_active(|ws| async move {
-            ws.jobs.request_cancel();
-            Ok(())
-        })
-        .await
+#[tauri::command]
+pub async fn cancel_scan(state: State<'_, AppState>) -> Result<()> {
+    trace_command("cancel_scan", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move {
+                ws.jobs.request_cancel();
+                Ok(())
+            })
+            .await
+    })
+    .await
 }
 
-#[tauri::command] pub async fn get_scan_status(state: State<'_, AppState>) -> Result<ScanProgressEvent> {
-    state
-        .with_active(|ws| async move {
-            let status = ws.scan_status.read().await;
-            Ok(scan_progress_from_status(&status))
-        })
-        .await
+#[tauri::command]
+pub async fn get_scan_status(state: State<'_, AppState>) -> Result<ScanProgressEvent> {
+    trace_command("get_scan_status", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move {
+                let status = ws.scan_status.read().await;
+                Ok(scan_progress_from_status(&status))
+            })
+            .await
+    })
+    .await
 }
 
 fn scan_progress_from_status(status: &crate::state::ScanStatus) -> ScanProgressEvent {
@@ -320,7 +324,7 @@ fn scan_progress_from_status(status: &crate::state::ScanStatus) -> ScanProgressE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scan::test_hooks::{FINALIZE_SCAN_LINKS_FAIL, reset_unlocked as reset_scan_hooks};
+    use crate::scan::test_hooks::{reset_unlocked as reset_scan_hooks, FINALIZE_SCAN_LINKS_FAIL};
     use crate::state::AppState;
     use std::sync::atomic::Ordering;
     use tauri::Manager;

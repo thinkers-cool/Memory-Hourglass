@@ -70,7 +70,12 @@ export function makeLibraryActionsDeps(
     compareOpen: false,
     compareItems: [],
     compareDetails: {},
-    stampConfig: { ...EMPTY_STAMP_CONFIG, rating: 3, tag_ids: [7], album_ids: [8] },
+    stampConfig: {
+      ...EMPTY_STAMP_CONFIG,
+      rating: 3,
+      tag_ids: [7],
+      album_ids: [8],
+    },
     stampArmed: true,
     disarmStamp,
     setStampRating: vi.fn(),

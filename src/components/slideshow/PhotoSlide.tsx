@@ -23,7 +23,8 @@ export function PhotoSlide({
   animate: boolean;
 }) {
   const src = useProgressiveImage(card);
-  const motionClass = kenBurns && animate ? KEN_BURNS_CLASS[kenBurnsVariant] : "";
+  const motionClass =
+    kenBurns && animate ? KEN_BURNS_CLASS[kenBurnsVariant] : "";
 
   return (
     <img
@@ -34,7 +35,10 @@ export function PhotoSlide({
       className={`max-h-screen max-w-screen object-contain ${motionClass}`}
       style={
         kenBurns && animate
-          ? { animationDuration: `${dwellMs}ms`, viewTransitionName: `asset-${card.id}` }
+          ? {
+              animationDuration: `${dwellMs}ms`,
+              viewTransitionName: `asset-${card.id}`,
+            }
           : { viewTransitionName: `asset-${card.id}` }
       }
     />

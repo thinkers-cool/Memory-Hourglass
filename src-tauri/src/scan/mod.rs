@@ -1,18 +1,18 @@
-pub mod extensions;
 mod control;
+pub mod extensions;
 pub mod index_asset;
 pub mod index_integrity;
 pub mod index_pipeline;
 
-use crate::catalog::Catalog;
 use crate::catalog::repo::UpsertAssetInput;
+use crate::catalog::Catalog;
 use crate::error::{AppError, Result};
 use crate::metadata::metadata_context_for_asset;
-use crate::workspace::WorkspaceMediaSettings;
 use crate::scan::extensions::{asset_kind, is_media_file, should_ignore};
 use crate::scan::index_asset::index_asset_on_disk;
 use crate::scan::index_integrity::is_index_complete;
 use crate::scan::index_pipeline::{apply_index_output, IndexApplyInput};
+use crate::workspace::WorkspaceMediaSettings;
 use extensions::MEDIA_EXTENSIONS;
 use rayon::prelude::*;
 use sqlx::SqlitePool;
@@ -133,7 +133,8 @@ impl ScanService {
         let inventory = self.scan_inventory(root_id, ctrl, |_, _| {}).await?;
         self.process_index_queue(ctrl, &inventory.index_queue, |_, _| {})
             .await?;
-        self.finalize_scan_links(root_id, &inventory.root_path).await?;
+        self.finalize_scan_links(root_id, &inventory.root_path)
+            .await?;
         Ok(inventory.summary)
     }
 
@@ -227,9 +228,13 @@ impl ScanService {
         let mut index_queue = Vec::new();
 
         for batch in discovered.chunks(SCAN_BATCH_SIZE) {
-            if should_stop_inventory_batch(ctrl) { break; }
+            if should_stop_inventory_batch(ctrl) {
+                break;
+            }
             ctrl.wait_if_paused().await;
-            if should_stop_inventory_batch(ctrl) { break; }
+            if should_stop_inventory_batch(ctrl) {
+                break;
+            }
 
             let mut batch_inputs = Vec::new();
             let mut batch_meta: Vec<(&DiscoveredFile, bool, Option<String>)> = Vec::new();
@@ -594,13 +599,20 @@ mod tests {
             .unwrap();
 
         let scanner = ScanService::new(catalog.pool().clone(), thumb_dir);
-        let summary = scanner.scan_root(root.id, &ScanControl::noop()).await.unwrap();
+        let summary = scanner
+            .scan_root(root.id, &ScanControl::noop())
+            .await
+            .unwrap();
 
         assert_eq!(summary.indexed, 1);
         assert_eq!(summary.new_count, 1);
 
         let assets = AssetRepo::new(catalog.pool().clone());
-        let asset = assets.find_by_path(root.id, "test.jpg").await.unwrap().unwrap();
+        let asset = assets
+            .find_by_path(root.id, "test.jpg")
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(asset.sync_state, "ok");
         assert_eq!(asset.indexed_mtime_ns, Some(asset.mtime_ns));
     }
@@ -641,16 +653,30 @@ mod tests {
             .unwrap();
         assets.set_sync_state(asset.id, "ok").await.unwrap();
 
-        assert_eq!(raw_tag_repo.list_for_asset(asset.id).await.unwrap().len(), 0);
+        assert_eq!(
+            raw_tag_repo.list_for_asset(asset.id).await.unwrap().len(),
+            0
+        );
 
         let scanner = ScanService::new(catalog.pool().clone(), thumb_dir);
-        scanner.scan_root(root.id, &ScanControl::noop()).await.unwrap();
+        scanner
+            .scan_root(root.id, &ScanControl::noop())
+            .await
+            .unwrap();
 
-        let asset = assets.find_by_path(root.id, "test.jpg").await.unwrap().unwrap();
+        let asset = assets
+            .find_by_path(root.id, "test.jpg")
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(asset.sync_state, "ok");
         assert_eq!(asset.indexed_mtime_ns, Some(asset.mtime_ns));
         assert!(asset.thumb_key.is_some());
-        assert!(!raw_tag_repo.list_for_asset(asset.id).await.unwrap().is_empty());
+        assert!(!raw_tag_repo
+            .list_for_asset(asset.id)
+            .await
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]
@@ -691,7 +717,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(assets.find_by_path(root.id, "trashed.jpg").await.unwrap().is_none());
+        assert!(assets
+            .find_by_path(root.id, "trashed.jpg")
+            .await
+            .unwrap()
+            .is_none());
         let stored = assets
             .find_by_path_including_deleted(root.id, "trashed.jpg")
             .await
@@ -894,13 +924,11 @@ mod tests {
             .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
             .await;
         assert!(result.is_err(), "expected discovery failure");
-        assert!(
-            result
-                .err()
-                .expect("discovery error")
-                .to_string()
-                .contains("discovery failed")
-        );
+        assert!(result
+            .err()
+            .expect("discovery error")
+            .to_string()
+            .contains("discovery failed"));
     }
 
     #[tokio::test]
@@ -943,8 +971,7 @@ mod tests {
         .unwrap();
         let cancelled = Arc::new(AtomicBool::new(true));
         let discovered_count = Arc::new(AtomicU64::new(0));
-        let entries =
-            collect_discovered_files(dir.path(), cancelled, discovered_count).unwrap();
+        let entries = collect_discovered_files(dir.path(), cancelled, discovered_count).unwrap();
         assert!(entries.is_empty());
     }
 
@@ -956,8 +983,7 @@ mod tests {
         std::fs::write(dir.path().join("skip.jpg"), b"x").unwrap();
         let cancelled = Arc::new(AtomicBool::new(false));
         let discovered_count = Arc::new(AtomicU64::new(0));
-        let entries =
-            collect_discovered_files(dir.path(), cancelled, discovered_count).unwrap();
+        let entries = collect_discovered_files(dir.path(), cancelled, discovered_count).unwrap();
         assert!(entries.is_empty());
     }
 
@@ -971,12 +997,8 @@ mod tests {
         }
         let cancelled = Arc::new(AtomicBool::new(false));
         let discovered_count = Arc::new(AtomicU64::new(0));
-        let entries = collect_discovered_files(
-            dir.path(),
-            cancelled,
-            discovered_count.clone(),
-        )
-        .unwrap();
+        let entries =
+            collect_discovered_files(dir.path(), cancelled, discovered_count.clone()).unwrap();
         assert_eq!(entries.len(), 251);
         assert_eq!(discovered_count.load(Ordering::Relaxed), 251);
     }
@@ -1000,11 +1022,8 @@ mod tests {
         let cancelled = Arc::new(AtomicBool::new(false));
         let ctrl = ScanControl::new(Arc::new(AtomicBool::new(false)), cancelled.clone());
         let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
-        let handle = tokio::spawn(async move {
-            scanner
-                .scan_inventory(root.id, &ctrl, |_, _| {})
-                .await
-        });
+        let handle =
+            tokio::spawn(async move { scanner.scan_inventory(root.id, &ctrl, |_, _| {}).await });
         tokio::time::sleep(Duration::from_millis(50)).await;
         cancelled.store(true, Ordering::SeqCst);
         handle.await.unwrap().unwrap();
@@ -1030,11 +1049,8 @@ mod tests {
         let cancelled = Arc::new(AtomicBool::new(false));
         let ctrl = ScanControl::new(paused.clone(), cancelled.clone());
         let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
-        let handle = tokio::spawn(async move {
-            scanner
-                .scan_inventory(root.id, &ctrl, |_, _| {})
-                .await
-        });
+        let handle =
+            tokio::spawn(async move { scanner.scan_inventory(root.id, &ctrl, |_, _| {}).await });
         tokio::time::sleep(Duration::from_millis(100)).await;
         cancelled.store(true, Ordering::SeqCst);
         paused.store(false, Ordering::SeqCst);
@@ -1092,11 +1108,8 @@ mod tests {
         let cancelled = Arc::new(AtomicBool::new(false));
         let ctrl = ScanControl::new(paused.clone(), cancelled.clone());
         let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
-        let handle = tokio::spawn(async move {
-            scanner
-                .scan_inventory(root.id, &ctrl, |_, _| {})
-                .await
-        });
+        let handle =
+            tokio::spawn(async move { scanner.scan_inventory(root.id, &ctrl, |_, _| {}).await });
         tokio::time::sleep(Duration::from_millis(50)).await;
         paused.store(false, Ordering::SeqCst);
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -1159,11 +1172,8 @@ mod tests {
         let cancelled = Arc::new(AtomicBool::new(false));
         let ctrl = ScanControl::new(paused.clone(), cancelled.clone());
         let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
-        let handle = tokio::spawn(async move {
-            scanner
-                .scan_inventory(root.id, &ctrl, |_, _| {})
-                .await
-        });
+        let handle =
+            tokio::spawn(async move { scanner.scan_inventory(root.id, &ctrl, |_, _| {}).await });
         tokio::time::sleep(Duration::from_millis(50)).await;
         cancelled.store(true, Ordering::SeqCst);
         paused.store(false, Ordering::SeqCst);
@@ -1187,8 +1197,7 @@ mod tests {
         .unwrap();
         let cancelled = Arc::new(AtomicBool::new(false));
         let discovered_count = Arc::new(AtomicU64::new(0));
-        let entries =
-            collect_discovered_files(dir.path(), cancelled, discovered_count).unwrap();
+        let entries = collect_discovered_files(dir.path(), cancelled, discovered_count).unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].file_name, "ok.jpg");
     }
@@ -1219,7 +1228,11 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(result.summary.missing_count, 1);
-        let asset = assets.find_by_path(root.id, "vanish.jpg").await.unwrap().unwrap();
+        let asset = assets
+            .find_by_path(root.id, "vanish.jpg")
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(asset.sync_state, "missing");
     }
 
@@ -1271,7 +1284,11 @@ mod tests {
             .scan_inventory(root.id, &ScanControl::noop(), |_, _| {})
             .await
             .unwrap();
-        let asset = assets.find_by_path(root.id, "size.jpg").await.unwrap().unwrap();
+        let asset = assets
+            .find_by_path(root.id, "size.jpg")
+            .await
+            .unwrap()
+            .unwrap();
         sqlx::query("UPDATE asset SET size = 1 WHERE id = ?")
             .bind(asset.id)
             .execute(catalog.pool())
@@ -1320,8 +1337,7 @@ mod tests {
         .unwrap();
         let cancelled = Arc::new(AtomicBool::new(false));
         let discovered_count = Arc::new(AtomicU64::new(0));
-        let entries =
-            collect_discovered_files(dir.path(), cancelled, discovered_count).unwrap();
+        let entries = collect_discovered_files(dir.path(), cancelled, discovered_count).unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].file_name, "photo.jpg");
     }
@@ -1367,7 +1383,10 @@ mod tests {
             .await
             .unwrap();
         let scanner = ScanService::new(pool.clone(), dir.path().join("thumbs"));
-        scanner.scan_root(root.id, &ScanControl::noop()).await.unwrap();
+        scanner
+            .scan_root(root.id, &ScanControl::noop())
+            .await
+            .unwrap();
         let hashed: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM asset WHERE root_id = ? AND content_hash IS NOT NULL",
         )
@@ -1427,13 +1446,11 @@ mod tests {
         let discovered_count = Arc::new(AtomicU64::new(0));
         let result = collect_discovered_files(dir.path(), cancelled, discovered_count);
         assert!(result.is_err());
-        assert!(
-            result
-                .err()
-                .expect("discovery error")
-                .to_string()
-                .contains("discovery failed")
-        );
+        assert!(result
+            .err()
+            .expect("discovery error")
+            .to_string()
+            .contains("discovery failed"));
     }
 
     #[tokio::test]
@@ -1489,13 +1506,11 @@ mod tests {
         let discovered_count = Arc::new(AtomicU64::new(0));
         let result = collect_discovered_files(dir.path(), cancelled, discovered_count);
         assert!(result.is_err());
-        assert!(
-            result
-                .err()
-                .expect("strip prefix error")
-                .to_string()
-                .contains("strip prefix failed")
-        );
+        assert!(result
+            .err()
+            .expect("strip prefix error")
+            .to_string()
+            .contains("strip prefix failed"));
     }
 
     #[cfg(unix)]
@@ -1503,8 +1518,11 @@ mod tests {
     fn collect_discovered_files_fails_on_broken_symlink_metadata() {
         let _guard = ScanTestGuard::new();
         let dir = tempdir().unwrap();
-        std::os::unix::fs::symlink(dir.path().join("missing.jpg"), dir.path().join("broken.jpg"))
-            .unwrap();
+        std::os::unix::fs::symlink(
+            dir.path().join("missing.jpg"),
+            dir.path().join("broken.jpg"),
+        )
+        .unwrap();
         let cancelled = Arc::new(AtomicBool::new(false));
         let discovered_count = Arc::new(AtomicU64::new(0));
         let result = collect_discovered_files(dir.path(), cancelled, discovered_count);
@@ -1534,13 +1552,11 @@ mod tests {
             .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
             .await;
         assert!(result.is_err());
-        assert!(
-            result
-                .err()
-                .expect("discovery panic error")
-                .to_string()
-                .contains("discovery failed")
-        );
+        assert!(result
+            .err()
+            .expect("discovery panic error")
+            .to_string()
+            .contains("discovery failed"));
     }
 
     #[tokio::test]
@@ -1624,24 +1640,15 @@ mod tests {
             .await
             .unwrap();
         pool.close().await;
-        assert!(
-            scanner
-                .scan_root(root.id, &ScanControl::noop())
-                .await
-                .is_err()
-        );
-        assert!(
-            scanner
-                .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
-                .await
-                .is_err()
-        );
-        assert!(
-            scanner
-                .finalize_scan_links(root.id, &photos)
-                .await
-                .is_err()
-        );
+        assert!(scanner
+            .scan_root(root.id, &ScanControl::noop())
+            .await
+            .is_err());
+        assert!(scanner
+            .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
+            .await
+            .is_err());
+        assert!(scanner.finalize_scan_links(root.id, &photos).await.is_err());
         let item = PostProcessItem {
             asset_id: 1,
             root_id: root.id,
@@ -1651,12 +1658,10 @@ mod tests {
             kind: "image".into(),
             prior_thumb_key: None,
         };
-        assert!(
-            scanner
-                .process_index_queue(&ScanControl::noop(), &[item], noop_scan_progress)
-                .await
-                .is_err()
-        );
+        assert!(scanner
+            .process_index_queue(&ScanControl::noop(), &[item], noop_scan_progress)
+            .await
+            .is_err());
     }
 
     #[tokio::test]
@@ -1724,10 +1729,7 @@ mod tests {
             .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
             .await
             .unwrap();
-        scanner
-            .finalize_scan_links(root.id, &photos)
-            .await
-            .unwrap();
+        scanner.finalize_scan_links(root.id, &photos).await.unwrap();
     }
 
     #[tokio::test]
@@ -1744,11 +1746,9 @@ mod tests {
             .unwrap();
         pool.close().await;
         let scanner = ScanService::new(pool, dir.path().join("thumbs"));
-        assert!(
-            scanner
-                .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
-                .await
-                .is_err()
-        );
+        assert!(scanner
+            .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
+            .await
+            .is_err());
     }
 }

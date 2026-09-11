@@ -14,13 +14,20 @@ async fn workspace_create_open_and_scope_libraries() {
         let mut workspaces = state.workspaces.write().await;
         workspaces.create(&wedding, false).unwrap()
     };
-    state.open_workspace(std::path::Path::new(&info.path)).await.unwrap();
+    state
+        .open_workspace(std::path::Path::new(&info.path))
+        .await
+        .unwrap();
 
     let photos = dir.path().join("photos");
     std::fs::create_dir_all(&photos).unwrap();
     state
         .with_active(|ws| async move {
-            let root = ws.library.add_local_root(photos.to_str().unwrap()).await.unwrap();
+            let root = ws
+                .library
+                .add_local_root(photos.to_str().unwrap())
+                .await
+                .unwrap();
             assert_eq!(ws.library.list_roots().await.unwrap().len(), 1);
             assert_eq!(root.path, photos.canonicalize().unwrap().to_string_lossy());
             Ok(())
@@ -36,7 +43,10 @@ async fn workspace_create_open_and_scope_libraries() {
         let mut workspaces = state.workspaces.write().await;
         workspaces.create(&family, false).unwrap()
     };
-    state.open_workspace(std::path::Path::new(&other.path)).await.unwrap();
+    state
+        .open_workspace(std::path::Path::new(&other.path))
+        .await
+        .unwrap();
 
     state
         .with_active(|ws| async move {
@@ -68,13 +78,19 @@ async fn recent_registry_updates_on_open() {
     std::fs::create_dir_all(&workspace_root).unwrap();
     let info = workspace::init_workspace_at(&workspace_root, false).unwrap();
 
-    state.open_workspace(std::path::Path::new(&info.path)).await.unwrap();
+    state
+        .open_workspace(std::path::Path::new(&info.path))
+        .await
+        .unwrap();
 
     let workspaces = state.workspaces.read().await;
     let recent = workspaces.list_recent();
     assert_eq!(recent.len(), 1);
     assert_eq!(recent[0].path, info.path);
-    assert_eq!(workspaces.last_opened().as_deref(), Some(info.path.as_str()));
+    assert_eq!(
+        workspaces.last_opened().as_deref(),
+        Some(info.path.as_str())
+    );
 }
 
 #[tokio::test]
@@ -145,12 +161,7 @@ async fn read_only_workspace_keeps_media_bytes_on_metadata_write() {
     state
         .with_active(|ws| async move {
             ws.query_service()
-                .apply_meta_patch(
-                    asset_id,
-                    AssetMetaPatch {
-                        rating: Some(4),
-                    },
-                )
+                .apply_meta_patch(asset_id, AssetMetaPatch { rating: Some(4) })
                 .await
                 .unwrap();
             Ok(())

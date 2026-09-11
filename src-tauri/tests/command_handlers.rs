@@ -20,3 +20,9 @@ mod activity;
 
 #[path = "command_handlers/export.rs"]
 mod export;
+
+#[path = "command_handlers/multi_asset.rs"]
+mod multi_asset;
+
+#[path = "command_handlers/command_workflows.rs"]
+mod command_workflows;

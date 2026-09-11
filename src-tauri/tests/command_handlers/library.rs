@@ -21,19 +21,11 @@ async fn library_relink_and_smb_commands() {
     let root_id = roots[0].id;
 
     std::fs::create_dir_all(&moved).unwrap();
-    std::fs::copy(
-        photos.join("move-me.jpg"),
-        moved.join("move-me.jpg"),
-    )
-    .unwrap();
+    std::fs::copy(photos.join("move-me.jpg"), moved.join("move-me.jpg")).unwrap();
 
-    let preview = preview_relink(
-        root_id,
-        moved.to_string_lossy().to_string(),
-        state.clone(),
-    )
-    .await
-    .unwrap();
+    let preview = preview_relink(root_id, moved.to_string_lossy().to_string(), state.clone())
+        .await
+        .unwrap();
     assert_eq!(preview.matched, preview.total_sampled);
 
     relink_root(root_id, moved.to_string_lossy().to_string(), state.clone())
@@ -67,6 +59,7 @@ async fn library_relink_and_smb_commands() {
             domain: None,
             poll_secs: None,
             sub_path: None,
+            read_only: false,
         },
         state.clone(),
     )
@@ -111,19 +104,14 @@ async fn rescan_empty_root_completes_without_index_queue() {
     let handle = fixture.handle();
     let empty = fixture.hold.path().join("empty-root");
     std::fs::create_dir_all(&empty).unwrap();
-    let root = add_root(
-        empty.to_string_lossy().to_string(),
-        state.clone(),
-    )
-    .await
-    .expect("add root");
+    let root = add_root(empty.to_string_lossy().to_string(), state.clone())
+        .await
+        .expect("add root");
     start_scan(root.id, handle, state.clone())
         .await
         .expect("scan");
     let status = wait_for_scan(state.clone(), std::time::Duration::from_secs(10)).await;
     assert_eq!(status.stage, "done");
-    let scan_status = get_scan_status(state.clone())
-        .await
-        .expect("status");
+    let scan_status = get_scan_status(state.clone()).await.expect("status");
     assert_eq!(scan_status.stage, "done");
 }

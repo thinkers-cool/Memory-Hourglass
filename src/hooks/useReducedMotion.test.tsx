@@ -20,7 +20,9 @@ describe("useReducedMotion", () => {
 describe("useRafTransition", () => {
   it("returns 1 immediately when inactive", () => {
     const onComplete = vi.fn();
-    const { result } = renderHook(() => useRafTransition(false, 300, onComplete));
+    const { result } = renderHook(() =>
+      useRafTransition(false, 300, onComplete),
+    );
     expect(result.current).toBe(1);
     expect(onComplete).not.toHaveBeenCalled();
   });
@@ -44,10 +46,14 @@ describe("useRafTransition", () => {
       cb(frame * 50);
       return frame;
     });
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(
+      () => undefined,
+    );
     vi.spyOn(performance, "now").mockReturnValue(0);
 
-    const { result } = renderHook(() => useRafTransition(true, 100, onComplete));
+    const { result } = renderHook(() =>
+      useRafTransition(true, 100, onComplete),
+    );
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
     expect(result.current).toBe(1);
   });

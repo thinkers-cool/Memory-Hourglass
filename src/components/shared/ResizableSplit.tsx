@@ -70,7 +70,9 @@ export function ResizableSplit({
         <div className="absolute inset-y-0 -left-1 -right-1" />
       </div>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{trailing}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {trailing}
+      </div>
     </div>
   );
 }
@@ -161,7 +163,9 @@ export function ResizableTrailingPanel({
       ref={containerRef}
       className={`relative z-0 flex min-h-0 min-w-0 flex-1 ${dragging ? "select-none" : ""}`}
     >
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{main}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {main}
+      </div>
 
       {renderSide && sideContent && (
         <>
@@ -179,7 +183,9 @@ export function ResizableTrailingPanel({
             }`}
             style={{
               width: open ? sideWidth : 0,
-              transitionDuration: dragging ? undefined : `${PANEL_TRANSITION_MS}ms`,
+              transitionDuration: dragging
+                ? undefined
+                : `${PANEL_TRANSITION_MS}ms`,
             }}
             onTransitionEnd={onSideTransitionEnd}
           >

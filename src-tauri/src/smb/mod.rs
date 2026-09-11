@@ -6,10 +6,10 @@ use std::time::{Duration, Instant};
 
 mod credentials;
 
-#[cfg(target_os = "macos")]
-mod macos;
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod unix;
 
@@ -17,6 +17,43 @@ mod unix;
 mod windows;
 
 pub(crate) const SMB_LIST_TIMEOUT: Duration = Duration::from_secs(20);
+
+pub(crate) struct TempAuthFile {
+    path: PathBuf,
+}
+
+impl TempAuthFile {
+    fn new(username: &str, password: &str, domain: Option<&str>) -> Result<Self> {
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "memhg-smb-{}-{}.auth",
+            std::process::id(),
+            COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let mut content = format!("username={}\npassword={}\n", username, password);
+        if let Some(domain) = domain.filter(|value| !value.is_empty()) {
+            content.push_str(&format!("domain={}\n", domain));
+        }
+        std::fs::write(&path, content).map_err(AppError::from)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+                .map_err(AppError::from)?;
+        }
+        Ok(Self { path })
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TempAuthFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
 pub const BROWSE_MOUNTS_DIR: &str = "_browse";
 pub const SHARE_MOUNTS_DIR: &str = "_shares";
 pub const TEST_MOUNT_MARKER: &str = ".memhg_test_mounted";
@@ -30,6 +67,8 @@ fn subprocess_test_env(default: &str) -> Option<&'static str> {
         "umount" => Some("MEMHG_TEST_UMOUNT"),
         "net" => Some("MEMHG_TEST_NET"),
         "diskutil" => Some("MEMHG_TEST_DISKUTIL"),
+        "security" => Some("MEMHG_TEST_SECURITY"),
+        "cmdkey" => Some("MEMHG_TEST_CMDKEY"),
         _ => None,
     }
 }
@@ -66,6 +105,8 @@ pub struct SmbConnectRequest {
     pub poll_secs: Option<i64>,
     #[serde(default)]
     pub sub_path: Option<String>,
+    #[serde(default)]
+    pub read_only: bool,
 }
 
 pub fn credential_key(host: &str, share: &str, username: &str) -> String {
@@ -108,12 +149,7 @@ pub fn browse_mount_point(base: &Path, host: &str, share: &str, username: &str) 
     }
     #[cfg(not(windows))]
     {
-        mount_point(
-            &base.join(BROWSE_MOUNTS_DIR),
-            host,
-            share,
-            username,
-        )
+        mount_point(&base.join(BROWSE_MOUNTS_DIR), host, share, username)
     }
 }
 
@@ -125,12 +161,7 @@ pub fn share_mount_point(base: &Path, host: &str, share: &str, username: &str) -
     }
     #[cfg(not(windows))]
     {
-        mount_point(
-            &base.join(SHARE_MOUNTS_DIR),
-            host,
-            share,
-            username,
-        )
+        mount_point(&base.join(SHARE_MOUNTS_DIR), host, share, username)
     }
 }
 
@@ -219,7 +250,9 @@ pub fn smb_share_sub_path(mount_root: &Path, library_path: &Path) -> Result<Stri
         return Ok(String::new());
     }
     if !library_path.starts_with(&mount_root) {
-        return Err(AppError::Library("library path is outside SMB mount".into()));
+        return Err(AppError::Library(
+            "library path is outside SMB mount".into(),
+        ));
     }
     let relative = library_path
         .strip_prefix(&mount_root)
@@ -274,7 +307,9 @@ pub fn mount_share(mount_path: &Path, req: &SmbConnectRequest) -> Result<()> {
     validate_component(&req.share, "share")?;
     validate_component(&req.username, "username")?;
 
-    if !should_skip_mount_dir_creation(mount_path) { std::fs::create_dir_all(mount_path)?; }
+    if !should_skip_mount_dir_creation(mount_path) {
+        std::fs::create_dir_all(mount_path)?;
+    }
 
     if is_mounted(mount_path) {
         return Ok(());
@@ -375,29 +410,29 @@ fn should_skip_mount_dir_creation(mount_path: &Path) -> bool {
 }
 
 pub(crate) fn list_shares_smbclient(req: &SmbListRequest) -> Result<Vec<SmbShareEntry>> {
+    let auth = TempAuthFile::new(&req.username, &req.password, None)?;
     let mut command = subprocess_command("smbclient");
     command.args([
         "-L",
         &format!("//{}", req.host),
-        "-U",
-        &req.username,
-        &format!("--password={}", req.password),
+        "-A",
+        auth.path().to_string_lossy().as_ref(),
         "-g",
     ]);
     let output = run_with_timeout(&mut command, SMB_LIST_TIMEOUT)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(AppError::Library(
-            if stderr.trim().is_empty() {
-                "could not list SMB shares; check host and credentials".into()
-            } else {
-                stderr.trim().to_string()
-            },
-        ));
+        return Err(AppError::Library(if stderr.trim().is_empty() {
+            "could not list SMB shares; check host and credentials".into()
+        } else {
+            stderr.trim().to_string()
+        }));
     }
 
-    Ok(parse_smbclient_grepable(&String::from_utf8_lossy(&output.stdout)))
+    Ok(parse_smbclient_grepable(&String::from_utf8_lossy(
+        &output.stdout,
+    )))
 }
 
 fn drain_child_pipe(pipe: Option<impl std::io::Read>) -> Result<Vec<u8>> {
@@ -463,7 +498,10 @@ fn parse_smbclient_grepable(stdout: &str) -> Vec<SmbShareEntry> {
             if name.is_empty() || should_skip_share_name(name) {
                 return None;
             }
-            let comment = parts.get(2).map(|value| value.trim()).filter(|value| !value.is_empty());
+            let comment = parts
+                .get(2)
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty());
             Some(SmbShareEntry {
                 name: name.to_string(),
                 comment: comment.map(str::to_string),
@@ -529,7 +567,10 @@ fn validate_component(value: &str, field: &str) -> Result<()> {
     if value.contains(|c: char| {
         c == '/' || c == '\\' || c == '@' || c == ':' || c.is_whitespace() || c == '\0'
     }) {
-        return Err(AppError::InvalidInput(format!("invalid characters in {}", field)));
+        return Err(AppError::InvalidInput(format!(
+            "invalid characters in {}",
+            field
+        )));
     }
     Ok(())
 }
@@ -570,6 +611,18 @@ mod tests {
     use super::*;
     use crate::test_support::unix::write_executable;
 
+    #[cfg(target_os = "macos")]
+    fn set_fake_security_script(dir: &Path) {
+        let security = dir.join("security.sh");
+        write_executable(&security, "#!/bin/sh\nexit 0\n");
+        std::env::set_var("MEMHG_TEST_SECURITY", security.to_string_lossy().as_ref());
+    }
+
+    #[cfg(target_os = "macos")]
+    fn clear_fake_security_script() {
+        std::env::remove_var("MEMHG_TEST_SECURITY");
+    }
+
     #[test]
     fn validates_host() {
         assert!(validate_component("nas.local", "host").is_ok());
@@ -578,7 +631,10 @@ mod tests {
 
     #[test]
     fn display_name_uses_selected_folder_leaf() {
-        assert_eq!(display_name_for_source(Some("photos/vacation"), "ACGv"), "vacation");
+        assert_eq!(
+            display_name_for_source(Some("photos/vacation"), "ACGv"),
+            "vacation"
+        );
         assert_eq!(display_name_for_source(Some("ACG"), "ACGv"), "ACG");
         assert_eq!(display_name_for_source(None, "ACGv"), "ACGv");
     }
@@ -593,13 +649,8 @@ mod tests {
     fn resolve_share_sub_path_from_folder_named_mount() {
         let mount_dir = Path::new("/mounts/ws-1");
         let library = Path::new("/mounts/ws-1/ACG/photos");
-        let sub_path = resolve_share_sub_path(
-            mount_dir,
-            library,
-            "192.168.1.1",
-            "Download",
-            "user",
-        );
+        let sub_path =
+            resolve_share_sub_path(mount_dir, library, "192.168.1.1", "Download", "user");
         assert_eq!(sub_path, "photos");
     }
 
@@ -615,10 +666,7 @@ mod tests {
     #[test]
     fn browse_mount_point_lives_under_browse_dir() {
         let path = browse_mount_point(Path::new("/mounts/ws-1"), "nas", "photos", "user");
-        assert_eq!(
-            path,
-            PathBuf::from("/mounts/ws-1/_browse/nas_photos_user")
-        );
+        assert_eq!(path, PathBuf::from("/mounts/ws-1/_browse/nas_photos_user"));
     }
 
     #[test]
@@ -646,8 +694,16 @@ mod tests {
 
     #[test]
     fn builds_mount_point_with_sanitized_tokens() {
-        let path = mount_point(Path::new("/data/smb-mounts"), "nas.local", "my photos", "user@1");
-        assert_eq!(path, PathBuf::from("/data/smb-mounts/nas_local_my_photos_user_1"));
+        let path = mount_point(
+            Path::new("/data/smb-mounts"),
+            "nas.local",
+            "my photos",
+            "user@1",
+        );
+        assert_eq!(
+            path,
+            PathBuf::from("/data/smb-mounts/nas_local_my_photos_user_1")
+        );
     }
 
     #[test]
@@ -659,17 +715,9 @@ mod tests {
 
     #[test]
     fn run_with_timeout_kills_slow_commands() {
-        let result = run_with_timeout(
-            Command::new("sleep").arg("2"),
-            Duration::from_millis(100),
-        );
+        let result = run_with_timeout(Command::new("sleep").arg("2"), Duration::from_millis(100));
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("did not respond")
-        );
+        assert!(result.unwrap_err().to_string().contains("did not respond"));
     }
 
     #[test]
@@ -791,6 +839,7 @@ Pipe|IPC$|IPC Service
             domain: None,
             poll_secs: None,
             sub_path: None,
+            read_only: false,
         };
         let browse = browse_mount_point(dir.path(), &req.host, &req.share, &req.username);
         let share = share_mount_point(dir.path(), &req.host, &req.share, &req.username);
@@ -810,6 +859,7 @@ Pipe|IPC$|IPC Service
             &script,
             "#!/bin/sh\nmkdir -p \"$2\"\necho 1 > \"$2/.memhg_test_mounted\"\n",
         );
+        set_fake_security_script(dir.path());
         std::env::set_var("MEMHG_TEST_MOUNT_SMBFS", script.to_string_lossy().as_ref());
         let mount_path = dir.path().join("nested/mnt");
         assert!(!mount_path.exists());
@@ -821,11 +871,13 @@ Pipe|IPC$|IPC Service
             domain: None,
             poll_secs: None,
             sub_path: None,
+            read_only: false,
         };
         mount_share(&mount_path, &req).unwrap();
         assert!(mount_path.is_dir());
         assert!(is_mounted(&mount_path));
         std::env::remove_var("MEMHG_TEST_MOUNT_SMBFS");
+        clear_fake_security_script();
     }
 
     #[cfg(target_os = "macos")]
@@ -837,6 +889,7 @@ Pipe|IPC$|IPC Service
             &script,
             "#!/bin/sh\nmkdir -p \"$2\"\necho 1 > \"$2/.memhg_test_mounted\"\n",
         );
+        set_fake_security_script(dir.path());
         std::env::set_var("MEMHG_TEST_MOUNT_SMBFS", script.to_string_lossy().as_ref());
         let mount_path = dir.path().join("mnt");
         let req = SmbConnectRequest {
@@ -847,20 +900,19 @@ Pipe|IPC$|IPC Service
             domain: None,
             poll_secs: None,
             sub_path: None,
+            read_only: false,
         };
         mount_share(&mount_path, &req).unwrap();
         assert!(is_mounted(&mount_path));
         std::env::remove_var("MEMHG_TEST_MOUNT_SMBFS");
+        clear_fake_security_script();
     }
 
     #[test]
     fn list_shares_smbclient_uses_fake_command() {
         let dir = tempfile::tempdir().unwrap();
         let script = dir.path().join("smbclient.sh");
-        write_executable(
-            &script,
-            "#!/bin/sh\ncat <<'EOF'\nDisk|photos|Family\nEOF\n",
-        );
+        write_executable(&script, "#!/bin/sh\ncat <<'EOF'\nDisk|photos|Family\nEOF\n");
         std::env::set_var("MEMHG_TEST_SMBCLIENT", script.to_string_lossy().as_ref());
         let shares = list_shares_smbclient(&SmbListRequest {
             host: "nas".into(),
@@ -925,6 +977,7 @@ Pipe|IPC$|IPC Service
             domain: None,
             poll_secs: None,
             sub_path: None,
+            read_only: false,
         };
         mount_share(&mount, &req).unwrap();
     }
@@ -935,6 +988,7 @@ Pipe|IPC$|IPC Service
         let dir = tempfile::tempdir().unwrap();
         let script = dir.path().join("mount_smbfs.sh");
         write_executable(&script, "#!/bin/sh\nexit 1\necho failed >&2\n");
+        set_fake_security_script(dir.path());
         std::env::set_var("MEMHG_TEST_MOUNT_SMBFS", script.to_string_lossy().as_ref());
         let mount_path = dir.path().join("mnt");
         let req = SmbConnectRequest {
@@ -945,10 +999,12 @@ Pipe|IPC$|IPC Service
             domain: None,
             poll_secs: None,
             sub_path: None,
+            read_only: false,
         };
         let err = mount_share(&mount_path, &req).unwrap_err();
         assert!(err.to_string().contains("mount_smbfs failed"));
         std::env::remove_var("MEMHG_TEST_MOUNT_SMBFS");
+        clear_fake_security_script();
     }
 
     #[test]
@@ -971,10 +1027,7 @@ Pipe|IPC$|IPC Service
     fn run_with_timeout_reads_child_output() {
         let dir = tempfile::tempdir().unwrap();
         let script = dir.path().join("echo.sh");
-        write_executable(
-            &script,
-            "#!/bin/sh\nprintf ok\nprintf err >&2\n",
-        );
+        write_executable(&script, "#!/bin/sh\nprintf ok\nprintf err >&2\n");
         let output = run_with_timeout(&mut Command::new(&script), Duration::from_secs(2)).unwrap();
         assert!(output.status.success());
         assert!(!output.stdout.is_empty());
@@ -1065,9 +1118,7 @@ Pipe|IPC$|IPC Service
         let script = dir.path().join("echo.sh");
         write_executable(&script, "#!/bin/sh\necho ok\n");
         std::env::set_var("MEMHG_TEST_SMBUTIL", script.to_string_lossy().as_ref());
-        let output = subprocess_command("smbutil")
-            .output()
-            .unwrap();
+        let output = subprocess_command("smbutil").output().unwrap();
         assert!(output.status.success());
         std::env::remove_var("MEMHG_TEST_SMBUTIL");
     }
@@ -1100,7 +1151,9 @@ Pipe|IPC$|IPC Service
     #[test]
     fn is_mounted_in_system_table_returns_false_when_mount_fails() {
         std::env::set_var("MEMHG_TEST_MOUNT", "/no/such/memhg-mount-command");
-        assert!(!is_mounted_in_system_table(Path::new("/tmp/memhg-missing-mount")));
+        assert!(!is_mounted_in_system_table(Path::new(
+            "/tmp/memhg-missing-mount"
+        )));
         std::env::remove_var("MEMHG_TEST_MOUNT");
     }
 
@@ -1187,32 +1240,29 @@ Pipe|IPC$|IPC Service
             domain: None,
             poll_secs: None,
             sub_path: None,
+            read_only: false,
         };
         assert!(mount_share(&dir.path().join("mnt"), &req).is_err());
     }
 
     #[test]
     fn list_shares_rejects_invalid_username() {
-        assert!(
-            list_shares(&SmbListRequest {
-                host: "nas".into(),
-                username: "bad user".into(),
-                password: "secret".into(),
-            })
-            .is_err()
-        );
+        assert!(list_shares(&SmbListRequest {
+            host: "nas".into(),
+            username: "bad user".into(),
+            password: "secret".into(),
+        })
+        .is_err());
     }
 
     #[test]
     fn list_shares_rejects_invalid_host() {
-        assert!(
-            list_shares(&SmbListRequest {
-                host: "nas/evil".into(),
-                username: "user".into(),
-                password: "secret".into(),
-            })
-            .is_err()
-        );
+        assert!(list_shares(&SmbListRequest {
+            host: "nas/evil".into(),
+            username: "user".into(),
+            password: "secret".into(),
+        })
+        .is_err());
     }
 
     #[test]
@@ -1227,6 +1277,7 @@ Pipe|IPC$|IPC Service
             domain: None,
             poll_secs: None,
             sub_path: None,
+            read_only: false,
         };
         assert!(mount_share(&base.join("share"), &invalid_share).is_err());
         let invalid_user = SmbConnectRequest {
@@ -1237,6 +1288,7 @@ Pipe|IPC$|IPC Service
             domain: None,
             poll_secs: None,
             sub_path: None,
+            read_only: false,
         };
         assert!(mount_share(&base.join("user"), &invalid_user).is_err());
     }
@@ -1250,6 +1302,7 @@ Pipe|IPC$|IPC Service
             &script,
             "#!/bin/sh\nrm -rf \"$2\"\necho mounted > \"$2\"\nexit 0\n",
         );
+        set_fake_security_script(dir.path());
         std::env::set_var("MEMHG_TEST_MOUNT_SMBFS", script.to_string_lossy().as_ref());
         let mount_path = dir.path().join("mnt");
         let req = SmbConnectRequest {
@@ -1260,10 +1313,12 @@ Pipe|IPC$|IPC Service
             domain: None,
             poll_secs: None,
             sub_path: None,
+            read_only: false,
         };
         let err = mount_share(&mount_path, &req).unwrap_err();
         assert!(err.to_string().contains("SMB mount failed"));
         std::env::remove_var("MEMHG_TEST_MOUNT_SMBFS");
+        clear_fake_security_script();
     }
 
     #[test]
@@ -1283,7 +1338,10 @@ Pipe|IPC$|IPC Service
     fn ensure_share_mounted_unmounts_browse_with_fake_umount() {
         let dir = tempfile::tempdir().unwrap();
         let umount = dir.path().join("umount.sh");
-        write_executable(&umount, "#!/bin/sh\nrm -f \"$2/.memhg_test_mounted\"\nexit 0\n");
+        write_executable(
+            &umount,
+            "#!/bin/sh\nrm -f \"$2/.memhg_test_mounted\"\nexit 0\n",
+        );
         std::env::set_var("MEMHG_TEST_UMOUNT", umount.to_string_lossy().as_ref());
         let req = SmbConnectRequest {
             host: "nas".into(),
@@ -1293,6 +1351,7 @@ Pipe|IPC$|IPC Service
             domain: None,
             poll_secs: None,
             sub_path: None,
+            read_only: false,
         };
         let browse = browse_mount_point(dir.path(), &req.host, &req.share, &req.username);
         let share = share_mount_point(dir.path(), &req.host, &req.share, &req.username);
@@ -1303,12 +1362,17 @@ Pipe|IPC$|IPC Service
             &mount_script,
             "#!/bin/sh\nmkdir -p \"$2\"\necho 1 > \"$2/.memhg_test_mounted\"\n",
         );
-        std::env::set_var("MEMHG_TEST_MOUNT_SMBFS", mount_script.to_string_lossy().as_ref());
+        set_fake_security_script(dir.path());
+        std::env::set_var(
+            "MEMHG_TEST_MOUNT_SMBFS",
+            mount_script.to_string_lossy().as_ref(),
+        );
         std::fs::create_dir_all(&share).unwrap();
         ensure_share_mounted(dir.path(), &req).unwrap();
         assert!(is_mounted(&share));
         std::env::remove_var("MEMHG_TEST_UMOUNT");
         std::env::remove_var("MEMHG_TEST_MOUNT_SMBFS");
+        clear_fake_security_script();
     }
 
     #[test]
@@ -1345,7 +1409,10 @@ Pipe|IPC$|IPC Service
     fn unmount_share_invokes_macos_unmount() {
         let dir = tempfile::tempdir().unwrap();
         let umount = dir.path().join("umount.sh");
-        write_executable(&umount, "#!/bin/sh\nrm -f \"$1/.memhg_test_mounted\"\nexit 0\n");
+        write_executable(
+            &umount,
+            "#!/bin/sh\nrm -f \"$1/.memhg_test_mounted\"\nexit 0\n",
+        );
         std::env::set_var("MEMHG_TEST_UMOUNT", umount.to_string_lossy().as_ref());
         let mount = dir.path().join("mnt");
         std::fs::create_dir_all(&mount).unwrap();

@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as api from "../../api/client";
-import {
-  mergeLibraryFilter,
-} from "../../lib/libraryFilters";
+import { mergeLibraryFilter } from "../../lib/libraryFilters";
 import type { FilterBarState } from "../../lib/libraryActions";
 import { errorNotification } from "../../lib/notification";
 import { DEFAULT_SORT_DIR, encodeSortParam } from "../../lib/sortSettings";
@@ -46,13 +44,16 @@ export function useLibraryQuery(
     sort: "date",
     sortDir: DEFAULT_SORT_DIR.date,
   });
-  const [selectedCollectionId, setSelectedCollectionId] = useState<number | null>(null);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<
+    number | null
+  >(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [scanStatus, setScanStatus] = useState("");
 
   const offsetRef = useRef(0);
   const filterRef = useRef<AssetFilter>({});
+  const requestGenerationRef = useRef(0);
 
   const filter = useMemo(
     () => mergeLibraryFilter(filterBar, extraFilter),
@@ -67,25 +68,40 @@ export function useLibraryQuery(
   );
 
   const refreshMeta = useCallback(async () => {
-    setRoots(await api.listRootStats());
-    setAlbums(await api.listAlbums());
-    setCollections(await api.listSmartCollections());
-    setTags(await api.listTags());
-    setDeletedCount(await api.countAssets({ deleted_only: true }));
-  }, []);
+    try {
+      setRoots(await api.listRootStats());
+      setAlbums(await api.listAlbums());
+      setCollections(await api.listSmartCollections());
+      setTags(await api.listTags());
+      setDeletedCount(await api.countAssets({ deleted_only: true }));
+    } catch (error) {
+      setNotification(errorNotification(error));
+    }
+  }, [setNotification]);
 
   const refreshGrid = useCallback(async () => {
+    const generation = ++requestGenerationRef.current;
     offsetRef.current = 0;
-    const result = await api.queryAssets(
-      filterRef.current,
-      sortParam,
-      0,
-      PAGE,
-    );
-    setItems(result.items);
-    setTotal(result.total);
-    setHasMore(result.items.length < result.total);
-  }, [sortParam]);
+    try {
+      const result = await api.queryAssets(
+        filterRef.current,
+        sortParam,
+        0,
+        PAGE,
+      );
+      if (generation !== requestGenerationRef.current) {
+        return;
+      }
+      setItems(result.items);
+      setTotal(result.total);
+      setHasMore(result.items.length < result.total);
+    } catch (error) {
+      if (generation !== requestGenerationRef.current) {
+        return;
+      }
+      setNotification(errorNotification(error));
+    }
+  }, [setNotification, sortParam]);
 
   const refreshAll = useCallback(async () => {
     await refreshMeta();
@@ -93,11 +109,11 @@ export function useLibraryQuery(
   }, [refreshMeta, refreshGrid]);
 
   useEffect(() => {
-    refreshMeta().catch(console.error);
+    void refreshMeta();
   }, [refreshMeta]);
 
   useEffect(() => {
-    refreshGrid().catch(console.error);
+    void refreshGrid();
   }, [filter, sortParam, refreshGrid]);
 
   useEffect(() => {
@@ -115,7 +131,9 @@ export function useLibraryQuery(
           now - lastStatusUpdate >= 500
         ) {
           lastStatusUpdate = now;
-          setScanStatus(`${progress.stage}: ${progress.indexed}/${progress.scanned}`);
+          setScanStatus(
+            `${progress.stage}: ${progress.indexed}/${progress.scanned}`,
+          );
         }
 
         if (progress.stage === "done" || progress.stage === "error") {

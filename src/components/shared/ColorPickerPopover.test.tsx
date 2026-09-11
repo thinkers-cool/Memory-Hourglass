@@ -10,7 +10,11 @@ vi.mock("react-colorful", () => ({
     color: string;
     onChange: (color: string) => void;
   }) => (
-    <button type="button" className="mock-color-picker" onClick={() => onChange("#00ff00")}>
+    <button
+      type="button"
+      className="mock-color-picker"
+      onClick={() => onChange("#00ff00")}
+    >
       Pick
     </button>
   ),
@@ -20,7 +24,11 @@ describe("ColorPickerPopover", () => {
   it("opens color picker popover", async () => {
     const user = userEvent.setup();
     render(
-      <ColorPickerPopover value="#ff0000" onChange={vi.fn()} title="Tag color" />,
+      <ColorPickerPopover
+        value="#ff0000"
+        onChange={vi.fn()}
+        title="Tag color"
+      />,
     );
     await user.click(screen.getByTitle("Tag color"));
     expect(document.querySelector(".mock-color-picker")).toBeInTheDocument();
@@ -30,7 +38,11 @@ describe("ColorPickerPopover", () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(
-      <ColorPickerPopover value="#ff0000" onChange={onChange} title="Tag color" />,
+      <ColorPickerPopover
+        value="#ff0000"
+        onChange={onChange}
+        title="Tag color"
+      />,
     );
     await user.click(screen.getByTitle("Tag color"));
     await user.click(screen.getByRole("button", { name: "Pick" }));
@@ -48,31 +60,45 @@ describe("ColorPickerPopover", () => {
       />,
     );
     await user.click(screen.getByTitle("Tag color"));
-    expect(document.querySelector(".mock-color-picker")).not.toBeInTheDocument();
+    expect(
+      document.querySelector(".mock-color-picker"),
+    ).not.toBeInTheDocument();
   });
 
   it("closes on outside click", async () => {
     const user = userEvent.setup();
     render(
       <>
-        <ColorPickerPopover value="#ff0000" onChange={vi.fn()} title="Tag color" />
+        <ColorPickerPopover
+          value="#ff0000"
+          onChange={vi.fn()}
+          title="Tag color"
+        />
         <button type="button">Outside</button>
       </>,
     );
     await user.click(screen.getByTitle("Tag color"));
     expect(document.querySelector(".mock-color-picker")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Outside" }));
-    expect(document.querySelector(".mock-color-picker")).not.toBeInTheDocument();
+    expect(
+      document.querySelector(".mock-color-picker"),
+    ).not.toBeInTheDocument();
   });
 
   it("toggles closed on second click", async () => {
     const user = userEvent.setup();
     render(
-      <ColorPickerPopover value="#ff0000" onChange={vi.fn()} title="Tag color" />,
+      <ColorPickerPopover
+        value="#ff0000"
+        onChange={vi.fn()}
+        title="Tag color"
+      />,
     );
     await user.click(screen.getByTitle("Tag color"));
     expect(document.querySelector(".mock-color-picker")).toBeInTheDocument();
     await user.click(screen.getByTitle("Tag color"));
-    expect(document.querySelector(".mock-color-picker")).not.toBeInTheDocument();
+    expect(
+      document.querySelector(".mock-color-picker"),
+    ).not.toBeInTheDocument();
   });
 });

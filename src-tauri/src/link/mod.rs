@@ -29,11 +29,8 @@ impl LinkService {
 
         let mut linked = 0u64;
         for group in by_stem.values() {
-            let mut raws: Vec<&AssetRow> = group
-                .iter()
-                .filter(|a| a.kind == "raw")
-                .copied()
-                .collect();
+            let mut raws: Vec<&AssetRow> =
+                group.iter().filter(|a| a.kind == "raw").copied().collect();
             let mut jpegs: Vec<&AssetRow> = group
                 .iter()
                 .filter(|a| {
@@ -220,9 +217,7 @@ impl LinkService {
             rows.into_iter()
                 .filter_map(|row| {
                     let path = root_path.join(&row.rel_path);
-                    file_sha256(&path)
-                        .ok()
-                        .map(|hash| (hash, row.id))
+                    file_sha256(&path).ok().map(|hash| (hash, row.id))
                 })
                 .collect::<Vec<_>>()
         })
@@ -263,14 +258,12 @@ impl LinkService {
     }
 
     async fn insert_link(&self, src: i64, dst: i64, kind: &str) -> Result<()> {
-        sqlx::query(
-            "INSERT OR IGNORE INTO asset_link (src_id, dst_id, kind) VALUES (?, ?, ?)",
-        )
-        .bind(src)
-        .bind(dst)
-        .bind(kind)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("INSERT OR IGNORE INTO asset_link (src_id, dst_id, kind) VALUES (?, ?, ?)")
+            .bind(src)
+            .bind(dst)
+            .bind(kind)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 }
@@ -441,7 +434,9 @@ mod tests {
             .unwrap();
 
         let link = LinkService::new(pool.clone());
-        link.compute_hashes_for_root(root.id, &photos).await.unwrap();
+        link.compute_hashes_for_root(root.id, &photos)
+            .await
+            .unwrap();
 
         let asset = sqlx::query_as::<_, HashRow>(
             "SELECT id, content_hash, rel_path FROM asset WHERE root_id = ? LIMIT 1",
@@ -457,19 +452,15 @@ mod tests {
             .await
             .unwrap();
 
-        let after = sqlx::query_scalar::<_, String>(
-            "SELECT content_hash FROM asset WHERE id = ?",
-        )
-        .bind(asset.id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let after = sqlx::query_scalar::<_, String>("SELECT content_hash FROM asset WHERE id = ?")
+            .bind(asset.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         assert_ne!(before, after);
     }
 
-    async fn seed_duplicate_assets(
-        dir: &tempfile::TempDir,
-    ) -> (sqlx::SqlitePool, i64, i64, i64) {
+    async fn seed_duplicate_assets(dir: &tempfile::TempDir) -> (sqlx::SqlitePool, i64, i64, i64) {
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
         let jpeg = include_bytes!("../../tests/fixtures/minimal.jpg");
@@ -489,7 +480,9 @@ mod tests {
             .await
             .unwrap();
         let link = LinkService::new(pool.clone());
-        link.compute_hashes_for_root(root.id, &photos).await.unwrap();
+        link.compute_hashes_for_root(root.id, &photos)
+            .await
+            .unwrap();
         let ids = sqlx::query_scalar::<_, i64>(
             "SELECT id FROM asset WHERE root_id = ? ORDER BY rel_path",
         )
@@ -562,13 +555,12 @@ mod tests {
         let link = LinkService::new(pool.clone());
         link.link_raw_jpeg_in_root(root.id).await.unwrap();
 
-        let raw_id: i64 = sqlx::query_scalar(
-            "SELECT id FROM asset WHERE root_id = ? AND kind = 'raw' LIMIT 1",
-        )
-        .bind(root.id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let raw_id: i64 =
+            sqlx::query_scalar("SELECT id FROM asset WHERE root_id = ? AND kind = 'raw' LIMIT 1")
+                .bind(root.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         let links = link.list_links(raw_id).await.unwrap();
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].kind, "raw_jpeg");
@@ -637,7 +629,9 @@ mod tests {
             .await
             .unwrap();
         let link = LinkService::new(pool);
-        link.compute_hashes_for_root(root.id, &photos).await.unwrap();
+        link.compute_hashes_for_root(root.id, &photos)
+            .await
+            .unwrap();
         link.rebuild_duplicate_links().await.unwrap();
         let linked = link.link_duplicates_in_root(root.id).await.unwrap();
         assert_eq!(linked, 0);
@@ -692,7 +686,9 @@ mod tests {
             .await
             .unwrap();
         let link = LinkService::new(pool);
-        link.compute_hashes_for_root(root_b.id, &photos_b).await.unwrap();
+        link.compute_hashes_for_root(root_b.id, &photos_b)
+            .await
+            .unwrap();
         let groups = link.find_duplicates_by_hash(Some(root_a)).await.unwrap();
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0][0], a);
@@ -747,13 +743,12 @@ mod tests {
         }
         let link = LinkService::new(pool.clone());
         assert_eq!(link.link_raw_jpeg_in_root(root.id).await.unwrap(), 1);
-        let raw_id: i64 = sqlx::query_scalar(
-            "SELECT id FROM asset WHERE root_id = ? AND kind = 'raw' LIMIT 1",
-        )
-        .bind(root.id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let raw_id: i64 =
+            sqlx::query_scalar("SELECT id FROM asset WHERE root_id = ? AND kind = 'raw' LIMIT 1")
+                .bind(root.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         let first_jpeg_id: i64 = sqlx::query_scalar(
             "SELECT id FROM asset WHERE root_id = ? AND rel_path = 'a/shot.jpg'",
         )
@@ -792,15 +787,17 @@ mod tests {
             .await
             .unwrap();
         let link = LinkService::new(pool.clone());
-        let hashed = link.compute_hashes_for_root(root.id, &photos).await.unwrap();
+        let hashed = link
+            .compute_hashes_for_root(root.id, &photos)
+            .await
+            .unwrap();
         assert_eq!(hashed, 1);
-        let stored: Option<String> = sqlx::query_scalar(
-            "SELECT content_hash FROM asset WHERE root_id = ? LIMIT 1",
-        )
-        .bind(root.id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let stored: Option<String> =
+            sqlx::query_scalar("SELECT content_hash FROM asset WHERE root_id = ? LIMIT 1")
+                .bind(root.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert!(stored.is_some());
     }
 
@@ -818,12 +815,11 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(flagged, 2);
-        let links: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM asset_link WHERE kind = 'duplicate_hash'",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let links: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM asset_link WHERE kind = 'duplicate_hash'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(links, 1);
         let peers = link.list_duplicates_for_asset(a).await.unwrap();
         assert_eq!(peers.len(), 1);
@@ -847,13 +843,12 @@ mod tests {
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let before: String = sqlx::query_scalar(
-            "SELECT content_hash FROM asset WHERE root_id = ? LIMIT 1",
-        )
-        .bind(root.id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let before: String =
+            sqlx::query_scalar("SELECT content_hash FROM asset WHERE root_id = ? LIMIT 1")
+                .bind(root.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         std::fs::write(&file, b"changed-bytes").unwrap();
         sqlx::query("UPDATE asset SET sync_state = 'modified' WHERE root_id = ?")
             .bind(root.id)
@@ -861,14 +856,18 @@ mod tests {
             .await
             .unwrap();
         let link = LinkService::new(pool.clone());
-        assert_eq!(link.compute_hashes_for_root(root.id, &photos).await.unwrap(), 1);
-        let after: String = sqlx::query_scalar(
-            "SELECT content_hash FROM asset WHERE root_id = ? LIMIT 1",
-        )
-        .bind(root.id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        assert_eq!(
+            link.compute_hashes_for_root(root.id, &photos)
+                .await
+                .unwrap(),
+            1
+        );
+        let after: String =
+            sqlx::query_scalar("SELECT content_hash FROM asset WHERE root_id = ? LIMIT 1")
+                .bind(root.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_ne!(before, after);
     }
 
@@ -922,10 +921,7 @@ mod tests {
             .unwrap();
         let link = LinkService::new(pool);
         assert!(link.link_raw_jpeg_in_root(root.id).await.is_err());
-        sqlx::query("ROLLBACK")
-            .execute(&mut *locker)
-            .await
-            .unwrap();
+        sqlx::query("ROLLBACK").execute(&mut *locker).await.unwrap();
     }
 
     #[tokio::test]
@@ -981,10 +977,7 @@ mod tests {
             .unwrap();
         let link = LinkService::new(pool);
         assert!(link.refresh_duplicate_flags().await.is_err());
-        sqlx::query("ROLLBACK")
-            .execute(&mut *locker)
-            .await
-            .unwrap();
+        sqlx::query("ROLLBACK").execute(&mut *locker).await.unwrap();
     }
 
     #[tokio::test]
@@ -998,10 +991,7 @@ mod tests {
             .unwrap();
         let link = LinkService::new(pool);
         assert!(link.rebuild_duplicate_links().await.is_err());
-        sqlx::query("ROLLBACK")
-            .execute(&mut *locker)
-            .await
-            .unwrap();
+        sqlx::query("ROLLBACK").execute(&mut *locker).await.unwrap();
     }
 
     #[tokio::test]

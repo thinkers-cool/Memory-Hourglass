@@ -129,6 +129,21 @@ export function LibraryApp({
     savePanelWidth(INSPECTOR_STORAGE_KEY, inspectorWidth);
   }, [inspectorWidth]);
 
+  const selectionExportIds = useMemo(
+    () => Array.from(selectedIds),
+    [selectedIds],
+  );
+
+  const keyboardExportIds = useMemo(() => {
+    if (selectedIds.size > 0) {
+      return selectionExportIds;
+    }
+    if (selectedId !== null) {
+      return [selectedId];
+    }
+    return items.map((item) => item.id);
+  }, [items, selectedId, selectedIds.size, selectionExportIds]);
+
   useKeyboard(
     actions,
     galleryIndex === null && !compareOpen,
@@ -137,12 +152,8 @@ export function LibraryApp({
     filterBar.deleteStatus === "deleted",
     purgeEnabled,
     stampArmed,
-    Array.from(selectedIds),
-    selectedIds.size > 0
-      ? Array.from(selectedIds)
-      : selectedId !== null
-        ? [selectedId]
-        : items.map((item) => item.id),
+    selectionExportIds,
+    keyboardExportIds,
   );
 
   const fullViewCard = useMemo(() => {
@@ -193,105 +204,98 @@ export function LibraryApp({
 
   const showInspector = selectedIds.size > 0 && inspectorVisible;
 
-  const inspector = showInspector
-    ? detail
-      ? (
-          <InspectorPanel
-            detail={detail}
-            tags={tags}
-            onClose={actions.closeInspector}
-            onPurge={actions.purge}
-            purgeEnabled={purgeEnabled}
-            onSelectLink={actions.openLinked}
-            onSoftDeleteDuplicate={actions.softDeleteDuplicate}
-            onUndoActivity={(id) => void undoActivity(id)}
-          />
-        )
-      : (
-          <InspectorPlaceholder
-            onClose={actions.closeInspector}
-          />
-        )
-    : null;
+  const inspector = showInspector ? (
+    detail ? (
+      <InspectorPanel
+        detail={detail}
+        tags={tags}
+        onClose={actions.closeInspector}
+        onPurge={actions.purge}
+        purgeEnabled={purgeEnabled}
+        onSelectLink={actions.openLinked}
+        onSoftDeleteDuplicate={actions.softDeleteDuplicate}
+        onUndoActivity={(id) => void undoActivity(id)}
+      />
+    ) : (
+      <InspectorPlaceholder onClose={actions.closeInspector} />
+    )
+  ) : null;
 
-  const contentArea = compareOpen && compareItems.length >= 2
-    ? (
-        <CompareViewer
-          items={compareItems}
-          compareDetails={compareDetails}
-          tags={tags}
-          albums={albums}
-          busy={busy}
-          stampArmed={stampArmed}
-          onToggleStamp={() => void actions.toggleStampOnTargets()}
-          onClose={actions.closeCompare}
-          onRate={(id, rating) => void actions.rateAsset(id, rating)}
-          onToggleTag={(id, tagId, add) =>
-            void actions.toggleTagOnAsset(id, tagId, add)
-          }
-          onCreateTag={(id, tagName) => actions.createTagOnAsset(id, tagName)}
-          onToggleAlbum={(id, albumId, add) =>
-            void actions.toggleAlbumOnAsset(id, albumId, add)
-          }
-          onCreateAlbum={(id, name) => actions.createAlbumOnAsset(id, name)}
-          onExport={(id) => actions.openExport([id])}
-          onDelete={(id) => void actions.deleteAsset(id)}
-        />
-      )
-    : fullView && fullViewCard && fullViewIndex >= 0
-    ? (
-        <ResizableTrailingPanel
-          main={
-            <AssetFullView
-              card={fullViewCard}
-              index={fullViewIndex}
-              total={items.length}
-              onClose={actions.closeFullView}
-              onNavigateRelative={actions.navigateRelative}
-            />
-          }
-          side={inspector}
-          sideWidth={inspectorWidth}
-          onSideWidthChange={(width) =>
-            setInspectorWidth(
-              clampPanelWidth(width, INSPECTOR_WIDTH_MIN, INSPECTOR_WIDTH_MAX),
-            )
-          }
-          minMain={320}
-          minSide={INSPECTOR_WIDTH_MIN}
-          showSide={showInspector}
-        />
-      )
-    : (
-        <ResizableTrailingPanel
-          main={
-            <VirtualGrid
-              items={items}
-              selectedId={selectedId}
-              selectedIds={selectedIds}
-              columnCount={gridColumnCount}
-              stampConfig={stampConfig}
-              stampArmed={stampArmed}
-              stampMatchedIds={stampMatchedIds}
-              onSelect={actions.selectAsset}
-              onOpenFullView={actions.openFullViewFor}
-              onLoadMore={actions.loadMore}
-              hasMore={hasMore}
-              loadingMore={loadingMore}
-            />
-          }
-          side={inspector}
-          sideWidth={inspectorWidth}
-          onSideWidthChange={(width) =>
-            setInspectorWidth(
-              clampPanelWidth(width, INSPECTOR_WIDTH_MIN, INSPECTOR_WIDTH_MAX),
-            )
-          }
-          minMain={280}
-          minSide={INSPECTOR_WIDTH_MIN}
-          showSide={showInspector}
-        />
-      );
+  const contentArea =
+    compareOpen && compareItems.length >= 2 ? (
+      <CompareViewer
+        items={compareItems}
+        compareDetails={compareDetails}
+        tags={tags}
+        albums={albums}
+        busy={busy}
+        stampArmed={stampArmed}
+        onToggleStamp={() => void actions.toggleStampOnTargets()}
+        onClose={actions.closeCompare}
+        onRate={(id, rating) => void actions.rateAsset(id, rating)}
+        onToggleTag={(id, tagId, add) =>
+          void actions.toggleTagOnAsset(id, tagId, add)
+        }
+        onCreateTag={(id, tagName) => actions.createTagOnAsset(id, tagName)}
+        onToggleAlbum={(id, albumId, add) =>
+          void actions.toggleAlbumOnAsset(id, albumId, add)
+        }
+        onCreateAlbum={(id, name) => actions.createAlbumOnAsset(id, name)}
+        onExport={(id) => actions.openExport([id])}
+        onDelete={(id) => void actions.deleteAsset(id)}
+      />
+    ) : fullView && fullViewCard && fullViewIndex >= 0 ? (
+      <ResizableTrailingPanel
+        main={
+          <AssetFullView
+            card={fullViewCard}
+            index={fullViewIndex}
+            total={items.length}
+            onClose={actions.closeFullView}
+            onNavigateRelative={actions.navigateRelative}
+          />
+        }
+        side={inspector}
+        sideWidth={inspectorWidth}
+        onSideWidthChange={(width) =>
+          setInspectorWidth(
+            clampPanelWidth(width, INSPECTOR_WIDTH_MIN, INSPECTOR_WIDTH_MAX),
+          )
+        }
+        minMain={320}
+        minSide={INSPECTOR_WIDTH_MIN}
+        showSide={showInspector}
+      />
+    ) : (
+      <ResizableTrailingPanel
+        main={
+          <VirtualGrid
+            items={items}
+            selectedId={selectedId}
+            selectedIds={selectedIds}
+            columnCount={gridColumnCount}
+            stampConfig={stampConfig}
+            stampArmed={stampArmed}
+            stampMatchedIds={stampMatchedIds}
+            onSelect={actions.selectAsset}
+            onOpenFullView={actions.openFullViewFor}
+            onLoadMore={actions.loadMore}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+          />
+        }
+        side={inspector}
+        sideWidth={inspectorWidth}
+        onSideWidthChange={(width) =>
+          setInspectorWidth(
+            clampPanelWidth(width, INSPECTOR_WIDTH_MIN, INSPECTOR_WIDTH_MAX),
+          )
+        }
+        minMain={280}
+        minSide={INSPECTOR_WIDTH_MIN}
+        showSide={showInspector}
+      />
+    );
 
   return (
     <div className="flex h-screen app-canvas">
@@ -323,7 +327,6 @@ export function LibraryApp({
             <LibraryFilterToolbar
               tags={tags}
               albums={albums}
-              busy={busy}
               filterBar={filterBar}
               setFilterBar={setFilterBar}
               gridColumnCount={gridColumnCount}
@@ -461,10 +464,11 @@ export function LibraryApp({
         busy={busy}
         onClose={closeConfirmDialog}
         onConfirm={() => {
-          void Promise.resolve(confirmDialog.onConfirm()).then(closeConfirmDialog);
+          void Promise.resolve(confirmDialog.onConfirm()).then(
+            closeConfirmDialog,
+          );
         }}
       />
-
     </div>
   );
 }

@@ -7,14 +7,19 @@ import { LibraryFilterToolbar } from "./LibraryFilterToolbar";
 
 const tags = [{ id: 1, name: "trip", parent_id: null, color: null }];
 const albums = [
-  { id: 1, name: "Vacation", emoji: "📷", sort_mode: "date:desc", asset_count: 0 },
+  {
+    id: 1,
+    name: "Vacation",
+    emoji: "📷",
+    sort_mode: "date:desc",
+    asset_count: 0,
+  },
 ];
 
 function renderToolbar(
   overrides: Partial<Parameters<typeof LibraryFilterToolbar>[0]> = {},
 ) {
   const props = {
-    busy: false,
     tags,
     albums,
     filterBar: emptyFilterBar,
@@ -49,7 +54,6 @@ describe("LibraryFilterToolbar", () => {
     const onOpenExport = vi.fn();
     render(
       <LibraryFilterToolbar
-        busy={false}
         tags={[]}
         albums={[]}
         filterBar={emptyFilterBar}
@@ -93,7 +97,6 @@ describe("LibraryFilterToolbar", () => {
 
     render(
       <LibraryFilterToolbar
-        busy={false}
         tags={[]}
         albums={[]}
         filterBar={emptyFilterBar}
@@ -166,7 +169,11 @@ describe("LibraryFilterToolbar", () => {
   it("updates capture date range via chip bar", async () => {
     const user = userEvent.setup();
     const { setFilterBar } = renderToolbar({
-      filterBar: { ...emptyFilterBar, captureFrom: "2024-01-01", captureTo: "" },
+      filterBar: {
+        ...emptyFilterBar,
+        captureFrom: "2024-01-01",
+        captureTo: "",
+      },
     });
     await user.click(screen.getByRole("button", { name: /from 2024-01-01/i }));
     await user.type(screen.getByTitle("To"), "2024-12-31");

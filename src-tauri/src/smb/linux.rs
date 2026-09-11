@@ -9,7 +9,9 @@ use super::{
 pub fn list_shares(req: &SmbListRequest) -> Result<Vec<SmbShareEntry>> {
     let shares = list_shares_smbclient(req)?;
     if shares.is_empty() {
-        return Err(AppError::Library("no SMB shares found on this server".into()));
+        return Err(AppError::Library(
+            "no SMB shares found on this server".into(),
+        ));
     }
     Ok(shares)
 }
@@ -17,14 +19,18 @@ pub fn list_shares(req: &SmbListRequest) -> Result<Vec<SmbShareEntry>> {
 #[cfg_attr(coverage_nightly, coverage(off))]
 pub fn mount(mount_path: &Path, req: &SmbConnectRequest) -> Result<()> {
     let source = format!("//{}/{}", req.host, req.share);
-    let creds = format!("username={},password={}", req.username, req.password);
+    let auth = super::TempAuthFile::new(&req.username, &req.password, req.domain.as_deref())?;
+    let mut mount_options = format!("credentials={},vers=3.0", auth.path().display());
+    if req.read_only {
+        mount_options.push_str(",ro");
+    }
     let status = subprocess_command("mount")
         .arg("-t")
         .arg("cifs")
         .arg(&source)
         .arg(mount_path)
         .arg("-o")
-        .arg(format!("{},vers=3.0", creds))
+        .arg(mount_options)
         .status()
         .map_err(AppError::from)?;
 

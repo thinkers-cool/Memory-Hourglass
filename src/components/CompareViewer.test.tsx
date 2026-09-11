@@ -26,11 +26,23 @@ const cardB: AssetCard = {
   ext: "mp4",
 };
 
-function renderViewer(overrides: Partial<Parameters<typeof CompareViewer>[0]> = {}) {
+function renderViewer(
+  overrides: Partial<Parameters<typeof CompareViewer>[0]> = {},
+) {
   const props = {
     items: [cardA, cardB],
-    tags: [{ id: 1, name: "trip", color: null, parent_id: null, asset_count: 0 }],
-    albums: [{ id: 2, name: "Set", emoji: null, sort_mode: "date:desc", asset_count: 0 }],
+    tags: [
+      { id: 1, name: "trip", color: null, parent_id: null, asset_count: 0 },
+    ],
+    albums: [
+      {
+        id: 2,
+        name: "Set",
+        emoji: null,
+        sort_mode: "date:desc",
+        asset_count: 0,
+      },
+    ],
     busy: false,
     compareDetails: {
       1: { tag_ids: [1], album_ids: [2] },
@@ -87,7 +99,9 @@ describe("CompareViewer", () => {
 
   it("stamps on space when armed", () => {
     const props = renderViewer({ stampArmed: true });
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: " ", bubbles: true }),
+    );
     expect(props.onToggleStamp).toHaveBeenCalledTimes(1);
   });
 
@@ -111,7 +125,9 @@ describe("CompareViewer", () => {
   it("routes rating and tag menu changes", async () => {
     const user = userEvent.setup();
     const props = renderViewer();
-    await user.click(screen.getAllByRole("button", { name: /Rate 4 stars/i })[0]);
+    await user.click(
+      screen.getAllByRole("button", { name: /Rate 4 stars/i })[0],
+    );
     expect(props.onRate).toHaveBeenCalledWith(1, 4);
     await user.click(screen.getAllByText("Tag")[0]);
     expect(screen.getAllByText("Tag").length).toBeGreaterThan(0);
@@ -134,7 +150,9 @@ describe("CompareViewer", () => {
 
   it("ignores space when stamp is not armed", () => {
     const props = renderViewer({ stampArmed: false });
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: " ", bubbles: true }),
+    );
     expect(props.onToggleStamp).not.toHaveBeenCalled();
   });
 

@@ -37,14 +37,20 @@ pub async fn record_soft_deleted(
 pub async fn record_restored(
     recorder: &ActivityRecorder,
     correlation_id: Option<&str>,
-    asset_ids: &[i64],
-    previous_deleted_at: i64,
+    deleted_at_by_id: &std::collections::HashMap<i64, i64>,
 ) -> Result<i64> {
+    let asset_ids: Vec<i64> = deleted_at_by_id.keys().copied().collect();
+    let items = deleted_at_by_id
+        .iter()
+        .map(|(asset_id, deleted_at)| {
+            json!({
+                "asset_id": asset_id,
+                "deleted_at": deleted_at,
+            })
+        })
+        .collect::<Vec<_>>();
     let payload = json!({ "asset_ids": asset_ids });
-    let revert = json!({
-        "asset_ids": asset_ids,
-        "deleted_at": previous_deleted_at,
-    });
+    let revert = json!({ "items": items });
     recorder
         .append(ActivityInput {
             event_type: event_type::ASSET_RESTORED.to_string(),
@@ -126,9 +132,7 @@ pub async fn record_batch_metadata_changed(
     }
     let revert_items = items
         .iter()
-        .map(|(asset_id, _, _, before, _)| {
-            json!({ "asset_id": asset_id, "patch": before })
-        })
+        .map(|(asset_id, _, _, before, _)| json!({ "asset_id": asset_id, "patch": before }))
         .collect::<Vec<_>>();
     let payload = json!({
         "count": items.len(),
@@ -174,7 +178,11 @@ pub async fn record_tags_added(
             subject_type: Some("asset".into()),
             subject_id: asset_ids.first().copied(),
             subject_key: None,
-            summary: Some(format!("tag {} added to {} assets", tag_id, asset_ids.len())),
+            summary: Some(format!(
+                "tag {} added to {} assets",
+                tag_id,
+                asset_ids.len()
+            )),
             payload_json: payload.to_string(),
             revert_json: Some(revert.to_string()),
         })
@@ -197,7 +205,11 @@ pub async fn record_tags_removed(
             subject_type: Some("asset".into()),
             subject_id: asset_ids.first().copied(),
             subject_key: None,
-            summary: Some(format!("tag {} removed from {} assets", tag_id, asset_ids.len())),
+            summary: Some(format!(
+                "tag {} removed from {} assets",
+                tag_id,
+                asset_ids.len()
+            )),
             payload_json: payload.to_string(),
             revert_json: Some(revert.to_string()),
         })
@@ -323,7 +335,9 @@ mod tests {
         let recorder = ActivityRecorder::new(catalog.pool().clone());
 
         assert_eq!(
-            record_batch_metadata_changed(&recorder, None, &[]).await.unwrap(),
+            record_batch_metadata_changed(&recorder, None, &[])
+                .await
+                .unwrap(),
             0
         );
         assert_eq!(record_asset_missing(&recorder, 1, &[]).await.unwrap(), ());
@@ -331,7 +345,13 @@ mod tests {
         let soft_id = record_soft_deleted(&recorder, Some("c"), &[1, 2], 10)
             .await
             .unwrap();
-        let restore_id = record_restored(&recorder, Some("c"), &[1], 10).await.unwrap();
+        let restore_id = record_restored(
+            &recorder,
+            Some("c"),
+            &std::collections::HashMap::from([(1, 10)]),
+        )
+        .await
+        .unwrap();
         let purge_id = record_purged(&recorder, Some("c"), &[1]).await.unwrap();
         let scan_id = record_scan_completed(
             &recorder,
@@ -345,14 +365,20 @@ mod tests {
                 missing_count: 0,
             },
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
         let export_id = record_export_completed(&recorder, Some("c"), 9, 3, "/tmp/out")
             .await
             .unwrap();
-        let rebuild_id = record_catalog_rebuilt(&recorder, Some("c"), 2).await.unwrap();
-        let tag_add = record_tags_added(&recorder, Some("c"), &[1], 5).await.unwrap();
-        let tag_remove = record_tags_removed(&recorder, Some("c"), &[1], 5).await.unwrap();
+        let rebuild_id = record_catalog_rebuilt(&recorder, Some("c"), 2)
+            .await
+            .unwrap();
+        let tag_add = record_tags_added(&recorder, Some("c"), &[1], 5)
+            .await
+            .unwrap();
+        let tag_remove = record_tags_removed(&recorder, Some("c"), &[1], 5)
+            .await
+            .unwrap();
         record_asset_missing(
             &recorder,
             1,
@@ -374,14 +400,7 @@ mod tests {
         .unwrap();
 
         for id in [
-            soft_id,
-            restore_id,
-            purge_id,
-            scan_id,
-            export_id,
-            rebuild_id,
-            tag_add,
-            tag_remove,
+            soft_id, restore_id, purge_id, scan_id, export_id, rebuild_id, tag_add, tag_remove,
             meta_id,
         ] {
             assert!(id > 0);

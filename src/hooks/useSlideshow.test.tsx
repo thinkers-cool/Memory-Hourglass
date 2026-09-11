@@ -33,6 +33,22 @@ describe("useSlideshow", () => {
     vi.unstubAllGlobals();
   });
 
+  it("does not navigate when only one slide and loop is disabled", () => {
+    const onNavigate = vi.fn();
+    const { result } = renderHook(() =>
+      useSlideshow({
+        items: [card(1)],
+        index: 0,
+        onNavigate,
+        reducedMotion: false,
+      }),
+    );
+
+    act(() => result.current.goNext());
+    act(() => result.current.goPrev());
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
   it("navigates forward and backward", () => {
     const onNavigate = vi.fn();
     const items = [card(1), card(2), card(3)];
@@ -240,7 +256,9 @@ describe("useSlideshow", () => {
       rafCallback = callback;
       return 1;
     });
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(
+      () => undefined,
+    );
     vi.spyOn(performance, "now").mockReturnValue(0);
 
     const { result, rerender } = renderHook(

@@ -5,7 +5,9 @@ import type {
   Album,
   AssetDetail,
   AssetFilter,
+  ExportJobSummary,
   ExportOptions,
+  ExportStatus,
   JobProgress,
   QueryResult,
   RecentWorkspace,
@@ -101,7 +103,10 @@ export async function connectSmbShare(
   });
 }
 
-export async function relinkRoot(id: number, path: string): Promise<SourceRoot> {
+export async function relinkRoot(
+  id: number,
+  path: string,
+): Promise<SourceRoot> {
   return invoke<SourceRoot>("relink_root", { id, path });
 }
 
@@ -130,6 +135,14 @@ export async function startScan(rootId: number): Promise<void> {
 
 export async function cancelScan(): Promise<void> {
   return invoke("cancel_scan");
+}
+
+export async function pauseScan(): Promise<void> {
+  return invoke("pause_scan");
+}
+
+export async function resumeScan(): Promise<void> {
+  return invoke("resume_scan");
 }
 
 export async function rebuildCatalog(): Promise<void> {
@@ -300,6 +313,22 @@ export async function startExport(
   return id;
 }
 
+export async function cancelExport(): Promise<void> {
+  return invoke("cancel_export");
+}
+
+export async function getExportStatus(): Promise<ExportStatus> {
+  return invoke<ExportStatus>("get_export_status");
+}
+
+export async function listExportJobs(): Promise<ExportJobSummary[]> {
+  return invoke<ExportJobSummary[]>("list_export_jobs");
+}
+
+export async function getAlbumAssetIds(albumId: number): Promise<number[]> {
+  return invoke<number[]>("get_album_asset_ids", { albumId });
+}
+
 export function onScanProgress(
   handler: (event: ScanProgress) => void,
 ): Promise<UnlistenFn> {
@@ -312,20 +341,9 @@ export function onJobProgress(
   return listen<JobProgress>("job://progress", (e) => handler(e.payload));
 }
 
-export type MessageEnvelope = {
-  kind: string;
-  source: string;
-  text_key: string;
-  text_params: Record<string, string | number>;
-  correlation_id?: string;
-  activity_id?: number;
-  actions: {
-    label_key: string;
-    action: string;
-    activity_id?: number;
-  }[];
-  duration_ms?: number;
-};
+import type { MessageEnvelope } from "../lib/message/types";
+
+export type { MessageEnvelope } from "../lib/message/types";
 
 export function onMessageNotify(
   handler: (event: MessageEnvelope) => void,

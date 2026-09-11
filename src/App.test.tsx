@@ -178,7 +178,12 @@ describe("App", () => {
   it("renders library shell when workspace is open", async () => {
     useWorkspaceMock.mockReturnValue({
       phase: "library",
-      workspace: { path: "/tmp/ws", name: "Demo", id: "ws-1", read_only: false },
+      workspace: {
+        path: "/tmp/ws",
+        name: "Demo",
+        id: "ws-1",
+        read_only: false,
+      },
       recent: [],
       busy: false,
       busyMessage: "",
@@ -219,7 +224,12 @@ describe("App", () => {
     const closeWorkspace = vi.fn();
     useWorkspaceMock.mockReturnValue({
       phase: "library",
-      workspace: { path: "/tmp/ws", name: "Demo", id: "ws-1", read_only: false },
+      workspace: {
+        path: "/tmp/ws",
+        name: "Demo",
+        id: "ws-1",
+        read_only: false,
+      },
       recent: [],
       busy: false,
       busyMessage: "",

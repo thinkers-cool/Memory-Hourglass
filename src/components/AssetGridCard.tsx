@@ -1,4 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { memo } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, FileImage, Film, Image, Stamp } from "lucide-react";
 import type { StampIndicatorState } from "../../lib/stamp";
 import type { AssetCard } from "../types";
@@ -43,13 +45,17 @@ function FileExtBadge({ kind, ext }: { kind: string; ext: string }) {
     <span
       className={`pointer-events-none absolute bottom-1.5 right-1.5 z-[15] inline-flex max-w-[calc(100%-12px)] items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[9px] font-semibold leading-none tracking-[0.08em] backdrop-blur-md shadow-sm ${extBadgeClass(kind, ext)}`}
     >
-      <Icon className="h-2.5 w-2.5 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
+      <Icon
+        className="h-2.5 w-2.5 shrink-0 opacity-90"
+        strokeWidth={2.25}
+        aria-hidden
+      />
       <span className="truncate">{label}</span>
     </span>
   );
 }
 
-export function AssetGridCard({
+function AssetGridCardInner({
   card,
   selected,
   stampIndicator = "none",
@@ -62,11 +68,19 @@ export function AssetGridCard({
   onSelect: (multi: boolean, range: boolean) => void;
   onOpenFullView: () => void;
 }) {
+  const { t } = useTranslation("library");
+  const syncLabel =
+    card.sync_state !== "ok"
+      ? t(`syncState.${card.sync_state}`, { defaultValue: card.sync_state })
+      : null;
+
   return (
     <button
       type="button"
       className={`btn btn-ghost relative block aspect-square h-auto min-h-0 w-full overflow-hidden rounded-lg border-0 bg-surface-inset p-0 text-left shadow-none ring-2 ring-inset transition-shadow group ${
-        selected ? "ring-primary" : "ring-transparent hover:ring-[var(--mem-ring-hover)]"
+        selected
+          ? "ring-primary"
+          : "ring-transparent hover:ring-[var(--mem-ring-hover)]"
       }`}
       style={{ viewTransitionName: `asset-${card.id}` }}
       onMouseDown={(e) => {
@@ -108,15 +122,21 @@ export function AssetGridCard({
           />
         ) : (
           <span className="flex h-full w-full items-center justify-center bg-surface-inset-strong">
-            <FileImage className="h-8 w-8 text-placeholder" strokeWidth={1.25} aria-hidden />
+            <FileImage
+              className="h-8 w-8 text-placeholder"
+              strokeWidth={1.25}
+              aria-hidden
+            />
           </span>
         )}
 
         <FileExtBadge kind={card.kind} ext={card.ext} />
 
-        {card.sync_state !== "ok" && (
-          <span className={`absolute top-1.5 right-1.5 badge badge-xs ${SYNC_BADGE[card.sync_state] ?? "badge-ghost"}`}>
-            {card.sync_state}
+        {syncLabel && (
+          <span
+            className={`absolute top-1.5 right-1.5 badge badge-xs ${SYNC_BADGE[card.sync_state] ?? "badge-ghost"}`}
+          >
+            {syncLabel}
           </span>
         )}
 
@@ -146,3 +166,5 @@ export function AssetGridCard({
     </button>
   );
 }
+
+export const AssetGridCard = memo(AssetGridCardInner);

@@ -30,7 +30,9 @@ describe("VirtualGrid", () => {
     scrollToIndex.mockClear();
   });
 
-  function renderGrid(overrides: Partial<Parameters<typeof VirtualGrid>[0]> = {}) {
+  function renderGrid(
+    overrides: Partial<Parameters<typeof VirtualGrid>[0]> = {},
+  ) {
     const props = {
       items: [sampleCard],
       selectedId: null as number | null,
@@ -85,6 +87,31 @@ describe("VirtualGrid", () => {
     expect(scrollToIndex).toHaveBeenCalled();
   });
 
+  it("does not load more when scrolled away from bottom", () => {
+    const onLoadMore = vi.fn();
+    const { container } = renderGrid({
+      hasMore: true,
+      loadingMore: false,
+      onLoadMore,
+    });
+    const scrollArea = container.querySelector(".grid-canvas") as HTMLElement;
+    Object.defineProperty(scrollArea, "scrollHeight", {
+      value: 2000,
+      configurable: true,
+    });
+    Object.defineProperty(scrollArea, "clientHeight", {
+      value: 600,
+      configurable: true,
+    });
+    Object.defineProperty(scrollArea, "scrollTop", {
+      value: 0,
+      writable: true,
+      configurable: true,
+    });
+    fireEvent.scroll(scrollArea);
+    expect(onLoadMore).not.toHaveBeenCalled();
+  });
+
   it("loads more when scrolled near bottom", () => {
     const onLoadMore = vi.fn();
     const { container } = renderGrid({
@@ -93,11 +120,30 @@ describe("VirtualGrid", () => {
       onLoadMore,
     });
     const scrollArea = container.querySelector(".grid-canvas") as HTMLElement;
-    Object.defineProperty(scrollArea, "scrollHeight", { value: 2000, configurable: true });
-    Object.defineProperty(scrollArea, "clientHeight", { value: 600, configurable: true });
-    Object.defineProperty(scrollArea, "scrollTop", { value: 1400, writable: true, configurable: true });
+    Object.defineProperty(scrollArea, "scrollHeight", {
+      value: 2000,
+      configurable: true,
+    });
+    Object.defineProperty(scrollArea, "clientHeight", {
+      value: 600,
+      configurable: true,
+    });
+    Object.defineProperty(scrollArea, "scrollTop", {
+      value: 1400,
+      writable: true,
+      configurable: true,
+    });
     fireEvent.scroll(scrollArea);
     expect(onLoadMore).toHaveBeenCalled();
+  });
+
+  it("removes scroll listener on unmount", () => {
+    const { unmount } = renderGrid({
+      hasMore: true,
+      loadingMore: false,
+      onLoadMore: vi.fn(),
+    });
+    unmount();
   });
 
   it("shows loading spinner while loading more", () => {
@@ -142,11 +188,30 @@ describe("VirtualGrid", () => {
       onLoadMore,
     });
     const scrollArea = container.querySelector(".grid-canvas") as HTMLElement;
-    Object.defineProperty(scrollArea, "scrollHeight", { value: 2000, configurable: true });
-    Object.defineProperty(scrollArea, "clientHeight", { value: 600, configurable: true });
-    Object.defineProperty(scrollArea, "scrollTop", { value: 1400, writable: true, configurable: true });
+    Object.defineProperty(scrollArea, "scrollHeight", {
+      value: 2000,
+      configurable: true,
+    });
+    Object.defineProperty(scrollArea, "clientHeight", {
+      value: 600,
+      configurable: true,
+    });
+    Object.defineProperty(scrollArea, "scrollTop", {
+      value: 1400,
+      writable: true,
+      configurable: true,
+    });
     fireEvent.scroll(scrollArea);
     expect(onLoadMore).not.toHaveBeenCalled();
+  });
+
+  it("renders stamp indicators when stamp mode is armed", () => {
+    renderGrid({
+      stampArmed: true,
+      stampMatchedIds: new Set([sampleCard.id]),
+      stampConfig: { rating: 4, tag_ids: [], album_ids: [] },
+    });
+    expect(screen.getByRole("button")).toBeInTheDocument();
   });
 
   it("renders empty cells when column count exceeds items", () => {
@@ -156,7 +221,10 @@ describe("VirtualGrid", () => {
   });
 
   it("scrolls selected row when column count changes", () => {
-    const { rerender } = renderGrid({ selectedId: 1, selectedIds: new Set([1]) });
+    const { rerender } = renderGrid({
+      selectedId: 1,
+      selectedIds: new Set([1]),
+    });
     scrollToIndex.mockClear();
     rerender(
       <div style={{ width: 800, height: 600 }}>
@@ -179,7 +247,10 @@ describe("VirtualGrid", () => {
   it("skips scroll when selection is missing or unchanged", () => {
     renderGrid({ selectedId: 99 });
     expect(scrollToIndex).not.toHaveBeenCalled();
-    const { rerender } = renderGrid({ selectedId: 1, selectedIds: new Set([1]) });
+    const { rerender } = renderGrid({
+      selectedId: 1,
+      selectedIds: new Set([1]),
+    });
     scrollToIndex.mockClear();
     rerender(
       <div style={{ width: 800, height: 600 }}>
@@ -224,9 +295,19 @@ describe("VirtualGrid", () => {
   it("does not load more without handler", () => {
     const { container } = renderGrid({ hasMore: true });
     const scrollArea = container.querySelector(".grid-canvas") as HTMLElement;
-    Object.defineProperty(scrollArea, "scrollHeight", { value: 2000, configurable: true });
-    Object.defineProperty(scrollArea, "clientHeight", { value: 600, configurable: true });
-    Object.defineProperty(scrollArea, "scrollTop", { value: 1400, writable: true, configurable: true });
+    Object.defineProperty(scrollArea, "scrollHeight", {
+      value: 2000,
+      configurable: true,
+    });
+    Object.defineProperty(scrollArea, "clientHeight", {
+      value: 600,
+      configurable: true,
+    });
+    Object.defineProperty(scrollArea, "scrollTop", {
+      value: 1400,
+      writable: true,
+      configurable: true,
+    });
     fireEvent.scroll(scrollArea);
   });
 });

@@ -12,7 +12,10 @@ export function playableIndices(items: AssetCard[]): number[] {
   return indices;
 }
 
-export function buildShuffleOrder(items: AssetCard[], startAt: number): number[] {
+export function buildShuffleOrder(
+  items: AssetCard[],
+  startAt: number,
+): number[] {
   const order = playableIndices(items);
   for (let i = order.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));

@@ -6,8 +6,14 @@ import {
   type AppLocale,
 } from "../i18n/config";
 
-export function isAppLocale(value: string | null | undefined): value is AppLocale {
-  return value !== null && value !== undefined && APP_LOCALES.includes(value as AppLocale);
+export function isAppLocale(
+  value: string | null | undefined,
+): value is AppLocale {
+  return (
+    value !== null &&
+    value !== undefined &&
+    APP_LOCALES.includes(value as AppLocale)
+  );
 }
 
 export function resolveSystemLocale(): AppLocale {

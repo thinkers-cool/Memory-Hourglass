@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import * as useZoomableMediaModule from "../hooks/useZoomableMedia";
 import { sampleCard, sampleVideoCard } from "../test/fixtures";
 import { AssetFullView } from "./AssetFullView";
 
@@ -82,8 +83,16 @@ describe("AssetFullView", () => {
     expect(screen.getByLabelText("Next")).toBeDisabled();
   });
 
-  it("handles zoom keyboard shortcuts", async () => {
-    const user = userEvent.setup();
+  it("resets zoom when pressing 0", () => {
+    const resetTransform = vi.fn();
+    vi.spyOn(useZoomableMediaModule, "useZoomableMedia").mockReturnValue({
+      ref: { current: null },
+      scale: 2,
+      onTransform: vi.fn(),
+      zoomIn: vi.fn(),
+      zoomOut: vi.fn(),
+      resetTransform,
+    });
     render(
       <AssetFullView
         card={sampleCard}
@@ -93,9 +102,36 @@ describe("AssetFullView", () => {
         onNavigateRelative={vi.fn()}
       />,
     );
+    fireEvent.keyDown(window, { key: "0" });
+    expect(resetTransform).toHaveBeenCalledTimes(1);
+    vi.restoreAllMocks();
+  });
+
+  it("handles zoom keyboard shortcuts", async () => {
+    const user = userEvent.setup();
+    const resetTransform = vi.fn();
+    vi.spyOn(useZoomableMediaModule, "useZoomableMedia").mockReturnValue({
+      ref: { current: null },
+      scale: 1,
+      onTransform: vi.fn(),
+      zoomIn: vi.fn(),
+      zoomOut: vi.fn(),
+      resetTransform,
+    });
+    render(
+      <AssetFullView
+        card={sampleCard}
+        index={0}
+        total={1}
+        onClose={vi.fn()}
+        onNavigateRelative={vi.fn()}
+      />,
+    );
+    await user.keyboard("=");
     await user.keyboard("+");
     await user.keyboard("-");
     await user.keyboard("0");
-    expect(screen.getByLabelText("Fit to view")).toBeInTheDocument();
+    expect(resetTransform).toHaveBeenCalledTimes(1);
+    vi.restoreAllMocks();
   });
 });

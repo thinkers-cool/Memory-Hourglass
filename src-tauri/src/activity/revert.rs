@@ -1,6 +1,6 @@
+use crate::activity::models::actor;
 use crate::activity::models::event_type;
 use crate::activity::models::ActivityInput;
-use crate::activity::models::actor;
 use crate::activity::recorder::ActivityRecorder;
 use crate::catalog::models::AssetMetaPatch;
 use crate::catalog::repo::AssetRepo;
@@ -30,7 +30,10 @@ pub async fn undo_activity(ctx: &UndoContext, activity_id: i64) -> Result<i64> {
         return Err(AppError::InvalidInput("activity is not reversible".into()));
     }
 
-    let revert = entry.revert_json.as_deref().expect("revert_json present after check");
+    let revert = entry
+        .revert_json
+        .as_deref()
+        .expect("revert_json present after check");
 
     let media_settings = crate::workspace::WorkspaceMediaSettings {
         read_only: ctx.read_only,
@@ -57,21 +60,32 @@ pub async fn undo_activity(ctx: &UndoContext, activity_id: i64) -> Result<i64> {
         }
         event_type::ASSET_RESTORED => {
             let payload: RestoreRevert = serde_json::from_str(revert)?;
-            AssetRepo::new(ctx.pool.clone())
-                .soft_delete(&payload.asset_ids, payload.deleted_at)
-                .await?;
+            let assets = AssetRepo::new(ctx.pool.clone());
+            for item in payload.items()? {
+                assets
+                    .soft_delete(&[item.asset_id], item.deleted_at)
+                    .await?;
+            }
         }
         event_type::ASSET_TAGS_ADDED => {
             let payload: TagsRevert = serde_json::from_str(revert)?;
-            QueryService::with_media_settings(ctx.pool.clone(), ctx.thumb_dir.clone(), media_settings)
-                .batch_remove_tags(&payload.asset_ids, payload.tag_id)
-                .await?;
+            QueryService::with_media_settings(
+                ctx.pool.clone(),
+                ctx.thumb_dir.clone(),
+                media_settings,
+            )
+            .batch_remove_tags(&payload.asset_ids, payload.tag_id)
+            .await?;
         }
         event_type::ASSET_TAGS_REMOVED => {
             let payload: TagsRevert = serde_json::from_str(revert)?;
-            QueryService::with_media_settings(ctx.pool.clone(), ctx.thumb_dir.clone(), media_settings)
-                .batch_append_tags(&payload.asset_ids, payload.tag_id)
-                .await?;
+            QueryService::with_media_settings(
+                ctx.pool.clone(),
+                ctx.thumb_dir.clone(),
+                media_settings,
+            )
+            .batch_append_tags(&payload.asset_ids, payload.tag_id)
+            .await?;
         }
         other => {
             return Err(AppError::InvalidInput(format!(
@@ -96,8 +110,8 @@ pub async fn undo_activity(ctx: &UndoContext, activity_id: i64) -> Result<i64> {
         payload_json: json!({ "undone_activity_id": activity_id }).to_string(),
         revert_json: None,
     };
-    let undo_id = recorder.append(undo_event).await?;
     let mut tx = ctx.pool.begin().await?;
+    let undo_id = recorder.append_in_tx(&mut tx, undo_event).await?;
     recorder
         .repo()
         .mark_undone(&mut tx, activity_id, undo_id)
@@ -123,10 +137,39 @@ struct SoftDeleteRevert {
     asset_ids: Vec<i64>,
 }
 
+#[derive(Clone, Deserialize)]
+struct RestoreRevertItem {
+    asset_id: i64,
+    deleted_at: i64,
+}
+
 #[derive(Deserialize)]
 struct RestoreRevert {
-    asset_ids: Vec<i64>,
-    deleted_at: i64,
+    asset_ids: Option<Vec<i64>>,
+    deleted_at: Option<i64>,
+    items: Option<Vec<RestoreRevertItem>>,
+}
+
+impl RestoreRevert {
+    fn items(&self) -> Result<Vec<RestoreRevertItem>> {
+        if let Some(items) = &self.items {
+            return Ok(items.clone());
+        }
+        let asset_ids = self
+            .asset_ids
+            .clone()
+            .ok_or_else(|| AppError::InvalidInput("invalid restore revert".into()))?;
+        let deleted_at = self
+            .deleted_at
+            .ok_or_else(|| AppError::InvalidInput("invalid restore revert".into()))?;
+        Ok(asset_ids
+            .into_iter()
+            .map(|asset_id| RestoreRevertItem {
+                asset_id,
+                deleted_at,
+            })
+            .collect())
+    }
 }
 
 #[derive(Deserialize)]
@@ -162,7 +205,10 @@ mod tests {
         )
         .unwrap();
         let library = LibraryService::new(pool.clone(), workspace_dir.to_path_buf());
-        let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
+        let root = library
+            .add_local_root(photos.to_str().unwrap())
+            .await
+            .unwrap();
         ScanService::new(pool.clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
@@ -207,9 +253,7 @@ mod tests {
                 subject_key: None,
                 summary: None,
                 payload_json: "{}".into(),
-                revert_json: Some(
-                    serde_json::json!({ "asset_ids": [asset_id] }).to_string(),
-                ),
+                revert_json: Some(serde_json::json!({ "asset_ids": [asset_id] }).to_string()),
             })
             .await
             .unwrap();
@@ -268,16 +312,17 @@ mod tests {
                 subject_key: None,
                 summary: None,
                 payload_json: "{}".into(),
-                revert_json: Some(
-                    serde_json::json!({ "asset_ids": [asset_id] }).to_string(),
-                ),
+                revert_json: Some(serde_json::json!({ "asset_ids": [asset_id] }).to_string()),
             })
             .await
             .unwrap();
         undo_activity(&undo_ctx(pool.clone(), thumb_dir), activity_id)
             .await
             .unwrap();
-        let asset = AssetRepo::new(pool.clone()).get_asset(asset_id).await.unwrap();
+        let asset = AssetRepo::new(pool.clone())
+            .get_asset(asset_id)
+            .await
+            .unwrap();
         assert!(asset.deleted_at.is_none());
     }
 
@@ -364,7 +409,10 @@ mod tests {
         let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
         let tag_repo = TagRepo::new(pool.clone());
         let tag_id = tag_repo.create_tag("trip", None, None).await.unwrap();
-        tag_repo.append_tag_id_to_assets(&[asset_id], tag_id).await.unwrap();
+        tag_repo
+            .append_tag_id_to_assets(&[asset_id], tag_id)
+            .await
+            .unwrap();
         let recorder = ActivityRecorder::new(pool.clone());
         let activity_id = recorder
             .append(ActivityInput {
@@ -398,12 +446,7 @@ mod tests {
         let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
         let query = QueryService::new(pool.clone(), thumb_dir.clone());
         query
-            .apply_meta_patch(
-                asset_id,
-                AssetMetaPatch {
-                    rating: Some(5),
-                },
-            )
+            .apply_meta_patch(asset_id, AssetMetaPatch { rating: Some(5) })
             .await
             .unwrap();
         let recorder = ActivityRecorder::new(pool.clone());
@@ -513,9 +556,7 @@ mod tests {
                 subject_key: None,
                 summary: None,
                 payload_json: "{}".into(),
-                revert_json: Some(
-                    serde_json::json!({ "asset_ids": [asset_id] }).to_string(),
-                ),
+                revert_json: Some(serde_json::json!({ "asset_ids": [asset_id] }).to_string()),
             })
             .await
             .unwrap();
@@ -548,9 +589,7 @@ mod tests {
                 subject_key: None,
                 summary: None,
                 payload_json: "{}".into(),
-                revert_json: Some(
-                    serde_json::json!({ "asset_ids": [asset_id] }).to_string(),
-                ),
+                revert_json: Some(serde_json::json!({ "asset_ids": [asset_id] }).to_string()),
             })
             .await
             .unwrap();
@@ -687,9 +726,7 @@ mod tests {
                 subject_key: None,
                 summary: None,
                 payload_json: "{}".into(),
-                revert_json: Some(
-                    serde_json::json!({ "asset_ids": [asset_id] }).to_string(),
-                ),
+                revert_json: Some(serde_json::json!({ "asset_ids": [asset_id] }).to_string()),
             })
             .await
             .unwrap();

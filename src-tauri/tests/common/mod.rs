@@ -51,9 +51,7 @@ pub async fn wait_for_scan(
 ) -> ScanProgressEvent {
     let deadline = tokio::time::Instant::now() + timeout;
     loop {
-        let status = get_scan_status(state.clone())
-            .await
-            .expect("scan status");
+        let status = get_scan_status(state.clone()).await.expect("scan status");
         if status.stage == "done" || status.stage == "error" {
             return status;
         }
@@ -115,12 +113,9 @@ pub async fn seed_scanned_asset(
 
     let state = fixture.state();
     let handle = fixture.handle();
-    let root = add_root(
-        photos_dir.to_string_lossy().to_string(),
-        state.clone(),
-    )
-    .await
-    .expect("add root");
+    let root = add_root(photos_dir.to_string_lossy().to_string(), state.clone())
+        .await
+        .expect("add root");
 
     start_scan(root.id, handle, state.clone())
         .await
@@ -145,4 +140,42 @@ pub async fn seed_scanned_asset(
         .map(|item| item.id)
         .expect("seeded asset");
     (root.id, asset_id)
+}
+
+pub async fn seed_extra_asset(
+    fixture: &TauriFixture,
+    photos_dir: &Path,
+    root_id: i64,
+    file_name: &str,
+) -> i64 {
+    std::fs::write(
+        photos_dir.join(file_name),
+        include_bytes!("../fixtures/minimal.jpg"),
+    )
+    .unwrap();
+
+    let state = fixture.state();
+    let handle = fixture.handle();
+    start_scan(root_id, handle, state.clone())
+        .await
+        .expect("start scan");
+    let status = wait_for_scan(state.clone(), Duration::from_secs(30)).await;
+    assert_eq!(status.stage, "done");
+    wait_for_jobs_idle(state.clone(), Duration::from_secs(30)).await;
+
+    let listed = query_assets(
+        AssetFilter::default(),
+        Some("date:desc".into()),
+        None,
+        None,
+        state.clone(),
+    )
+    .await
+    .expect("query assets");
+    listed
+        .items
+        .iter()
+        .find(|item| item.file_name == file_name)
+        .map(|item| item.id)
+        .expect("seeded asset")
 }

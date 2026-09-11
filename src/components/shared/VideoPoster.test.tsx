@@ -21,6 +21,17 @@ describe("VideoPoster", () => {
     expect(video.currentTime).toBe(0.001);
   });
 
+  it("skips seeking when current time is already set", () => {
+    render(<VideoPoster src="/tmp/poster.mp4" />);
+    const video = document.querySelector("video") as HTMLVideoElement;
+    Object.defineProperty(video, "currentTime", {
+      writable: true,
+      value: 0.5,
+    });
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(0.5);
+  });
+
   it("does not seek again after first metadata load", () => {
     render(<VideoPoster src="/tmp/poster.mp4" />);
     const video = document.querySelector("video") as HTMLVideoElement;

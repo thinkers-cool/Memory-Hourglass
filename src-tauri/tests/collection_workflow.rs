@@ -1,5 +1,5 @@
-use memhg_lib::collection::CollectionRepo;
 use memhg_lib::catalog::Catalog;
+use memhg_lib::collection::CollectionRepo;
 use memhg_lib::query::AssetFilter;
 use tempfile::tempdir;
 
@@ -14,7 +14,10 @@ async fn smart_collection_roundtrip() {
         kind: Some("image".into()),
         ..Default::default()
     };
-    let saved = collection.save_smart_collection("favorites", &filter).await.unwrap();
+    let saved = collection
+        .save_smart_collection("favorites", &filter)
+        .await
+        .unwrap();
     assert_eq!(saved.name, "favorites");
 
     let loaded = collection.get_smart_collection(saved.id).await.unwrap();

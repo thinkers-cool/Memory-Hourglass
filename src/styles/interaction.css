@@ -1,31 +1,99 @@
 [data-theme] {
-  --mem-hover: color-mix(in oklch, var(--color-base-content) 6%, var(--color-base-200));
-  --mem-hover-strong: color-mix(in oklch, var(--color-base-content) 10%, var(--color-base-200));
-  --mem-selected: color-mix(in oklch, var(--color-primary) 14%, var(--color-base-200));
-  --mem-selected-strong: color-mix(in oklch, var(--color-primary) 22%, var(--color-base-200));
-  --mem-selected-subtle: color-mix(in oklch, var(--color-primary) 8%, var(--color-base-200));
-  --mem-selected-border: color-mix(in oklch, var(--color-primary) 28%, transparent);
+  --mem-hover: color-mix(
+    in oklch,
+    var(--color-base-content) 6%,
+    var(--color-base-200)
+  );
+  --mem-hover-strong: color-mix(
+    in oklch,
+    var(--color-base-content) 10%,
+    var(--color-base-200)
+  );
+  --mem-selected: color-mix(
+    in oklch,
+    var(--color-primary) 14%,
+    var(--color-base-200)
+  );
+  --mem-selected-strong: color-mix(
+    in oklch,
+    var(--color-primary) 22%,
+    var(--color-base-200)
+  );
+  --mem-selected-subtle: color-mix(
+    in oklch,
+    var(--color-primary) 8%,
+    var(--color-base-200)
+  );
+  --mem-selected-border: color-mix(
+    in oklch,
+    var(--color-primary) 28%,
+    transparent
+  );
   --mem-control-bg: color-mix(in oklch, var(--color-base-100) 78%, transparent);
-  --mem-control-border: color-mix(in oklch, var(--color-base-content) 12%, transparent);
-  --mem-inset: color-mix(in oklch, var(--color-base-300) 65%, var(--color-base-200));
-  --mem-inset-strong: color-mix(in oklch, var(--color-base-300) 85%, var(--color-base-200));
-  --mem-border-subtle: color-mix(in oklch, var(--color-base-content) 6%, transparent);
+  --mem-control-border: color-mix(
+    in oklch,
+    var(--color-base-content) 12%,
+    transparent
+  );
+  --mem-inset: color-mix(
+    in oklch,
+    var(--color-base-300) 65%,
+    var(--color-base-200)
+  );
+  --mem-inset-strong: color-mix(
+    in oklch,
+    var(--color-base-300) 85%,
+    var(--color-base-200)
+  );
+  --mem-border-subtle: color-mix(
+    in oklch,
+    var(--color-base-content) 6%,
+    transparent
+  );
   --mem-border: color-mix(in oklch, var(--color-base-content) 12%, transparent);
-  --mem-badge-idle: color-mix(in oklch, var(--color-base-300) 82%, var(--color-base-200));
+  --mem-badge-idle: color-mix(
+    in oklch,
+    var(--color-base-300) 82%,
+    var(--color-base-200)
+  );
   --mem-badge-hover: var(--color-base-300);
   --mem-danger-hover: color-mix(in oklch, var(--color-error) 12%, transparent);
   --mem-danger-text: color-mix(in oklch, var(--color-error) 80%, transparent);
-  --mem-ring-hover: color-mix(in oklch, var(--color-base-content) 22%, transparent);
-  --mem-text-secondary: color-mix(in oklch, var(--color-base-content) 90%, transparent);
+  --mem-ring-hover: color-mix(
+    in oklch,
+    var(--color-base-content) 22%,
+    transparent
+  );
+  --mem-text-secondary: color-mix(
+    in oklch,
+    var(--color-base-content) 90%,
+    transparent
+  );
   --mem-text-tertiary: var(
     --color-content-faint,
     color-mix(in oklch, var(--color-base-content) 45%, transparent)
   );
-  --mem-text-quaternary: color-mix(in oklch, var(--color-base-content) 28%, transparent);
-  --mem-placeholder: color-mix(in oklch, var(--color-base-content) 10%, transparent);
-  --mem-split-idle: color-mix(in oklch, var(--color-base-content) 5%, transparent);
+  --mem-text-quaternary: color-mix(
+    in oklch,
+    var(--color-base-content) 28%,
+    transparent
+  );
+  --mem-placeholder: color-mix(
+    in oklch,
+    var(--color-base-content) 10%,
+    transparent
+  );
+  --mem-split-idle: color-mix(
+    in oklch,
+    var(--color-base-content) 5%,
+    transparent
+  );
   --mem-split-hover: color-mix(in oklch, var(--color-primary) 30%, transparent);
-  --mem-split-active: color-mix(in oklch, var(--color-primary) 50%, transparent);
+  --mem-split-active: color-mix(
+    in oklch,
+    var(--color-primary) 50%,
+    transparent
+  );
   --mem-canvas-bg: var(--mem-surface-panel-bg, var(--color-base-200));
   --mem-canvas-pattern: radial-gradient(
     color-mix(in oklch, var(--color-base-content) 5%, transparent) 1px,
@@ -71,9 +139,17 @@
 
 .btn.btn-ghost.btn-interactive:not(:disabled):not(.btn-disabled):hover {
   background-color: var(--mem-selected-subtle);
-  border-color: color-mix(in oklch, var(--mem-selected-border) 65%, transparent);
+  border-color: color-mix(
+    in oklch,
+    var(--mem-selected-border) 65%,
+    transparent
+  );
   --btn-bg: var(--mem-selected-subtle);
-  --btn-border: color-mix(in oklch, var(--mem-selected-border) 65%, transparent);
+  --btn-border: color-mix(
+    in oklch,
+    var(--mem-selected-border) 65%,
+    transparent
+  );
 }
 
 .btn.btn-ghost.btn-interactive.text-danger-text:hover,

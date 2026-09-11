@@ -138,7 +138,7 @@ describe("AssetGridCard", () => {
         onOpenFullView={vi.fn()}
       />,
     );
-    expect(screen.getByText("missing")).toBeInTheDocument();
+    expect(screen.getByText("Missing")).toBeInTheDocument();
 
     rerender(
       <AssetGridCard
@@ -148,7 +148,7 @@ describe("AssetGridCard", () => {
         onOpenFullView={vi.fn()}
       />,
     );
-    expect(screen.getByText("new")).toBeInTheDocument();
+    expect(screen.getByText("New")).toBeInTheDocument();
 
     rerender(
       <AssetGridCard
@@ -158,11 +158,14 @@ describe("AssetGridCard", () => {
         onOpenFullView={vi.fn()}
       />,
     );
-    expect(screen.getByText("modified")).toBeInTheDocument();
+    expect(screen.getByText("Modified")).toBeInTheDocument();
 
     rerender(
       <AssetGridCard
-        card={{ ...sampleCard, sync_state: "unknown" as typeof sampleCard.sync_state }}
+        card={{
+          ...sampleCard,
+          sync_state: "unknown" as typeof sampleCard.sync_state,
+        }}
         selected={false}
         onSelect={vi.fn()}
         onOpenFullView={vi.fn()}

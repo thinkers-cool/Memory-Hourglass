@@ -28,6 +28,8 @@ describe("smbAddress", () => {
   });
 
   it("formats smb urls", () => {
-    expect(formatSmbAddress("nas.local", "photos")).toBe("smb://nas.local/photos");
+    expect(formatSmbAddress("nas.local", "photos")).toBe(
+      "smb://nas.local/photos",
+    );
   });
 });

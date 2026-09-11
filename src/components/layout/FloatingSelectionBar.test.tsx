@@ -48,17 +48,18 @@ describe("FloatingSelectionBar", () => {
     const user = userEvent.setup();
     const props = renderBar();
     expect(screen.getByText("2 selected")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Rate 4 stars" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(
+      screen.getByRole("button", { name: "Rate 4 stars" }),
+    ).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByRole("button", { name: /Compare/i }));
     expect(props.onCompare).toHaveBeenCalledTimes(1);
   });
 
   it("hides compare when only one item is selected", () => {
     renderBar({ count: 1 });
-    expect(screen.queryByRole("button", { name: /Compare/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Compare/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("calls export, delete, and clear in library mode", async () => {
@@ -79,13 +80,19 @@ describe("FloatingSelectionBar", () => {
     await user.click(screen.getByRole("button", { name: /Purge/i }));
     expect(props.onRestore).toHaveBeenCalledTimes(1);
     expect(props.onPurge).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("button", { name: /Delete/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Delete/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("hides purge in trash mode when purge is disabled", () => {
     renderBar({ mode: "trash", purgeEnabled: false });
-    expect(screen.getByRole("button", { name: /Restore/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Purge/i })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Restore/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Purge/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("disables trash actions when busy", () => {

@@ -221,7 +221,9 @@ describe("useLibraryQuery", () => {
     const setDetail = vi.fn();
     const setNotification = vi.fn();
 
-    renderHook(() => useLibraryQuery(selectedIdRef, setDetail, setNotification));
+    renderHook(() =>
+      useLibraryQuery(selectedIdRef, setDetail, setNotification),
+    );
     await waitFor(() => expect(onScanProgress).toHaveBeenCalled());
 
     queryAssets.mockClear();

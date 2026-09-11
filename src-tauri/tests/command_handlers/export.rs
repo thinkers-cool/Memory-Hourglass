@@ -1,7 +1,5 @@
 use memhg_lib::catalog::models::ExportOptions;
-use memhg_lib::commands::export::{
-    get_export_status, list_export_jobs, start_export,
-};
+use memhg_lib::commands::export::{get_export_status, list_export_jobs, start_export};
 use std::time::Duration;
 
 use crate::common::{seed_scanned_asset, wait_for_export_idle, TauriFixture};
@@ -56,9 +54,7 @@ async fn export_command_reports_all_failures() {
     .await
     .expect("start export");
     for _ in 0..100 {
-        let status = get_export_status(state.clone())
-            .await
-            .expect("status");
+        let status = get_export_status(state.clone()).await.expect("status");
         if status.status == "failed" || status.status == "completed" {
             return;
         }

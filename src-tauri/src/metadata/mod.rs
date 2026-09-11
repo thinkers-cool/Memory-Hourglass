@@ -1,9 +1,7 @@
 mod policy;
 mod sidecar;
 
-pub use policy::{
-    metadata_context_for_asset, MetadataContext, MetadataPolicy,
-};
+pub use policy::{metadata_context_for_asset, MetadataContext, MetadataPolicy};
 pub use sidecar::{workspace_sidecar_path, xmp_sidecar_path};
 
 use crate::catalog::models::AssetMeta;
@@ -33,9 +31,7 @@ impl MetadataService {
         }
         let path = &ctx.media_path;
         let et = ExifTool::new();
-        let embedded = et
-            .extract_info(path.to_string_lossy().as_ref())
-            .ok();
+        let embedded = et.extract_info(path.to_string_lossy().as_ref()).ok();
 
         let mut merged: Option<Vec<Tag>> = embedded;
 
@@ -66,9 +62,10 @@ impl MetadataService {
         let tags = match merged {
             Some(tags) if !tags.is_empty() => tags,
             _ => {
-                return Err(AppError::Metadata(
-                    format!("no metadata found for {}", path.display()),
-                ));
+                return Err(AppError::Metadata(format!(
+                    "no metadata found for {}",
+                    path.display()
+                )));
             }
         };
 
@@ -119,8 +116,7 @@ impl MetadataService {
         apply(&mut et);
 
         let sidecar = ctx.write_sidecar_path();
-        if ctx.policy == MetadataPolicy::WorkspaceSidecar
-            || uses_xmp_sidecar_write(&ctx.media_path)
+        if ctx.policy == MetadataPolicy::WorkspaceSidecar || uses_xmp_sidecar_write(&ctx.media_path)
         {
             prepare_xmp_sidecar(&sidecar)?;
             et.write_info(
@@ -132,8 +128,11 @@ impl MetadataService {
         }
 
         let path = &ctx.media_path;
-        et.write_info(path.to_string_lossy().as_ref(), path.to_string_lossy().as_ref())
-            .map_err(|e| AppError::Metadata(e.to_string()))?;
+        et.write_info(
+            path.to_string_lossy().as_ref(),
+            path.to_string_lossy().as_ref(),
+        )
+        .map_err(|e| AppError::Metadata(e.to_string()))?;
         Ok(())
     }
 
@@ -150,8 +149,12 @@ impl MetadataService {
 }
 
 fn prepare_xmp_sidecar(sidecar: &std::path::Path) -> Result<()> {
-    if let Some(parent) = sidecar.parent() { std::fs::create_dir_all(parent)?; }
-    if !sidecar.exists() { std::fs::write(sidecar, MINIMAL_XMP)?; }
+    if let Some(parent) = sidecar.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    if !sidecar.exists() {
+        std::fs::write(sidecar, MINIMAL_XMP)?;
+    }
     Ok(())
 }
 
@@ -248,7 +251,11 @@ fn gps_coordinate(tags: &[Tag], coord: &str, ref_tag: &str, negative_ref: char) 
         .chars()
         .next()
         .is_some_and(|c| c.eq_ignore_ascii_case(&negative_ref));
-    Some(if negative { -decimal.abs() } else { decimal.abs() })
+    Some(if negative {
+        -decimal.abs()
+    } else {
+        decimal.abs()
+    })
 }
 
 fn gps_raw_to_decimal(value: &Value) -> Option<f64> {
@@ -367,8 +374,7 @@ mod tests {
         let file = NamedTempFile::new().unwrap();
         write_minimal_jpeg(file.path());
         let ctx = in_place_ctx(file.path());
-        MetadataService::write_keywords(&ctx, &["travel".into(), "family".into()])
-            .unwrap();
+        MetadataService::write_keywords(&ctx, &["travel".into(), "family".into()]).unwrap();
         let (meta, _) = MetadataService::read_meta(&ctx).unwrap();
         let keywords = meta.keywords_json.as_deref().unwrap();
         assert!(keywords.contains("travel"));
@@ -563,12 +569,7 @@ mod tests {
                 "",
             ),
             gps_tag("GPSLongitudeRef", "GPS", Value::String("W".into()), "W"),
-            gps_tag(
-                "GPSLongitude",
-                "GPS",
-                Value::F64(45.5),
-                "45.5",
-            ),
+            gps_tag("GPSLongitude", "GPS", Value::F64(45.5), "45.5"),
         ];
         let lat = gps_coordinate(&tags, "GPSLatitude", "GPSLatitudeRef", 'S').unwrap();
         let lon = gps_coordinate(&tags, "GPSLongitude", "GPSLongitudeRef", 'W').unwrap();
@@ -632,8 +633,7 @@ mod tests {
         let file = NamedTempFile::new().unwrap();
         write_minimal_jpeg(file.path());
         let ctx = in_place_ctx(file.path());
-        MetadataService::write_keywords(&ctx, &["keep".into(), "".into(), "also".into()])
-            .unwrap();
+        MetadataService::write_keywords(&ctx, &["keep".into(), "".into(), "also".into()]).unwrap();
         let (meta, _) = MetadataService::read_meta(&ctx).unwrap();
         let keywords = meta.keywords_json.as_deref().unwrap();
         assert!(keywords.contains("keep"));
@@ -677,12 +677,7 @@ mod tests {
         let sidecar = workspace_sidecar_path(&xmp_dir, 1, "photo.jpg");
         std::fs::create_dir_all(sidecar.parent().unwrap()).unwrap();
         std::fs::write(&sidecar, MINIMAL_XMP).unwrap();
-        let ctx = MetadataContext::workspace_sidecar(
-            photo,
-            1,
-            "photo.jpg".into(),
-            xmp_dir,
-        );
+        let ctx = MetadataContext::workspace_sidecar(photo, 1, "photo.jpg".into(), xmp_dir);
         MetadataService::write_rating(&ctx, 4).unwrap();
     }
 
@@ -741,12 +736,7 @@ mod tests {
         let photo = dir.path().join("photo.jpg");
         write_minimal_jpeg(&photo);
         let xmp_dir = dir.path().join("nested/xmp/store");
-        let ctx = MetadataContext::workspace_sidecar(
-            photo,
-            1,
-            "photo.jpg".into(),
-            xmp_dir.clone(),
-        );
+        let ctx = MetadataContext::workspace_sidecar(photo, 1, "photo.jpg".into(), xmp_dir.clone());
         MetadataService::write_rating(&ctx, 5).unwrap();
         assert!(workspace_sidecar_path(&xmp_dir, 1, "photo.jpg").is_file());
     }
@@ -790,8 +780,7 @@ mod tests {
             xmp_dir.clone(),
         );
         MetadataService::write_rating(&ctx, 3).unwrap();
-        MetadataService::write_keywords(&in_place_ctx(&photo), &["colocated".into()])
-            .unwrap();
+        MetadataService::write_keywords(&in_place_ctx(&photo), &["colocated".into()]).unwrap();
         let (meta, _) = MetadataService::read_meta(&ctx).unwrap();
         assert_eq!(meta.rating, Some(3));
         let keywords = meta.keywords_json.as_deref().unwrap();
@@ -830,7 +819,12 @@ mod tests {
 
     #[test]
     fn lens_meta_uses_lens_tag_when_lens_model_missing() {
-        let tags = vec![gps_tag("Lens", "EXIF", Value::String("50mm".into()), "50mm")];
+        let tags = vec![gps_tag(
+            "Lens",
+            "EXIF",
+            Value::String("50mm".into()),
+            "50mm",
+        )];
         let lens = first_tag_value(&tags, "LensModel").or_else(|| first_tag_value(&tags, "Lens"));
         assert_eq!(lens.as_deref(), Some("50mm"));
     }
@@ -864,12 +858,7 @@ mod tests {
         std::fs::create_dir_all(sidecar.parent().unwrap()).unwrap();
         std::fs::write(&sidecar, MINIMAL_XMP).unwrap();
         std::fs::set_permissions(&sidecar, std::fs::Permissions::from_mode(0o000)).unwrap();
-        let ctx = MetadataContext::workspace_sidecar(
-            photo,
-            1,
-            "photo.jpg".into(),
-            xmp_dir,
-        );
+        let ctx = MetadataContext::workspace_sidecar(photo, 1, "photo.jpg".into(), xmp_dir);
         let err = MetadataService::read_meta(&ctx).unwrap_err();
         std::fs::set_permissions(&sidecar, std::fs::Permissions::from_mode(0o644)).unwrap();
         assert!(!err.to_string().is_empty());
@@ -895,11 +884,9 @@ mod tests {
     #[test]
     fn gps_raw_to_decimal_requires_three_list_items() {
         assert!(gps_raw_to_decimal(&Value::List(vec![Value::F64(1.0)])).is_none());
-        assert!(gps_raw_to_decimal(&Value::List(vec![
-            Value::F64(1.0),
-            Value::F64(2.0),
-        ]))
-        .is_none());
+        assert!(
+            gps_raw_to_decimal(&Value::List(vec![Value::F64(1.0), Value::F64(2.0),])).is_none()
+        );
     }
 
     #[cfg(unix)]
@@ -921,13 +908,7 @@ mod tests {
 
     #[test]
     fn gps_coordinate_returns_none_without_reference_tag() {
-        let tags = vec![gps_tag(
-            "GPSLatitude",
-            "GPS",
-            Value::F64(12.5),
-            "12.5",
-        )];
+        let tags = vec![gps_tag("GPSLatitude", "GPS", Value::F64(12.5), "12.5")];
         assert!(gps_coordinate(&tags, "GPSLatitude", "GPSLatitudeRef", 'S').is_none());
     }
-
 }

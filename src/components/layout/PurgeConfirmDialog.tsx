@@ -37,13 +37,17 @@ export function PurgeConfirmDialog({
     <dialog open className="modal modal-open">
       <div className="modal-box surface-card max-w-md">
         <h3 className="font-semibold text-lg mb-2">
-          {itemCount > 1 ? t("dialogs:purge.titleItems") : t("dialogs:purge.titleFile")}
+          {itemCount > 1
+            ? t("dialogs:purge.titleItems")
+            : t("dialogs:purge.titleFile")}
         </h3>
         <p className="text-sm text-content-muted mb-4">
           {t("dialogs:purge.message", { target: targetLabel })}
         </p>
         <fieldset className="fieldset">
-          <legend className="fieldset-legend">{t("dialogs:purge.confirmPrompt")}</legend>
+          <legend className="fieldset-legend">
+            {t("dialogs:purge.confirmPrompt")}
+          </legend>
           <input
             type="text"
             className={`${INPUT_CONTROL_FULL_CLASS} w-full`}
@@ -57,7 +61,11 @@ export function PurgeConfirmDialog({
           />
         </fieldset>
         <div className="modal-action">
-          <button type="button" className="btn btn-ghost btn-interactive btn-sm" onClick={onClose}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-interactive btn-sm"
+            onClick={onClose}
+          >
             {t("common:action.cancel")}
           </button>
           <button
@@ -71,7 +79,9 @@ export function PurgeConfirmDialog({
         </div>
       </div>
       <form method="dialog" className="modal-backdrop">
-        <button type="button" className="sr-only" onClick={onClose}>{t("common:action.close")}</button>
+        <button type="button" className="sr-only" onClick={onClose}>
+          {t("common:action.close")}
+        </button>
       </form>
     </dialog>
   );

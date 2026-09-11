@@ -3,7 +3,10 @@ import { PhotoSlide } from "./PhotoSlide";
 import { VideoSlide } from "./VideoSlide";
 import { kenBurnsVariantForIndex } from "../../lib/slideshow/timing";
 import { layerStyle } from "../../lib/slideshow/transitions";
-import type { SlideshowIntervalMs, SlideshowTheme } from "../../lib/slideshow/types";
+import type {
+  SlideshowIntervalMs,
+  SlideshowTheme,
+} from "../../lib/slideshow/types";
 import type { AssetCard } from "../../types";
 
 function SlideLayer({
@@ -88,7 +91,8 @@ export function SlideStage({
 }) {
   const incoming = items[toIndex];
   const outgoing = fromIndex !== null ? items[fromIndex] : null;
-  const transitioning = fromIndex !== null && fromIndex !== toIndex && progress < 1;
+  const transitioning =
+    fromIndex !== null && fromIndex !== toIndex && progress < 1;
   const backdropCard = incoming ?? outgoing;
 
   if (!backdropCard) return null;

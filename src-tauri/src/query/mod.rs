@@ -2,57 +2,29 @@ use crate::catalog::models::{AssetCard, AssetDetail, AssetMetaPatch};
 use crate::catalog::repo::{AssetMetaRepo, AssetRepo, RawTagRepo, SourceRootRepo, TagRepo};
 use crate::dates::CAPTURE_AT_SQL;
 use crate::error::{AppError, Result};
-use crate::sort::{SortField, SortSpec};
 use crate::link::LinkService;
 use crate::metadata::{metadata_context_for_asset, MetadataContext, MetadataService};
-use crate::workspace::WorkspaceMediaSettings;
 use crate::query::display_path::resolve_display_path;
 use crate::scan::index_asset::index_asset_on_disk;
 use crate::scan::index_integrity::is_index_complete;
 use crate::scan::index_pipeline::{apply_index_output, IndexApplyInput};
+use crate::sort::SortSpec;
+use crate::workspace::WorkspaceMediaSettings;
 use serde::{Deserialize, Serialize};
 use sqlx::QueryBuilder;
 use sqlx::SqlitePool;
 use std::path::PathBuf;
 
 mod display_path;
+mod filter;
 mod metadata_refresh;
 pub(crate) mod tag_keywords;
 
+pub use filter::AssetFilter;
+
+use filter::{apply_deleted_clause, apply_filter, apply_sort, Row};
 use metadata_refresh::refresh_asset_after_metadata_write;
 use tag_keywords::sync_assets_tag_keywords;
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct AssetFilter {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub root_id: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rating_min: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sync_states: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub kind: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub camera: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub capture_from: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub capture_to: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tag_ids: Option<Vec<i64>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub album_ids: Option<Vec<i64>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub meta_search: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub has_gps: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub has_duplicate: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub asset_ids: Option<Vec<i64>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub deleted_only: Option<bool>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryResult {
@@ -150,9 +122,10 @@ impl QueryService {
             .into_iter()
             .map(|r| {
                 let abs = PathBuf::from(&r.root_path).join(&r.rel_path);
-                let thumb_path = r.thumb_key.as_ref().map(|k| {
-                    self.thumb_dir.join(k).to_string_lossy().to_string()
-                });
+                let thumb_path = r
+                    .thumb_key
+                    .as_ref()
+                    .map(|k| self.thumb_dir.join(k).to_string_lossy().to_string());
                 AssetCard {
                     id: r.id,
                     file_name: r.file_name,
@@ -192,11 +165,8 @@ impl QueryService {
             let prior_thumb_key = asset.thumb_key.clone();
             let abs_path_for_index = abs_path.clone();
             let thumb_dir = self.thumb_dir.clone();
-            let metadata_ctx = self.metadata_ctx(
-                asset.root_id,
-                &asset.rel_path,
-                abs_path_for_index.clone(),
-            );
+            let metadata_ctx =
+                self.metadata_ctx(asset.root_id, &asset.rel_path, abs_path_for_index.clone());
             let indexed = tokio::task::spawn_blocking(move || {
                 index_asset_on_disk(asset_id, &abs_path_for_index, &thumb_dir, &metadata_ctx)
             })
@@ -261,23 +231,18 @@ impl QueryService {
         self.get_detail(asset_id).await
     }
 
-    pub async fn batch_apply_meta(
-        &self,
-        asset_ids: &[i64],
-        patch: AssetMetaPatch,
-    ) -> Result<u64> {
+    pub async fn batch_apply_meta(&self, asset_ids: &[i64], patch: AssetMetaPatch) -> Result<u64> {
         for asset_id in asset_ids {
-            self.apply_meta_patch_inner(*asset_id, patch.clone()).await?;
+            self.apply_meta_patch_inner(*asset_id, patch.clone())
+                .await?;
         }
-        if !asset_ids.is_empty() { refresh_duplicate_index(&self.pool).await?; }
+        if !asset_ids.is_empty() {
+            refresh_duplicate_index(&self.pool).await?;
+        }
         Ok(asset_ids.len() as u64)
     }
 
-    async fn apply_meta_patch_inner(
-        &self,
-        asset_id: i64,
-        patch: AssetMetaPatch,
-    ) -> Result<()> {
+    async fn apply_meta_patch_inner(&self, asset_id: i64, patch: AssetMetaPatch) -> Result<()> {
         let assets = AssetRepo::new(self.pool.clone());
         let roots = SourceRootRepo::new(self.pool.clone());
 
@@ -286,7 +251,9 @@ impl QueryService {
         let abs_path = PathBuf::from(&root.path).join(&asset.rel_path);
 
         let metadata_ctx = self.metadata_ctx(asset.root_id, &asset.rel_path, abs_path.clone());
-        if let Some(rating) = patch.rating { MetadataService::write_rating(&metadata_ctx, rating)?; }
+        if let Some(rating) = patch.rating {
+            MetadataService::write_rating(&metadata_ctx, rating)?;
+        }
         refresh_asset_after_metadata_write(
             &self.pool,
             asset_id,
@@ -307,188 +274,18 @@ impl QueryService {
 
     pub async fn batch_remove_tags(&self, asset_ids: &[i64], tag_id: i64) -> Result<u64> {
         let tag_repo = TagRepo::new(self.pool.clone());
-        let updated = tag_repo.remove_tag_id_from_assets(asset_ids, tag_id).await?;
+        let updated = tag_repo
+            .remove_tag_id_from_assets(asset_ids, tag_id)
+            .await?;
         sync_assets_tag_keywords(&self.pool, asset_ids, &self.media_settings).await?;
         Ok(updated)
     }
 }
 
-fn escape_like(input: &str) -> String {
-    input
-        .replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
-}
-
-fn apply_sort(builder: &mut QueryBuilder<'_, sqlx::Sqlite>, field: SortField, desc: bool) {
-    let dir = if desc { "DESC" } else { "ASC" };
-    let tie = if desc { " DESC" } else { " ASC" };
-
-    builder.push(" ORDER BY ");
-    match field {
-        SortField::Name => {
-            builder.push("a.file_name ").push(dir);
-        }
-        SortField::Rating => {
-            builder
-                .push("m.rating ")
-                .push(dir)
-                .push(", a.id")
-                .push(tie);
-        }
-        SortField::Path => {
-            builder.push("a.rel_path ").push(dir);
-        }
-        SortField::Date => {
-            builder
-                .push(CAPTURE_AT_SQL)
-                .push(" ")
-                .push(dir)
-                .push(", a.id")
-                .push(tie);
-        }
-    }
-}
-
 async fn refresh_duplicate_index(pool: &sqlx::SqlitePool) -> Result<()> {
-    LinkService::new(pool.clone()).refresh_duplicate_index().await
-}
-
-fn apply_sync_states_filter(
-    builder: &mut QueryBuilder<'_, sqlx::Sqlite>,
-    sync_states: &[String],
-) {
-    builder.push(" AND a.sync_state IN (");
-    for (index, state) in sync_states.iter().enumerate() {
-        if index > 0 {
-            builder.push(", ");
-        }
-        builder.push_bind(state.clone());
-    }
-    builder.push(")");
-}
-
-fn apply_album_ids_filter(builder: &mut QueryBuilder<'_, sqlx::Sqlite>, album_ids: &[i64]) {
-    builder.push(" AND EXISTS (SELECT 1 FROM album_item ai WHERE ai.asset_id = a.id AND ai.album_id IN (");
-    for (index, album_id) in album_ids.iter().enumerate() {
-        if index > 0 {
-            builder.push(", ");
-        }
-        builder.push_bind(*album_id);
-    }
-    builder.push("))");
-}
-
-fn apply_deleted_clause(builder: &mut QueryBuilder<'_, sqlx::Sqlite>, filter: &AssetFilter) {
-    if filter.deleted_only == Some(true) {
-        builder.push("a.deleted_at IS NOT NULL");
-    } else {
-        builder.push("a.deleted_at IS NULL");
-    }
-}
-
-fn apply_filter(builder: &mut QueryBuilder<'_, sqlx::Sqlite>, filter: &AssetFilter) {
-    if let Some(root_id) = filter.root_id {
-        builder.push(" AND a.root_id = ").push_bind(root_id);
-    }
-    if let Some(rating_min) = filter.rating_min {
-        builder.push(" AND m.rating >= ").push_bind(rating_min);
-    }
-    if let Some(sync_states) = filter.sync_states.clone() {
-        if !sync_states.is_empty() { apply_sync_states_filter(builder, &sync_states); }
-    }
-    if let Some(kind) = filter.kind.clone() {
-        builder.push(" AND a.kind = ").push_bind(kind);
-    }
-    if let Some(camera) = filter.camera.clone() {
-        let pattern = format!("%{}%", camera);
-        builder.push(" AND m.camera LIKE ").push_bind(pattern);
-    }
-    if filter.has_gps == Some(true) {
-        builder.push(" AND m.latitude IS NOT NULL AND m.longitude IS NOT NULL");
-    }
-    if filter.has_duplicate == Some(true) {
-        builder.push(" AND a.has_duplicate = 1");
-    }
-    if let Some(from) = filter.capture_from {
-        builder
-            .push(" AND ")
-            .push(CAPTURE_AT_SQL)
-            .push(" >= ")
-            .push_bind(from);
-    }
-    if let Some(to) = filter.capture_to {
-        builder
-            .push(" AND ")
-            .push(CAPTURE_AT_SQL)
-            .push(" <= ")
-            .push_bind(to);
-    }
-    if let Some(tag_ids) = filter.tag_ids.clone() {
-        if !tag_ids.is_empty() {
-            builder.push(" AND (");
-            for (i, tag_id) in tag_ids.iter().enumerate() {
-                if i > 0 {
-                    builder.push(" OR ");
-                }
-                builder
-                    .push("EXISTS (SELECT 1 FROM asset_tag at WHERE at.asset_id = a.id AND at.tag_id = ")
-                    .push_bind(*tag_id)
-                    .push(")");
-            }
-            builder.push(")");
-        }
-    }
-    if let Some(album_ids) = filter.album_ids.clone() {
-        if !album_ids.is_empty() { apply_album_ids_filter(builder, &album_ids); }
-    }
-    if let Some(query) = filter.meta_search.as_ref() {
-        let trimmed = query.trim();
-        if !trimmed.is_empty() {
-            let pattern = format!("%{}%", escape_like(trimmed));
-            builder
-                .push(" AND (EXISTS (SELECT 1 FROM asset_raw_tag rt WHERE rt.asset_id = a.id AND (rt.name LIKE ")
-                .push_bind(pattern.clone())
-                .push(" ESCAPE '\\' OR rt.value LIKE ")
-                .push_bind(pattern.clone())
-                .push(" ESCAPE '\\')) OR a.file_name LIKE ")
-                .push_bind(pattern.clone())
-                .push(" ESCAPE '\\' OR m.camera LIKE ")
-                .push_bind(pattern.clone())
-                .push(" ESCAPE '\\' OR m.lens LIKE ")
-                .push_bind(pattern)
-                .push(" ESCAPE '\\')");
-        }
-    }
-    if let Some(ids) = filter.asset_ids.clone() {
-        if ids.is_empty() {
-            builder.push(" AND 1=0");
-        } else {
-            builder.push(" AND a.id IN (");
-            for (i, id) in ids.iter().enumerate() {
-                if i > 0 {
-                    builder.push(", ");
-                }
-                builder.push_bind(*id);
-            }
-            builder.push(")");
-        }
-    }
-}
-
-#[derive(sqlx::FromRow)]
-struct Row {
-    id: i64,
-    file_name: String,
-    ext: String,
-    kind: String,
-    capture_at: Option<i64>,
-    rating: Option<i64>,
-    sync_state: String,
-    thumb_key: Option<String>,
-    has_duplicate: i64,
-    root_path: String,
-    rel_path: String,
+    LinkService::new(pool.clone())
+        .refresh_duplicate_index()
+        .await
 }
 
 #[cfg(test)]
@@ -525,7 +322,11 @@ mod tests {
             .unwrap();
 
         let assets = AssetRepo::new(catalog.pool().clone());
-        let asset = assets.find_by_path(root.id, "high.jpg").await.unwrap().unwrap();
+        let asset = assets
+            .find_by_path(root.id, "high.jpg")
+            .await
+            .unwrap()
+            .unwrap();
         AssetMetaRepo::new(catalog.pool().clone())
             .upsert(&AssetMeta {
                 asset_id: asset.id,
@@ -584,8 +385,16 @@ mod tests {
             .unwrap();
 
         let assets = AssetRepo::new(catalog.pool().clone());
-        let clip = assets.find_by_path(root.id, "clip.mp4").await.unwrap().unwrap();
-        let dated = assets.find_by_path(root.id, "dated.jpg").await.unwrap().unwrap();
+        let clip = assets
+            .find_by_path(root.id, "clip.mp4")
+            .await
+            .unwrap()
+            .unwrap();
+        let dated = assets
+            .find_by_path(root.id, "dated.jpg")
+            .await
+            .unwrap()
+            .unwrap();
         let capture_at = 1_710_000_000i64;
         sqlx::query(
             "INSERT INTO asset_meta (asset_id, capture_at) VALUES (?, ?) ON CONFLICT(asset_id) DO UPDATE SET capture_at = excluded.capture_at",
@@ -648,12 +457,26 @@ mod tests {
             .unwrap();
 
         let assets = AssetRepo::new(catalog.pool().clone());
-        let one = assets.find_by_path(root.id, "one.jpg").await.unwrap().unwrap();
-        let two = assets.find_by_path(root.id, "two.jpg").await.unwrap().unwrap();
+        let one = assets
+            .find_by_path(root.id, "one.jpg")
+            .await
+            .unwrap()
+            .unwrap();
+        let two = assets
+            .find_by_path(root.id, "two.jpg")
+            .await
+            .unwrap()
+            .unwrap();
 
         let collection = CollectionRepo::new(catalog.pool().clone());
-        let album = collection.create_album("Trip", "date:desc", None).await.unwrap();
-        collection.set_album_items(album.id, &[one.id]).await.unwrap();
+        let album = collection
+            .create_album("Trip", "date:desc", None)
+            .await
+            .unwrap();
+        collection
+            .set_album_items(album.id, &[one.id])
+            .await
+            .unwrap();
 
         let query = QueryService::new(catalog.pool().clone(), thumb_dir);
         let filtered = query
@@ -762,8 +585,16 @@ mod tests {
             .unwrap();
 
         let assets = AssetRepo::new(catalog.pool().clone());
-        let alpha = assets.find_by_path(root.id, "alpha.jpg").await.unwrap().unwrap();
-        let beta = assets.find_by_path(root.id, "beta.jpg").await.unwrap().unwrap();
+        let alpha = assets
+            .find_by_path(root.id, "alpha.jpg")
+            .await
+            .unwrap()
+            .unwrap();
+        let beta = assets
+            .find_by_path(root.id, "beta.jpg")
+            .await
+            .unwrap()
+            .unwrap();
         AssetMetaRepo::new(catalog.pool().clone())
             .upsert(&AssetMeta {
                 asset_id: alpha.id,
@@ -804,7 +635,13 @@ mod tests {
             .unwrap();
         assert_eq!(filtered_count, 1);
 
-        for sort in ["name:asc", "name:desc", "rating:asc", "path:asc", "date:asc"] {
+        for sort in [
+            "name:asc",
+            "name:desc",
+            "rating:asc",
+            "path:asc",
+            "date:asc",
+        ] {
             let page = query
                 .query(&AssetFilter::default(), sort, 0, 10)
                 .await
@@ -974,22 +811,12 @@ mod tests {
 
         let query = QueryService::new(catalog.pool().clone(), thumb_dir);
         let count = query
-            .batch_apply_meta(
-                &[asset.id],
-                AssetMetaPatch {
-                    rating: Some(3),
-                },
-            )
+            .batch_apply_meta(&[asset.id], AssetMetaPatch { rating: Some(3) })
             .await
             .unwrap();
         assert_eq!(count, 1);
         query.batch_append_tags(&[asset.id], tag_id).await.unwrap();
         query.batch_remove_tags(&[asset.id], tag_id).await.unwrap();
-    }
-
-    #[test]
-    fn escape_like_escapes_wildcards() {
-        assert_eq!(escape_like("50%_x"), "50\\%\\_x");
     }
 
     #[tokio::test]
@@ -1015,7 +842,11 @@ mod tests {
             .await
             .unwrap();
         let assets = AssetRepo::new(catalog.pool().clone());
-        let asset = assets.find_by_path(root.id, "dup.jpg").await.unwrap().unwrap();
+        let asset = assets
+            .find_by_path(root.id, "dup.jpg")
+            .await
+            .unwrap()
+            .unwrap();
         AssetMetaRepo::new(catalog.pool().clone())
             .upsert(&AssetMeta {
                 asset_id: asset.id,
@@ -1112,16 +943,15 @@ mod tests {
             .await
             .unwrap();
         let assets = AssetRepo::new(catalog.pool().clone());
-        let asset = assets.find_by_path(root.id, "meta.jpg").await.unwrap().unwrap();
+        let asset = assets
+            .find_by_path(root.id, "meta.jpg")
+            .await
+            .unwrap()
+            .unwrap();
 
         let query = QueryService::new(catalog.pool().clone(), thumb_dir);
         query
-            .apply_meta_patch(
-                asset.id,
-                AssetMetaPatch {
-                    rating: Some(2),
-                },
-            )
+            .apply_meta_patch(asset.id, AssetMetaPatch { rating: Some(2) })
             .await
             .unwrap();
         let detail = query.get_detail(asset.id).await.unwrap();
@@ -1156,12 +986,7 @@ mod tests {
             .unwrap();
         let query = QueryService::new(catalog.pool().clone(), thumb_dir);
         let count = query
-            .batch_apply_meta(
-                &[asset.id],
-                AssetMetaPatch {
-                    rating: Some(4),
-                },
-            )
+            .batch_apply_meta(&[asset.id], AssetMetaPatch { rating: Some(4) })
             .await
             .unwrap();
         assert_eq!(count, 1);
@@ -1193,13 +1018,33 @@ mod tests {
             .await
             .unwrap();
         let assets = AssetRepo::new(catalog.pool().clone());
-        let alpha = assets.find_by_path(root.id, "alpha.jpg").await.unwrap().unwrap();
-        let beta = assets.find_by_path(root.id, "beta.jpg").await.unwrap().unwrap();
+        let alpha = assets
+            .find_by_path(root.id, "alpha.jpg")
+            .await
+            .unwrap()
+            .unwrap();
+        let beta = assets
+            .find_by_path(root.id, "beta.jpg")
+            .await
+            .unwrap()
+            .unwrap();
         let collection = CollectionRepo::new(catalog.pool().clone());
-        let album_a = collection.create_album("A", "date:desc", None).await.unwrap();
-        let album_b = collection.create_album("B", "date:desc", None).await.unwrap();
-        collection.set_album_items(album_a.id, &[alpha.id]).await.unwrap();
-        collection.set_album_items(album_b.id, &[beta.id]).await.unwrap();
+        let album_a = collection
+            .create_album("A", "date:desc", None)
+            .await
+            .unwrap();
+        let album_b = collection
+            .create_album("B", "date:desc", None)
+            .await
+            .unwrap();
+        collection
+            .set_album_items(album_a.id, &[alpha.id])
+            .await
+            .unwrap();
+        collection
+            .set_album_items(album_b.id, &[beta.id])
+            .await
+            .unwrap();
 
         let query = QueryService::new(catalog.pool().clone(), thumb_dir);
         let filtered = query
@@ -1239,8 +1084,14 @@ mod tests {
             .await
             .unwrap();
         let query = QueryService::new(catalog.pool().clone(), thumb_dir);
-        let page1 = query.query(&AssetFilter::default(), "date:desc", 0, 1).await.unwrap();
-        let page2 = query.query(&AssetFilter::default(), "date:desc", 1, 1).await.unwrap();
+        let page1 = query
+            .query(&AssetFilter::default(), "date:desc", 0, 1)
+            .await
+            .unwrap();
+        let page2 = query
+            .query(&AssetFilter::default(), "date:desc", 1, 1)
+            .await
+            .unwrap();
         assert_eq!(page1.total, 3);
         assert_eq!(page1.items.len(), 1);
         assert_eq!(page2.items.len(), 1);
@@ -1264,12 +1115,7 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let query = QueryService::new(catalog.pool().clone(), dir.path().join("thumbs"));
         let count = query
-            .batch_apply_meta(
-                &[],
-                AssetMetaPatch {
-                    rating: Some(1),
-                },
-            )
+            .batch_apply_meta(&[], AssetMetaPatch { rating: Some(1) })
             .await
             .unwrap();
         assert_eq!(count, 0);
@@ -1303,20 +1149,27 @@ mod tests {
 
         let link = LinkService::new(pool.clone());
         link.link_raw_jpeg_in_root(root.id).await.unwrap();
-        link.compute_hashes_for_root(root.id, &photos).await.unwrap();
+        link.compute_hashes_for_root(root.id, &photos)
+            .await
+            .unwrap();
         link.refresh_duplicate_index().await.unwrap();
 
-        let raw_id: i64 = sqlx::query_scalar(
-            "SELECT id FROM asset WHERE root_id = ? AND kind = 'raw' LIMIT 1",
-        )
-        .bind(root.id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let raw_id: i64 =
+            sqlx::query_scalar("SELECT id FROM asset WHERE root_id = ? AND kind = 'raw' LIMIT 1")
+                .bind(root.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
 
         let collection = CollectionRepo::new(pool.clone());
-        let album = collection.create_album("Trip", "date:desc", None).await.unwrap();
-        collection.set_album_items(album.id, &[raw_id]).await.unwrap();
+        let album = collection
+            .create_album("Trip", "date:desc", None)
+            .await
+            .unwrap();
+        collection
+            .set_album_items(album.id, &[raw_id])
+            .await
+            .unwrap();
 
         let query = QueryService::new(pool.clone(), thumb_dir);
         let detail = query.get_detail(raw_id).await.unwrap();
@@ -1394,8 +1247,16 @@ mod tests {
             .unwrap();
 
         let assets = AssetRepo::new(catalog.pool().clone());
-        let first = assets.find_by_path(root.id, "first.jpg").await.unwrap().unwrap();
-        let second = assets.find_by_path(root.id, "second.jpg").await.unwrap().unwrap();
+        let first = assets
+            .find_by_path(root.id, "first.jpg")
+            .await
+            .unwrap()
+            .unwrap();
+        let second = assets
+            .find_by_path(root.id, "second.jpg")
+            .await
+            .unwrap()
+            .unwrap();
         AssetMetaRepo::new(catalog.pool().clone())
             .upsert(&AssetMeta {
                 asset_id: first.id,
@@ -1425,7 +1286,10 @@ mod tests {
 
         let query = QueryService::new(catalog.pool().clone(), thumb_dir);
         for sort in ["rating:desc", "path:desc", "date:desc"] {
-            let page = query.query(&AssetFilter::default(), sort, 0, 10).await.unwrap();
+            let page = query
+                .query(&AssetFilter::default(), sort, 0, 10)
+                .await
+                .unwrap();
             assert_eq!(page.total, 2);
             assert_eq!(page.items.len(), 2);
         }
@@ -1505,12 +1369,7 @@ mod tests {
             },
         );
         query
-            .apply_meta_patch(
-                asset.id,
-                AssetMetaPatch {
-                    rating: Some(3),
-                },
-            )
+            .apply_meta_patch(asset.id, AssetMetaPatch { rating: Some(3) })
             .await
             .unwrap();
         let after = std::fs::read(photos.join("readonly.jpg")).unwrap();
@@ -1572,11 +1431,6 @@ mod tests {
         assert_eq!(result.total, 1);
     }
 
-    #[test]
-    fn escape_like_escapes_backslash() {
-        assert_eq!(escape_like(r"a\b"), r"a\\b");
-    }
-
     #[tokio::test]
     async fn get_detail_uses_existing_index_without_repair() {
         let dir = tempdir().unwrap();
@@ -1615,12 +1469,7 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let query = QueryService::new(catalog.pool().clone(), dir.path().join("thumbs"));
         let count = query
-            .batch_apply_meta(
-                &[],
-                AssetMetaPatch {
-                    rating: Some(2),
-                },
-            )
+            .batch_apply_meta(&[], AssetMetaPatch { rating: Some(2) })
             .await
             .unwrap();
         assert_eq!(count, 0);
@@ -1676,48 +1525,38 @@ mod tests {
         let query = QueryService::new(pool.clone(), thumb_dir);
         pool.close().await;
         assert!(query.count(&AssetFilter::default()).await.is_err());
-        assert!(
-            query
-                .count(&AssetFilter {
+        assert!(query
+            .count(&AssetFilter {
+                tag_ids: Some(vec![tag_id]),
+                ..Default::default()
+            })
+            .await
+            .is_err());
+        assert!(query
+            .query(&AssetFilter::default(), "date:desc", 0, 10)
+            .await
+            .is_err());
+        assert!(query
+            .query(
+                &AssetFilter {
                     tag_ids: Some(vec![tag_id]),
                     ..Default::default()
-                })
-                .await
-                .is_err()
-        );
-        assert!(
-            query
-                .query(&AssetFilter::default(), "date:desc", 0, 10)
-                .await
-                .is_err()
-        );
-        assert!(
-            query
-                .query(
-                    &AssetFilter {
-                        tag_ids: Some(vec![tag_id]),
-                        ..Default::default()
-                    },
-                    "date:desc",
-                    0,
-                    10,
-                )
-                .await
-                .is_err()
-        );
+                },
+                "date:desc",
+                0,
+                10,
+            )
+            .await
+            .is_err());
         assert!(query.get_detail(asset.id).await.is_err());
-        assert!(
-            query
-                .apply_meta_patch(asset.id, AssetMetaPatch { rating: Some(1) })
-                .await
-                .is_err()
-        );
-        assert!(
-            query
-                .batch_apply_meta(&[asset.id], AssetMetaPatch { rating: Some(1) })
-                .await
-                .is_err()
-        );
+        assert!(query
+            .apply_meta_patch(asset.id, AssetMetaPatch { rating: Some(1) })
+            .await
+            .is_err());
+        assert!(query
+            .batch_apply_meta(&[asset.id], AssetMetaPatch { rating: Some(1) })
+            .await
+            .is_err());
         assert!(query.batch_append_tags(&[asset.id], tag_id).await.is_err());
         assert!(query.batch_remove_tags(&[asset.id], tag_id).await.is_err());
     }
@@ -1787,13 +1626,27 @@ mod tests {
             .await
             .unwrap();
         let assets = AssetRepo::new(catalog.pool().clone());
-        let one = assets.find_by_path(root.id, "one.jpg").await.unwrap().unwrap();
-        let two = assets.find_by_path(root.id, "two.jpg").await.unwrap().unwrap();
+        let one = assets
+            .find_by_path(root.id, "one.jpg")
+            .await
+            .unwrap()
+            .unwrap();
+        let two = assets
+            .find_by_path(root.id, "two.jpg")
+            .await
+            .unwrap()
+            .unwrap();
         let tag_repo = TagRepo::new(catalog.pool().clone());
         let tag_a = tag_repo.create_tag("alpha", None, None).await.unwrap();
         let tag_b = tag_repo.create_tag("beta", None, None).await.unwrap();
-        tag_repo.append_tag_id_to_assets(&[one.id], tag_a).await.unwrap();
-        tag_repo.append_tag_id_to_assets(&[two.id], tag_b).await.unwrap();
+        tag_repo
+            .append_tag_id_to_assets(&[one.id], tag_a)
+            .await
+            .unwrap();
+        tag_repo
+            .append_tag_id_to_assets(&[two.id], tag_b)
+            .await
+            .unwrap();
         let query = QueryService::new(catalog.pool().clone(), thumb_dir);
         let result = query
             .query(

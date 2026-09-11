@@ -10,7 +10,7 @@ use crate::query::QueryService;
 use crate::scan::ScanService;
 use crate::watcher::WatcherService;
 use crate::workspace::{
-    WorkspaceInfo, WorkspaceMediaSettings, WorkspacePaths, WorkspaceService, workspace_mounts_dir,
+    workspace_mounts_dir, WorkspaceInfo, WorkspaceMediaSettings, WorkspacePaths, WorkspaceService,
 };
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -44,8 +44,9 @@ pub struct ActiveWorkspace {
 
 impl ActiveWorkspace {
     pub async fn open(path: &Path, app_data_dir: &Path) -> Result<Self> {
-        let canonical = std::fs::canonicalize(path)
-            .map_err(|_| AppError::Workspace(format!("workspace path not found: {}", path.display())))?;
+        let canonical = std::fs::canonicalize(path).map_err(|_| {
+            AppError::Workspace(format!("workspace path not found: {}", path.display()))
+        })?;
         let info = crate::workspace::workspace_info(&canonical)?;
         let paths = WorkspacePaths::new(canonical);
         crate::workspace::ensure_workspace_dirs(&paths, info.read_only)?;
@@ -65,7 +66,7 @@ impl ActiveWorkspace {
         watcher.spawn_dynamic_local_watcher(jobs.clone(), shutdown_rx.clone(), roots_refresh_rx);
         watcher.spawn_smb_poller(jobs.clone(), shutdown_rx);
 
-        let library = LibraryService::new(pool.clone(), mount_dir);
+        let library = LibraryService::with_mount_mode(pool.clone(), mount_dir, info.read_only);
         library.ensure_smb_mounts_ready().await?;
 
         Ok(Self {
@@ -98,10 +99,7 @@ impl ActiveWorkspace {
     }
 
     pub fn scan_control(&self) -> crate::scan::ScanControl {
-        crate::scan::ScanControl::new(
-            self.scan_pause.clone(),
-            self.jobs.cancel_flag(),
-        )
+        crate::scan::ScanControl::new(self.scan_pause.clone(), self.jobs.cancel_flag())
     }
 
     pub fn pause_scan(&self) {
@@ -263,15 +261,9 @@ mod tests {
 
         assert!(state.active_workspace_info().await.is_none());
 
-        let opened = state
-            .open_workspace(Path::new(&info.path))
-            .await
-            .unwrap();
+        let opened = state.open_workspace(Path::new(&info.path)).await.unwrap();
         assert_eq!(opened, info);
-        assert_eq!(
-            state.active_workspace_info().await.unwrap().path,
-            info.path
-        );
+        assert_eq!(state.active_workspace_info().await.unwrap().path, info.path);
 
         state.close_workspace().await.unwrap();
         assert!(state.active_workspace_info().await.is_none());
@@ -281,10 +273,7 @@ mod tests {
     async fn with_active_requires_open_workspace() {
         let dir = tempdir().unwrap();
         let state = AppState::new(dir.path().join("app")).unwrap();
-        let err = state
-            .with_active(|_| async { Ok(()) })
-            .await
-            .unwrap_err();
+        let err = state.with_active(|_| async { Ok(()) }).await.unwrap_err();
         assert!(err.to_string().contains("no workspace open"));
     }
 
@@ -376,8 +365,14 @@ mod tests {
         let first_info = crate::workspace::init_workspace_at(&first, false).unwrap();
         let second_info = crate::workspace::init_workspace_at(&second, false).unwrap();
         let state = AppState::new(dir.path().join("app")).unwrap();
-        state.open_workspace(Path::new(&first_info.path)).await.unwrap();
-        state.open_workspace(Path::new(&second_info.path)).await.unwrap();
+        state
+            .open_workspace(Path::new(&first_info.path))
+            .await
+            .unwrap();
+        state
+            .open_workspace(Path::new(&second_info.path))
+            .await
+            .unwrap();
         assert_eq!(
             state.active_workspace_info().await.unwrap().path,
             second_info.path
@@ -466,11 +461,8 @@ mod tests {
     #[tokio::test]
     async fn active_workspace_open_rejects_missing_path_directly() {
         let dir = tempdir().unwrap();
-        let result = ActiveWorkspace::open(
-            &dir.path().join("missing"),
-            &dir.path().join("app"),
-        )
-        .await;
+        let result =
+            ActiveWorkspace::open(&dir.path().join("missing"), &dir.path().join("app")).await;
         assert!(result.is_err());
         assert!(result.err().unwrap().to_string().contains("not found"));
     }

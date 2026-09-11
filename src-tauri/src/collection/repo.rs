@@ -69,12 +69,11 @@ impl CollectionRepo {
         validate_smart_filter(filter)?;
         let filter_json = serde_json::to_string(filter)?;
 
-        let existing = sqlx::query_scalar::<_, i64>(
-            "SELECT id FROM smart_collection WHERE name = ?",
-        )
-        .bind(trimmed)
-        .fetch_optional(&self.pool)
-        .await?;
+        let existing =
+            sqlx::query_scalar::<_, i64>("SELECT id FROM smart_collection WHERE name = ?")
+                .bind(trimmed)
+                .fetch_optional(&self.pool)
+                .await?;
 
         if let Some(id) = existing {
             sqlx::query("UPDATE smart_collection SET filter_json = ? WHERE id = ?")
@@ -115,7 +114,9 @@ impl CollectionRepo {
         let sql = format!(
             "SELECT a.id, a.name, a.sort_mode, a.emoji, {ALBUM_ASSET_COUNT_SQL} FROM album a ORDER BY a.name"
         );
-        Ok(sqlx::query_as::<_, Album>(&sql).fetch_all(&self.pool).await?)
+        Ok(sqlx::query_as::<_, Album>(&sql)
+            .fetch_all(&self.pool)
+            .await?)
     }
 
     async fn fetch_album(&self, id: i64) -> Result<Album> {
@@ -172,9 +173,8 @@ impl CollectionRepo {
         if asset_ids.is_empty() {
             return Ok(());
         }
-        let mut builder = sqlx::QueryBuilder::new(
-            "INSERT INTO album_item (album_id, asset_id, position) ",
-        );
+        let mut builder =
+            sqlx::QueryBuilder::new("INSERT INTO album_item (album_id, asset_id, position) ");
         builder.push_values(asset_ids.iter().enumerate(), |mut b, (pos, asset_id)| {
             b.push_bind(album_id)
                 .push_bind(*asset_id)
@@ -222,7 +222,9 @@ impl CollectionRepo {
                 }
             })
             .collect();
-        if removed > 0 { self.set_album_items(album_id, &filtered).await?; }
+        if removed > 0 {
+            self.set_album_items(album_id, &filtered).await?;
+        }
         Ok(removed)
     }
 
@@ -253,22 +255,15 @@ impl CollectionRepo {
             .await?)
     }
     pub async fn list_album_ids_for_asset(&self, asset_id: i64) -> Result<Vec<i64>> {
-        Ok(
-            sqlx::query_scalar::<_, i64>(
-                "SELECT album_id FROM album_item WHERE asset_id = ? ORDER BY album_id",
-            )
-            .bind(asset_id)
-            .fetch_all(&self.pool)
-            .await?,
+        Ok(sqlx::query_scalar::<_, i64>(
+            "SELECT album_id FROM album_item WHERE asset_id = ? ORDER BY album_id",
         )
+        .bind(asset_id)
+        .fetch_all(&self.pool)
+        .await?)
     }
 
-    pub async fn update_album(
-        &self,
-        id: i64,
-        name: &str,
-        emoji: Option<&str>,
-    ) -> Result<Album> {
+    pub async fn update_album(&self, id: i64, name: &str, emoji: Option<&str>) -> Result<Album> {
         let trimmed = name.trim();
         if trimmed.is_empty() {
             return Err(AppError::InvalidInput("album name is required".into()));
@@ -350,7 +345,10 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = CollectionRepo::new(catalog.pool().clone());
         let roots = SourceRootRepo::new(catalog.pool().clone());
-        let root = roots.insert_root(dir.path().to_str().unwrap(), "local", "watch", None).await.unwrap();
+        let root = roots
+            .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
+            .await
+            .unwrap();
         let assets = AssetRepo::new(catalog.pool().clone());
         let one = assets
             .upsert_asset(UpsertAssetInput {
@@ -391,16 +389,27 @@ mod tests {
             })
             .await
             .unwrap();
-        let album = repo.create_album("Trip", "date:desc", Some("📷")).await.unwrap();
+        let album = repo
+            .create_album("Trip", "date:desc", Some("📷"))
+            .await
+            .unwrap();
         assert_eq!(album.name, "Trip");
-        repo.set_album_items(album.id, &[one.id, two.id]).await.unwrap();
+        repo.set_album_items(album.id, &[one.id, two.id])
+            .await
+            .unwrap();
         let ids = repo.album_asset_ids(album.id).await.unwrap();
         assert_eq!(ids, vec![one.id, two.id]);
-        let added = repo.add_album_items(album.id, &[two.id, three.id]).await.unwrap();
+        let added = repo
+            .add_album_items(album.id, &[two.id, three.id])
+            .await
+            .unwrap();
         assert_eq!(added, 1);
         let removed = repo.remove_album_items(album.id, &[one.id]).await.unwrap();
         assert_eq!(removed, 1);
-        let updated = repo.update_album(album.id, "Trip 2", Some("🎞")).await.unwrap();
+        let updated = repo
+            .update_album(album.id, "Trip 2", Some("🎞"))
+            .await
+            .unwrap();
         assert_eq!(updated.name, "Trip 2");
         assert!(repo.update_album(999, "x", None).await.is_err());
         assert!(repo.create_album("", "date:desc", None).await.is_err());
@@ -439,7 +448,10 @@ mod tests {
             .unwrap();
         assert_eq!(first.id, second.id);
         assert_eq!(second.filter.rating_min, Some(5));
-        assert!(repo.save_smart_collection("", &AssetFilter::default()).await.is_err());
+        assert!(repo
+            .save_smart_collection("", &AssetFilter::default())
+            .await
+            .is_err());
         assert!(repo.delete_smart_collection(999).await.is_err());
     }
 
@@ -469,7 +481,10 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = CollectionRepo::new(catalog.pool().clone());
         let roots = SourceRootRepo::new(catalog.pool().clone());
-        let root = roots.insert_root(dir.path().to_str().unwrap(), "local", "watch", None).await.unwrap();
+        let root = roots
+            .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
+            .await
+            .unwrap();
         let assets = AssetRepo::new(catalog.pool().clone());
         let one = assets
             .upsert_asset(UpsertAssetInput {
@@ -498,7 +513,9 @@ mod tests {
             .await
             .unwrap();
         let album = repo.create_album("Trip", "date:desc", None).await.unwrap();
-        repo.set_album_items(album.id, &[one.id, two.id]).await.unwrap();
+        repo.set_album_items(album.id, &[one.id, two.id])
+            .await
+            .unwrap();
         let removed = repo.remove_album_items(album.id, &[one.id]).await.unwrap();
         assert_eq!(removed, 1);
         assert_eq!(repo.album_asset_ids(album.id).await.unwrap(), vec![two.id]);
@@ -509,7 +526,10 @@ mod tests {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = CollectionRepo::new(catalog.pool().clone());
-        let err = repo.create_album("Trip", "bad:sort", None).await.unwrap_err();
+        let err = repo
+            .create_album("Trip", "bad:sort", None)
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("sort"));
     }
 
@@ -545,7 +565,10 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = CollectionRepo::new(catalog.pool().clone());
         let roots = SourceRootRepo::new(catalog.pool().clone());
-        let root = roots.insert_root(dir.path().to_str().unwrap(), "local", "watch", None).await.unwrap();
+        let root = roots
+            .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
+            .await
+            .unwrap();
         let assets = AssetRepo::new(catalog.pool().clone());
         let asset = assets
             .upsert_asset(UpsertAssetInput {
@@ -562,8 +585,16 @@ mod tests {
             .unwrap();
         let album = repo.create_album("Trip", "name:asc", None).await.unwrap();
         repo.set_album_items(album.id, &[asset.id]).await.unwrap();
-        assert_eq!(repo.remove_album_items(album.id, &[asset.id + 999]).await.unwrap(), 0);
-        assert_eq!(repo.add_album_items(album.id, &[asset.id]).await.unwrap(), 0);
+        assert_eq!(
+            repo.remove_album_items(album.id, &[asset.id + 999])
+                .await
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            repo.add_album_items(album.id, &[asset.id]).await.unwrap(),
+            0
+        );
     }
 
     #[tokio::test]
@@ -591,7 +622,10 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = CollectionRepo::new(catalog.pool().clone());
         let roots = SourceRootRepo::new(catalog.pool().clone());
-        let root = roots.insert_root(dir.path().to_str().unwrap(), "local", "watch", None).await.unwrap();
+        let root = roots
+            .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
+            .await
+            .unwrap();
         let assets = AssetRepo::new(catalog.pool().clone());
         let asset = assets
             .upsert_asset(UpsertAssetInput {
@@ -620,7 +654,10 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = CollectionRepo::new(catalog.pool().clone());
         let roots = SourceRootRepo::new(catalog.pool().clone());
-        let root = roots.insert_root(dir.path().to_str().unwrap(), "local", "watch", None).await.unwrap();
+        let root = roots
+            .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
+            .await
+            .unwrap();
         let assets = AssetRepo::new(catalog.pool().clone());
         let asset = assets
             .upsert_asset(UpsertAssetInput {
@@ -636,13 +673,22 @@ mod tests {
             .await
             .unwrap();
         let first = repo.create_album("First", "name:asc", None).await.unwrap();
-        let second = repo.create_album("Second", "path:desc", None).await.unwrap();
+        let second = repo
+            .create_album("Second", "path:desc", None)
+            .await
+            .unwrap();
         repo.set_album_items(first.id, &[asset.id]).await.unwrap();
         repo.set_album_items(second.id, &[asset.id]).await.unwrap();
         let album_ids = repo.list_album_ids_for_asset(asset.id).await.unwrap();
         assert_eq!(album_ids, vec![first.id, second.id]);
-        assert_eq!(repo.album_asset_ids(first.id).await.unwrap(), vec![asset.id]);
-        assert_eq!(repo.album_asset_ids(second.id).await.unwrap(), vec![asset.id]);
+        assert_eq!(
+            repo.album_asset_ids(first.id).await.unwrap(),
+            vec![asset.id]
+        );
+        assert_eq!(
+            repo.album_asset_ids(second.id).await.unwrap(),
+            vec![asset.id]
+        );
     }
 
     #[tokio::test]
@@ -686,7 +732,10 @@ mod tests {
         let pool = catalog.pool().clone();
         let repo = CollectionRepo::new(pool.clone());
         let roots = SourceRootRepo::new(pool.clone());
-        let root = roots.insert_root(dir.path().to_str().unwrap(), "local", "watch", None).await.unwrap();
+        let root = roots
+            .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
+            .await
+            .unwrap();
         let assets = AssetRepo::new(pool.clone());
         let asset = assets
             .upsert_asset(UpsertAssetInput {
@@ -718,7 +767,10 @@ mod tests {
         assert!(repo.delete_album(album.id).await.is_err());
         assert!(repo.set_album_items(album.id, &[asset.id]).await.is_err());
         assert!(repo.add_album_items(album.id, &[asset.id]).await.is_err());
-        assert!(repo.remove_album_items(album.id, &[asset.id]).await.is_err());
+        assert!(repo
+            .remove_album_items(album.id, &[asset.id])
+            .await
+            .is_err());
         assert!(repo.album_asset_ids(album.id).await.is_err());
         assert!(repo.list_album_ids_for_asset(asset.id).await.is_err());
         assert!(repo.update_album(album.id, "Trip", None).await.is_err());
@@ -730,7 +782,10 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = CollectionRepo::new(catalog.pool().clone());
         let album = repo.create_album("Trip", "date:desc", None).await.unwrap();
-        let err = repo.set_album_items(album.id, &[999_999]).await.unwrap_err();
+        let err = repo
+            .set_album_items(album.id, &[999_999])
+            .await
+            .unwrap_err();
         assert!(!err.to_string().is_empty());
     }
 
@@ -740,7 +795,10 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = CollectionRepo::new(catalog.pool().clone());
         let album = repo.create_album("Trip", "date:desc", None).await.unwrap();
-        let err = repo.add_album_items(album.id, &[999_999]).await.unwrap_err();
+        let err = repo
+            .add_album_items(album.id, &[999_999])
+            .await
+            .unwrap_err();
         assert!(!err.to_string().is_empty());
     }
 
@@ -753,7 +811,10 @@ mod tests {
         let pool = catalog.pool().clone();
         let repo = CollectionRepo::new(pool.clone());
         let roots = SourceRootRepo::new(pool.clone());
-        let root = roots.insert_root(dir.path().to_str().unwrap(), "local", "watch", None).await.unwrap();
+        let root = roots
+            .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
+            .await
+            .unwrap();
         let assets = AssetRepo::new(pool.clone());
         let first = assets
             .upsert_asset(UpsertAssetInput {
@@ -782,18 +843,20 @@ mod tests {
             .await
             .unwrap();
         let album = repo.create_album("Trip", "date:desc", None).await.unwrap();
-        repo.set_album_items(album.id, &[first.id, second.id]).await.unwrap();
+        repo.set_album_items(album.id, &[first.id, second.id])
+            .await
+            .unwrap();
         let mut locker = pool.acquire().await.unwrap();
         sqlx::query("BEGIN EXCLUSIVE")
             .execute(&mut *locker)
             .await
             .unwrap();
-        let err = repo.remove_album_items(album.id, &[first.id]).await.unwrap_err();
-        assert!(!err.to_string().is_empty());
-        sqlx::query("ROLLBACK")
-            .execute(&mut *locker)
+        let err = repo
+            .remove_album_items(album.id, &[first.id])
             .await
-            .unwrap();
+            .unwrap_err();
+        assert!(!err.to_string().is_empty());
+        sqlx::query("ROLLBACK").execute(&mut *locker).await.unwrap();
     }
 
     #[tokio::test]
@@ -806,7 +869,10 @@ mod tests {
             .execute(catalog.pool())
             .await
             .unwrap();
-        let err = repo.update_album(album.id, "Trip 2", None).await.unwrap_err();
+        let err = repo
+            .update_album(album.id, "Trip 2", None)
+            .await
+            .unwrap_err();
         assert!(!err.to_string().is_empty());
     }
 
@@ -820,7 +886,10 @@ mod tests {
             .execute(catalog.pool())
             .await
             .unwrap();
-        let err = repo.update_album(album.id, "Trip 2", None).await.unwrap_err();
+        let err = repo
+            .update_album(album.id, "Trip 2", None)
+            .await
+            .unwrap_err();
         assert!(!err.to_string().is_empty());
     }
 
@@ -851,10 +920,7 @@ mod tests {
             .await
             .unwrap_err();
         assert!(!err.to_string().is_empty());
-        sqlx::query("ROLLBACK")
-            .execute(&mut *locker)
-            .await
-            .unwrap();
+        sqlx::query("ROLLBACK").execute(&mut *locker).await.unwrap();
         sqlx::query("BEGIN EXCLUSIVE")
             .execute(&mut *locker)
             .await
@@ -864,10 +930,7 @@ mod tests {
             .await
             .unwrap_err();
         assert!(!err.to_string().is_empty());
-        sqlx::query("ROLLBACK")
-            .execute(&mut *locker)
-            .await
-            .unwrap();
+        sqlx::query("ROLLBACK").execute(&mut *locker).await.unwrap();
     }
 
     #[tokio::test]
@@ -876,7 +939,10 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = CollectionRepo::new(catalog.pool().clone());
         let keep = repo.create_album("Keep", "date:desc", None).await.unwrap();
-        let remove = repo.create_album("Remove", "date:desc", None).await.unwrap();
+        let remove = repo
+            .create_album("Remove", "date:desc", None)
+            .await
+            .unwrap();
         repo.delete_album(remove.id).await.unwrap();
         let albums = repo.list_albums().await.unwrap();
         assert!(albums.iter().all(|row| row.id != remove.id));
@@ -928,10 +994,7 @@ mod tests {
             .await
             .unwrap_err();
         assert!(!err.to_string().is_empty());
-        sqlx::query("ROLLBACK")
-            .execute(&mut *locker)
-            .await
-            .unwrap();
+        sqlx::query("ROLLBACK").execute(&mut *locker).await.unwrap();
     }
 
     #[tokio::test]
@@ -987,7 +1050,10 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = CollectionRepo::new(catalog.pool().clone());
         let roots = SourceRootRepo::new(catalog.pool().clone());
-        let root = roots.insert_root(dir.path().to_str().unwrap(), "local", "watch", None).await.unwrap();
+        let root = roots
+            .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
+            .await
+            .unwrap();
         let assets = AssetRepo::new(catalog.pool().clone());
         let meta_repo = AssetMetaRepo::new(catalog.pool().clone());
         let low = assets
@@ -1042,9 +1108,16 @@ mod tests {
             })
             .await
             .unwrap();
-        let album = repo.create_album("Rated", "rating:desc", None).await.unwrap();
-        repo.set_album_items(album.id, &[low.id, high.id]).await.unwrap();
-        assert_eq!(repo.album_asset_ids(album.id).await.unwrap(), vec![high.id, low.id]);
+        let album = repo
+            .create_album("Rated", "rating:desc", None)
+            .await
+            .unwrap();
+        repo.set_album_items(album.id, &[low.id, high.id])
+            .await
+            .unwrap();
+        assert_eq!(
+            repo.album_asset_ids(album.id).await.unwrap(),
+            vec![high.id, low.id]
+        );
     }
 }
-

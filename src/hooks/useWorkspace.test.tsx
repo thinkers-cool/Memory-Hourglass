@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkspace } from "./useWorkspace";
@@ -34,16 +34,25 @@ function Probe() {
       <span data-testid="phase">{state.phase}</span>
       <span data-testid="workspace">{state.workspace?.name ?? ""}</span>
       <span data-testid="notification">{state.notification?.text ?? ""}</span>
-      <button type="button" onClick={() => void state.openWorkspacePath("/tmp/open")}>
+      <button
+        type="button"
+        onClick={() => void state.openWorkspacePath("/tmp/open")}
+      >
         open-path
       </button>
-      <button type="button" onClick={() => void state.createWorkspaceAt("/tmp/new", true)}>
+      <button
+        type="button"
+        onClick={() => void state.createWorkspaceAt("/tmp/new", true)}
+      >
         create-path
       </button>
       <button type="button" onClick={() => void state.pickAndOpenWorkspace()}>
         pick-open
       </button>
-      <button type="button" onClick={() => void state.pickAndCreateWorkspace(true)}>
+      <button
+        type="button"
+        onClick={() => void state.pickAndCreateWorkspace(true)}
+      >
         pick-create
       </button>
       <button type="button" onClick={() => void state.closeWorkspace()}>
@@ -94,7 +103,9 @@ describe("useWorkspace", () => {
   });
 
   it("shows start page when bootstrap throws", async () => {
-    vi.mocked(api.tryOpenLastWorkspace).mockRejectedValue(new Error("boot failed"));
+    vi.mocked(api.tryOpenLastWorkspace).mockRejectedValue(
+      new Error("boot failed"),
+    );
 
     render(<Probe />);
 
@@ -103,7 +114,9 @@ describe("useWorkspace", () => {
     });
     expect(screen.getByTestId("workspace").textContent).toBe("");
     await waitFor(() => {
-      expect(screen.getByTestId("notification").textContent).toContain("boot failed");
+      expect(screen.getByTestId("notification").textContent).toContain(
+        "boot failed",
+      );
     });
   });
 
@@ -111,7 +124,9 @@ describe("useWorkspace", () => {
     vi.mocked(api.tryOpenLastWorkspace).mockResolvedValue(null);
     const user = userEvent.setup();
     render(<Probe />);
-    await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("start"));
+    await waitFor(() =>
+      expect(screen.getByTestId("phase").textContent).toBe("start"),
+    );
 
     await user.click(screen.getByRole("button", { name: "open-path" }));
 
@@ -126,7 +141,9 @@ describe("useWorkspace", () => {
     vi.mocked(api.tryOpenLastWorkspace).mockResolvedValue(null);
     const user = userEvent.setup();
     render(<Probe />);
-    await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("start"));
+    await waitFor(() =>
+      expect(screen.getByTestId("phase").textContent).toBe("start"),
+    );
 
     await user.click(screen.getByRole("button", { name: "create-path" }));
 
@@ -141,7 +158,9 @@ describe("useWorkspace", () => {
     vi.mocked(pickFolder).mockResolvedValue("/picked/ws");
     const user = userEvent.setup();
     render(<Probe />);
-    await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("start"));
+    await waitFor(() =>
+      expect(screen.getByTestId("phase").textContent).toBe("start"),
+    );
 
     await user.click(screen.getByRole("button", { name: "pick-open" }));
 
@@ -157,7 +176,9 @@ describe("useWorkspace", () => {
     vi.mocked(pickFolder).mockResolvedValue(null);
     const user = userEvent.setup();
     render(<Probe />);
-    await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("start"));
+    await waitFor(() =>
+      expect(screen.getByTestId("phase").textContent).toBe("start"),
+    );
 
     await user.click(screen.getByRole("button", { name: "pick-open" }));
 
@@ -172,12 +193,16 @@ describe("useWorkspace", () => {
     vi.mocked(pickFolder).mockRejectedValue(new Error("picker failed"));
     const user = userEvent.setup();
     render(<Probe />);
-    await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("start"));
+    await waitFor(() =>
+      expect(screen.getByTestId("phase").textContent).toBe("start"),
+    );
 
     await user.click(screen.getByRole("button", { name: "pick-open" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("notification").textContent).toContain("picker failed");
+      expect(screen.getByTestId("notification").textContent).toContain(
+        "picker failed",
+      );
     });
     expect(api.openWorkspace).not.toHaveBeenCalled();
   });
@@ -187,7 +212,9 @@ describe("useWorkspace", () => {
     vi.mocked(pickFolder).mockResolvedValue(null);
     const user = userEvent.setup();
     render(<Probe />);
-    await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("start"));
+    await waitFor(() =>
+      expect(screen.getByTestId("phase").textContent).toBe("start"),
+    );
 
     await user.click(screen.getByRole("button", { name: "pick-create" }));
 
@@ -202,12 +229,16 @@ describe("useWorkspace", () => {
     vi.mocked(pickFolder).mockRejectedValue(new Error("create picker failed"));
     const user = userEvent.setup();
     render(<Probe />);
-    await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("start"));
+    await waitFor(() =>
+      expect(screen.getByTestId("phase").textContent).toBe("start"),
+    );
 
     await user.click(screen.getByRole("button", { name: "pick-create" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("notification").textContent).toContain("create picker failed");
+      expect(screen.getByTestId("notification").textContent).toContain(
+        "create picker failed",
+      );
     });
     expect(api.createWorkspace).not.toHaveBeenCalled();
   });
@@ -217,7 +248,9 @@ describe("useWorkspace", () => {
     vi.mocked(pickFolder).mockResolvedValue("/picked/new");
     const user = userEvent.setup();
     render(<Probe />);
-    await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("start"));
+    await waitFor(() =>
+      expect(screen.getByTestId("phase").textContent).toBe("start"),
+    );
 
     await user.click(screen.getByRole("button", { name: "pick-create" }));
 
@@ -231,7 +264,9 @@ describe("useWorkspace", () => {
     vi.mocked(api.tryOpenLastWorkspace).mockResolvedValue(workspaceInfo);
     const user = userEvent.setup();
     render(<Probe />);
-    await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("library"));
+    await waitFor(() =>
+      expect(screen.getByTestId("phase").textContent).toBe("library"),
+    );
 
     await user.click(screen.getByRole("button", { name: "close" }));
 
@@ -246,7 +281,9 @@ describe("useWorkspace", () => {
     vi.mocked(api.tryOpenLastWorkspace).mockResolvedValue(null);
     const user = userEvent.setup();
     render(<Probe />);
-    await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("start"));
+    await waitFor(() =>
+      expect(screen.getByTestId("phase").textContent).toBe("start"),
+    );
 
     await user.click(screen.getByRole("button", { name: "remove-recent" }));
 

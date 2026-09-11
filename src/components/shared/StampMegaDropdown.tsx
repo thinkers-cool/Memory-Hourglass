@@ -86,7 +86,9 @@ export function StampMegaDropdown({
                       <span className="flex w-4 shrink-0 items-center justify-center">
                         <TagColorDot color={tag.color} />
                       </span>
-                      <span className="truncate">{tagPathLabel(tag, tags)}</span>
+                      <span className="truncate">
+                        {tagPathLabel(tag, tags)}
+                      </span>
                     </button>
                   </li>
                 );

@@ -47,7 +47,11 @@ describe("api client", () => {
   });
 
   it("invokes smb browse commands", async () => {
-    await client.listSmbShares({ host: "nas", username: "user", password: "secret" });
+    await client.listSmbShares({
+      host: "nas",
+      username: "user",
+      password: "secret",
+    });
     await client.mountSmbForBrowse({
       host: "nas",
       share: "photos",
@@ -69,7 +73,9 @@ describe("api client", () => {
         domain: "WORKGROUP",
       },
     });
-    expect(invoke).toHaveBeenCalledWith("list_folder_children", { path: "/smb/photos" });
+    expect(invoke).toHaveBeenCalledWith("list_folder_children", {
+      path: "/smb/photos",
+    });
   });
 
   it("invokes library commands", async () => {
@@ -113,7 +119,10 @@ describe("api client", () => {
       },
     });
     expect(invoke).toHaveBeenCalledWith("relink_root", { id: 1, path: "/new" });
-    expect(invoke).toHaveBeenCalledWith("preview_relink", { id: 1, path: "/new" });
+    expect(invoke).toHaveBeenCalledWith("preview_relink", {
+      id: 1,
+      path: "/new",
+    });
     expect(invoke).toHaveBeenCalledWith("list_roots");
     expect(invoke).toHaveBeenCalledWith("list_root_stats");
     expect(invoke).toHaveBeenCalledWith("remove_root", { id: 2 });
@@ -122,11 +131,15 @@ describe("api client", () => {
   it("invokes scan commands", async () => {
     await client.startScan(3);
     await client.cancelScan();
+    await client.pauseScan();
+    await client.resumeScan();
     await client.rebuildCatalog();
     await client.getScanStatus();
 
     expect(invoke).toHaveBeenCalledWith("start_scan", { rootId: 3 });
     expect(invoke).toHaveBeenCalledWith("cancel_scan");
+    expect(invoke).toHaveBeenCalledWith("pause_scan");
+    expect(invoke).toHaveBeenCalledWith("resume_scan");
     expect(invoke).toHaveBeenCalledWith("rebuild_catalog");
     expect(invoke).toHaveBeenCalledWith("get_scan_status");
   });
@@ -246,6 +259,9 @@ describe("api client", () => {
     vi.spyOn(Date, "now").mockReturnValue(1234);
     await client.startExport([1], "/out", { flat: true });
     await client.startExport([2], "/out2", { flat: false }, 99);
+    await client.cancelExport();
+    await client.getExportStatus();
+    await client.listExportJobs();
 
     expect(invoke).toHaveBeenCalledWith("start_export", {
       assetIds: [1],
@@ -259,6 +275,14 @@ describe("api client", () => {
       options: { flat: false },
       jobId: 99,
     });
+    expect(invoke).toHaveBeenCalledWith("cancel_export");
+    expect(invoke).toHaveBeenCalledWith("get_export_status");
+    expect(invoke).toHaveBeenCalledWith("list_export_jobs");
+  });
+
+  it("invokes album asset lookup", async () => {
+    await client.getAlbumAssetIds(12);
+    expect(invoke).toHaveBeenCalledWith("get_album_asset_ids", { albumId: 12 });
   });
 
   it("invokes activity commands", async () => {
@@ -278,13 +302,24 @@ describe("api client", () => {
     const jobHandler = vi.fn();
     await client.onScanProgress(scanHandler);
     await client.onJobProgress(jobHandler);
-    expect(listen).toHaveBeenCalledWith("scan://progress", expect.any(Function));
+    expect(listen).toHaveBeenCalledWith(
+      "scan://progress",
+      expect.any(Function),
+    );
     expect(listen).toHaveBeenCalledWith("job://progress", expect.any(Function));
 
-    const scanCallback = listen.mock.calls.find(([channel]) => channel === "scan://progress")?.[1];
-    const jobCallback = listen.mock.calls.find(([channel]) => channel === "job://progress")?.[1];
-    scanCallback?.({ payload: { root_id: 1, stage: "scanning", scanned: 1, indexed: 1 } });
-    jobCallback?.({ payload: { job_id: 1, phase: "started", done: 0, total: 1 } });
+    const scanCallback = listen.mock.calls.find(
+      ([channel]) => channel === "scan://progress",
+    )?.[1];
+    const jobCallback = listen.mock.calls.find(
+      ([channel]) => channel === "job://progress",
+    )?.[1];
+    scanCallback?.({
+      payload: { root_id: 1, stage: "scanning", scanned: 1, indexed: 1 },
+    });
+    jobCallback?.({
+      payload: { job_id: 1, phase: "started", done: 0, total: 1 },
+    });
     expect(scanHandler).toHaveBeenCalledWith({
       root_id: 1,
       stage: "scanning",
@@ -302,7 +337,10 @@ describe("api client", () => {
   it("registers message notify listener", async () => {
     const handler = vi.fn();
     await client.onMessageNotify(handler);
-    expect(listen).toHaveBeenCalledWith("message://notify", expect.any(Function));
+    expect(listen).toHaveBeenCalledWith(
+      "message://notify",
+      expect.any(Function),
+    );
 
     const notifyCallback = listen.mock.calls.find(
       ([channel]) => channel === "message://notify",

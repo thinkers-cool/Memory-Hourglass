@@ -1,9 +1,9 @@
+use super::metadata_refresh::refresh_asset_after_metadata_write;
 use crate::catalog::repo::{AssetMetaRepo, AssetRepo, SourceRootRepo, TagRepo};
 use crate::error::Result;
 use crate::link::LinkService;
 use crate::metadata::{metadata_context_for_asset, MetadataService};
 use crate::workspace::WorkspaceMediaSettings;
-use super::metadata_refresh::refresh_asset_after_metadata_write;
 use sqlx::SqlitePool;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -95,7 +95,9 @@ pub async fn sync_assets_tag_keywords(
 mod tests {
     use super::*;
     use crate::catalog::models::AssetMeta;
-    use crate::catalog::repo::{AssetMetaRepo, AssetRepo, SourceRootRepo, TagRepo, UpsertAssetInput};
+    use crate::catalog::repo::{
+        AssetMetaRepo, AssetRepo, SourceRootRepo, TagRepo, UpsertAssetInput,
+    };
     use crate::catalog::Catalog;
     use crate::workspace::WorkspaceMediaSettings;
     use tempfile::tempdir;
@@ -456,15 +458,11 @@ mod tests {
             workspace_xmp_dir: dir.path().join("xmp"),
         };
         pool.close().await;
-        assert!(
-            sync_asset_tag_keywords(&pool, asset.id, &settings)
-                .await
-                .is_err()
-        );
-        assert!(
-            sync_assets_tag_keywords(&pool, &[asset.id], &settings)
-                .await
-                .is_err()
-        );
+        assert!(sync_asset_tag_keywords(&pool, asset.id, &settings)
+            .await
+            .is_err());
+        assert!(sync_assets_tag_keywords(&pool, &[asset.id], &settings)
+            .await
+            .is_err());
     }
 }

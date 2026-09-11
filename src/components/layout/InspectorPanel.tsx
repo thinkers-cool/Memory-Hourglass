@@ -41,7 +41,11 @@ export function InspectorPanel({
       .filter((name): name is string => name !== undefined);
   }, [detail.tag_ids, tags]);
   const fileKeywords = useMemo(
-    () => fileKeywordsNotInCatalog(detail.meta?.keywords_json, tags.map((tag) => tag.name)),
+    () =>
+      fileKeywordsNotInCatalog(
+        detail.meta?.keywords_json,
+        tags.map((tag) => tag.name),
+      ),
     [detail.meta?.keywords_json, tags],
   );
 
@@ -71,16 +75,28 @@ export function InspectorPanel({
     <aside className="surface-panel flex h-full w-full min-h-0 flex-col border-l">
       <div className="navbar min-h-0 px-3 py-2 border-b border-divider-subtle shrink-0">
         <div className="navbar-start min-w-0 flex-1">
-          <p className="text-sm font-medium truncate">{detail.asset.file_name}</p>
+          <p className="text-sm font-medium truncate">
+            {detail.asset.file_name}
+          </p>
         </div>
         <div className="navbar-end">
-          <button type="button" className="btn btn-ghost btn-xs btn-square" onClick={onClose}>×</button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs btn-square"
+            onClick={onClose}
+          >
+            ×
+          </button>
         </div>
       </div>
 
       <div className="p-3 border-b border-divider-subtle bg-surface-inset shrink-0">
         {isVideo ? (
-          <video src={convertFileSrc(displayPath)} controls className="w-full rounded-lg" />
+          <video
+            src={convertFileSrc(displayPath)}
+            controls
+            className="w-full rounded-lg"
+          />
         ) : (
           <img
             src={convertFileSrc(displayPath)}
@@ -94,17 +110,26 @@ export function InspectorPanel({
         {tagLabels.length > 0 && (
           <div className="flex flex-wrap gap-1 shrink-0">
             {tagLabels.map((tag) => (
-              <span key={tag} className="badge badge-outline badge-sm">{tag}</span>
+              <span key={tag} className="badge badge-outline badge-sm">
+                {tag}
+              </span>
             ))}
           </div>
         )}
 
         {fileKeywords.length > 0 && (
           <div className="shrink-0">
-            <div className="mb-1 text-[11px] font-medium opacity-60">{t("inspector.fileKeywords")}</div>
+            <div className="mb-1 text-[11px] font-medium opacity-60">
+              {t("inspector.fileKeywords")}
+            </div>
             <div className="flex flex-wrap gap-1">
               {fileKeywords.map((keyword) => (
-                <span key={keyword} className="badge badge-ghost badge-sm opacity-80">{keyword}</span>
+                <span
+                  key={keyword}
+                  className="badge badge-ghost badge-sm opacity-80"
+                >
+                  {keyword}
+                </span>
               ))}
             </div>
           </div>
@@ -118,9 +143,14 @@ export function InspectorPanel({
             </div>
             <div className="collapse-content text-[11px] space-y-1.5 max-h-40 overflow-auto">
               {activity.map((entry) => (
-                <div key={entry.id} className="flex items-start justify-between gap-2">
+                <div
+                  key={entry.id}
+                  className="flex items-start justify-between gap-2"
+                >
                   <div className="min-w-0">
-                    <div className="truncate">{activityEventLabel(entry.event_type)}</div>
+                    <div className="truncate">
+                      {activityEventLabel(entry.event_type)}
+                    </div>
                     <div className="opacity-45">
                       {new Date(entry.occurred_at * 1000).toLocaleString()}
                     </div>
@@ -143,7 +173,9 @@ export function InspectorPanel({
         {detail.links.length > 0 && (
           <div className="collapse collapse-arrow bg-surface-inset-strong rounded-lg shrink-0">
             <input type="checkbox" defaultChecked />
-            <div className="collapse-title text-xs font-medium py-2 min-h-0">{t("inspector.linkedFiles")}</div>
+            <div className="collapse-title text-xs font-medium py-2 min-h-0">
+              {t("inspector.linkedFiles")}
+            </div>
             <div className="collapse-content text-xs space-y-1">
               {detail.links.map((link) => (
                 <button
@@ -161,7 +193,9 @@ export function InspectorPanel({
 
         <div className="flex-1 flex flex-col min-h-0 rounded-lg bg-surface-inset-strong">
           <div className="shrink-0 border-b border-divider-subtle px-3 py-1.5">
-            <div className="mb-1 text-xs font-medium">{t("inspector.metadata")}</div>
+            <div className="mb-1 text-xs font-medium">
+              {t("inspector.metadata")}
+            </div>
             <MetadataFieldSearch
               value={metadataQuery}
               onChange={setMetadataQuery}
@@ -175,7 +209,9 @@ export function InspectorPanel({
             ) : (
               filteredTags.map((tag) => (
                 <div key={`${tag.name}-${tag.value}`} className="flex gap-2">
-                  <span className="opacity-45 shrink-0 w-24 truncate">{tag.name}</span>
+                  <span className="opacity-45 shrink-0 w-24 truncate">
+                    {tag.name}
+                  </span>
                   <span className="truncate">{tag.value}</span>
                 </div>
               ))
@@ -192,10 +228,7 @@ export function InspectorPanel({
               {detail.duplicates.map((duplicate) => {
                 const fullPath = `${duplicate.root_path}/${duplicate.rel_path}`;
                 return (
-                  <div
-                    key={duplicate.id}
-                    className="flex items-center gap-2"
-                  >
+                  <div key={duplicate.id} className="flex items-center gap-2">
                     <button
                       type="button"
                       className="link link-hover flex min-w-0 flex-1 items-center gap-1.5 truncate text-left"
@@ -208,7 +241,9 @@ export function InspectorPanel({
                       type="button"
                       className="btn btn-ghost btn-xs btn-square h-6 min-h-0 w-6 shrink-0 text-danger-text hover:bg-danger-subtle hover:text-danger"
                       onClick={() => onSoftDeleteDuplicate(duplicate.id)}
-                      aria-label={t("common:aria.deleteDuplicate", { fileName: duplicate.file_name })}
+                      aria-label={t("common:aria.deleteDuplicate", {
+                        fileName: duplicate.file_name,
+                      })}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -241,7 +276,13 @@ export function InspectorPlaceholder({ onClose }: { onClose: () => void }) {
     <aside className="surface-panel flex h-full w-full min-h-0 flex-col border-l">
       <div className="navbar min-h-0 px-3 py-2 border-b border-divider-subtle shrink-0">
         <div className="navbar-end w-full">
-          <button type="button" className="btn btn-ghost btn-xs btn-square" onClick={onClose}>×</button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs btn-square"
+            onClick={onClose}
+          >
+            ×
+          </button>
         </div>
       </div>
       <div className="flex flex-1 items-center justify-center">

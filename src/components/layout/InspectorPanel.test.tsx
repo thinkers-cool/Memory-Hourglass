@@ -32,7 +32,15 @@ describe("InspectorPanel", () => {
             keywords_json: '["travel", "orphan"]',
           },
         }}
-        tags={[{ id: 1, name: "travel", parent_id: null, color: null, asset_count: 0 }]}
+        tags={[
+          {
+            id: 1,
+            name: "travel",
+            parent_id: null,
+            color: null,
+            asset_count: 0,
+          },
+        ]}
         onClose={vi.fn()}
         onPurge={vi.fn()}
         onSelectLink={vi.fn()}
@@ -50,7 +58,15 @@ describe("InspectorPanel", () => {
     render(
       <InspectorPanel
         detail={sampleDetail}
-        tags={[{ id: 1, name: "travel", parent_id: null, color: "#ff0000", asset_count: 0 }]}
+        tags={[
+          {
+            id: 1,
+            name: "travel",
+            parent_id: null,
+            color: "#ff0000",
+            asset_count: 0,
+          },
+        ]}
         onClose={onClose}
         onPurge={vi.fn()}
         onSelectLink={vi.fn()}
@@ -104,7 +120,9 @@ describe("InspectorPanel", () => {
     await user.click(await screen.findByRole("button", { name: "Undo" }));
     expect(onUndoActivity).toHaveBeenCalledWith(7);
     await waitFor(() => {
-      expect(api.queryAssetActivity.mock.calls.length).toBeGreaterThanOrEqual(2);
+      expect(api.queryAssetActivity.mock.calls.length).toBeGreaterThanOrEqual(
+        2,
+      );
     });
   });
 
@@ -115,7 +133,11 @@ describe("InspectorPanel", () => {
       <InspectorPanel
         detail={{
           ...sampleDetail,
-          asset: { ...sampleDetail.asset, kind: "video", file_name: "clip.mp4" },
+          asset: {
+            ...sampleDetail.asset,
+            kind: "video",
+            file_name: "clip.mp4",
+          },
           display_path: "/tmp/clip.mp4",
         }}
         tags={[]}
@@ -142,7 +164,9 @@ describe("InspectorPanel", () => {
         onSoftDeleteDuplicate={vi.fn()}
       />,
     );
-    expect(screen.queryByRole("button", { name: "Purge" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Purge" }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens linked files and deletes duplicates", async () => {
@@ -153,7 +177,14 @@ describe("InspectorPanel", () => {
       <InspectorPanel
         detail={{
           ...sampleDetail,
-          links: [{ id: 9, file_name: "linked.jpg", rel_path: "linked.jpg", root_path: "/tmp" }],
+          links: [
+            {
+              id: 9,
+              file_name: "linked.jpg",
+              rel_path: "linked.jpg",
+              root_path: "/tmp",
+            },
+          ],
           duplicates: [
             {
               id: 10,
@@ -174,7 +205,9 @@ describe("InspectorPanel", () => {
     await user.click(screen.getByText("linked.jpg"));
     expect(onSelectLink).toHaveBeenCalledWith(9);
 
-    await user.click(screen.getByRole("button", { name: "Delete duplicate dup.jpg" }));
+    await user.click(
+      screen.getByRole("button", { name: "Delete duplicate dup.jpg" }),
+    );
     expect(onSoftDeleteDuplicate).toHaveBeenCalledWith(10);
   });
 
@@ -231,7 +264,9 @@ describe("InspectorPanel", () => {
 
   it("filters metadata and handles activity load errors", async () => {
     const user = userEvent.setup();
-    vi.mocked(api.queryAssetActivity).mockRejectedValueOnce(new Error("activity failed"));
+    vi.mocked(api.queryAssetActivity).mockRejectedValueOnce(
+      new Error("activity failed"),
+    );
     render(
       <InspectorPanel
         detail={sampleDetail}
@@ -298,9 +333,13 @@ describe("InspectorPanel", () => {
         onSoftDeleteDuplicate={vi.fn()}
       />,
     );
-    await waitFor(() => expect(screen.getByText("Activity")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Activity")).toBeInTheDocument(),
+    );
     await user.click(screen.getByText("Activity"));
-    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Undo" }),
+    ).not.toBeInTheDocument();
     expect(api.queryAssetActivity).toHaveBeenCalledTimes(1);
   });
 });

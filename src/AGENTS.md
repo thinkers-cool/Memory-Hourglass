@@ -4,15 +4,15 @@ React 19 + TypeScript + Vite. Specs: [docs/spec/](../docs/spec/README.md).
 
 ## Structure
 
-| Path | Contents |
-|------|----------|
-| `api/client.ts` | Sole Tauri bridge — all `invoke` and `listen` calls |
-| `components/` | Feature components; subdirs: `layout/`, `shared/`, `slideshow/` |
-| `hooks/` | React hooks; `hooks/library/` = `useLibrary` internals |
-| `lib/` | Pure functions — filters, theme, selection, slideshow, message bus |
-| `types/index.ts` | DTO types mirroring Rust (snake_case fields) |
-| `styles/` | `interaction.css` tokens, `themes/memhg.css` overrides |
-| `test/` | Vitest setup, fixtures |
+| Path             | Contents                                                           |
+| ---------------- | ------------------------------------------------------------------ |
+| `api/client.ts`  | Sole Tauri bridge — all `invoke` and `listen` calls                |
+| `components/`    | Feature components; subdirs: `layout/`, `shared/`, `slideshow/`    |
+| `hooks/`         | React hooks; `hooks/library/` = `useLibrary` internals             |
+| `lib/`           | Pure functions — filters, theme, selection, slideshow, message bus |
+| `types/index.ts` | DTO types mirroring Rust (snake_case fields)                       |
+| `styles/`        | `interaction.css` tokens, `themes/memhg.css` overrides             |
+| `test/`          | Vitest setup, fixtures                                             |
 
 ## App Flow
 
@@ -27,14 +27,14 @@ main.tsx → App.tsx
 
 ## State
 
-| Hook | File | Role |
-|------|------|------|
-| `useWorkspace` | `hooks/useWorkspace.ts` | Phase, workspace, recent, notifications |
-| `useLibrary` | `hooks/useLibrary.ts` | Facade over library sub-hooks |
-| `useMessageSystem` | `hooks/useMessageSystem.ts` | Toasts, busy state, delayed undo IPC |
-| `useLibraryQuery` | `hooks/library/useLibraryQuery.ts` | Grid data, filters, pagination, scan status |
-| `useLibrarySelection` | `hooks/library/useLibrarySelection.ts` | Selected assets, compare mode |
-| `createLibraryActions` | `hooks/library/createLibraryActions.ts` | All user mutations |
+| Hook                   | File                                    | Role                                        |
+| ---------------------- | --------------------------------------- | ------------------------------------------- |
+| `useWorkspace`         | `hooks/useWorkspace.ts`                 | Phase, workspace, recent, notifications     |
+| `useLibrary`           | `hooks/useLibrary.ts`                   | Facade over library sub-hooks               |
+| `useMessageSystem`     | `hooks/useMessageSystem.ts`             | Toasts, busy state, delayed undo IPC        |
+| `useLibraryQuery`      | `hooks/library/useLibraryQuery.ts`      | Grid data, filters, pagination, scan status |
+| `useLibrarySelection`  | `hooks/library/useLibrarySelection.ts`  | Selected assets, compare mode               |
+| `createLibraryActions` | `hooks/library/createLibraryActions.ts` | All user mutations                          |
 
 No global store. Components call `library.actions.*` for mutations.
 
@@ -44,22 +44,22 @@ No global store. Components call `library.actions.*` for mutations.
 
 ## Component Tiers
 
-| Tier | Path | Examples |
-|------|------|----------|
-| Feature | `components/` | `VirtualGrid`, `AssetGridCard`, `GalleryPlayer` |
-| Layout | `components/layout/` | `NavRail`, `LibraryPanel`, `InspectorPanel`, `*Dialog` |
-| Shared | `components/shared/` | `FilterChipBar`, `SortDropdown`, `ThemeSwitcher` |
-| Slideshow | `components/slideshow/` | `SlideStage`, `PhotoSlide`, `VideoSlide` |
+| Tier      | Path                    | Examples                                               |
+| --------- | ----------------------- | ------------------------------------------------------ |
+| Feature   | `components/`           | `VirtualGrid`, `AssetGridCard`, `GalleryPlayer`        |
+| Layout    | `components/layout/`    | `NavRail`, `LibraryPanel`, `InspectorPanel`, `*Dialog` |
+| Shared    | `components/shared/`    | `FilterChipBar`, `SortDropdown`, `ThemeSwitcher`       |
+| Slideshow | `components/slideshow/` | `SlideStage`, `PhotoSlide`, `VideoSlide`               |
 
 ## Key lib Modules
 
-| Area | Modules |
-|------|---------|
-| Library | `libraryFilters.ts`, `libraryActions.ts`, `selection.ts`, `gridNavigation.ts` |
-| UI classes | `formControlClass.ts`, `interactionClass.ts`, `buttonClass.ts` |
-| App chrome | `theme.ts`, `locale.ts`, `i18n/`, `statusBar.ts`, `appError.ts` |
-| Messages | `message/bus.ts` |
-| Slideshow | `slideshow/*` |
+| Area       | Modules                                                                       |
+| ---------- | ----------------------------------------------------------------------------- |
+| Library    | `libraryFilters.ts`, `libraryActions.ts`, `selection.ts`, `gridNavigation.ts` |
+| UI classes | `formControlClass.ts`, `interactionClass.ts`, `buttonClass.ts`                |
+| App chrome | `theme.ts`, `locale.ts`, `i18n/`, `statusBar.ts`, `appError.ts`               |
+| Messages   | `message/bus.ts`                                                              |
+| Slideshow  | `slideshow/*`                                                                 |
 
 Styling and i18n rules: [CONVENTIONS.md](../docs/spec/CONVENTIONS.md).
 
@@ -76,10 +76,10 @@ Styling and i18n rules: [CONVENTIONS.md](../docs/spec/CONVENTIONS.md).
 
 Co-located `*.test.ts(x)`. Setup: `src/test/setup.ts` (Tauri mock, happy-dom). Fixtures: `src/test/fixtures.ts`.
 
-| Command | Use |
-|---------|-----|
-| `npm test` | Full frontend suite |
-| `npm run test:coverage` | Coverage report |
+| Command                 | Use                 |
+| ----------------------- | ------------------- |
+| `npm test`              | Full frontend suite |
+| `npm run test:coverage` | Coverage report     |
 
 Prefer targeted runs: `npx vitest run path/to/file.test.ts`. Coverage policy: [CONVENTIONS.md](../docs/spec/CONVENTIONS.md).
 

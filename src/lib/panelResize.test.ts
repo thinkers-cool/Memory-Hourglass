@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  clampLeadingPanelWidth,
-  clampTrailingPanelWidth,
-} from "./panelResize";
+import { clampLeadingPanelWidth, clampTrailingPanelWidth } from "./panelResize";
 
 describe("clampLeadingPanelWidth", () => {
   it("clamps within container bounds", () => {

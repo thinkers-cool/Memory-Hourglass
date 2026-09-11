@@ -22,7 +22,11 @@ describe("smbFolderPath", () => {
   });
 
   it("joins nested relative paths", () => {
-    expect(joinFolderPath("/mnt/share", "Photos/2024")).toBe("/mnt/share/Photos/2024");
-    expect(joinFolderPath("/mnt/share/", "/Photos/2024/")).toBe("/mnt/share/Photos/2024");
+    expect(joinFolderPath("/mnt/share", "Photos/2024")).toBe(
+      "/mnt/share/Photos/2024",
+    );
+    expect(joinFolderPath("/mnt/share/", "/Photos/2024/")).toBe(
+      "/mnt/share/Photos/2024",
+    );
   });
 });

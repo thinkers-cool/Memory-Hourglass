@@ -4,7 +4,10 @@ import {
   type ReactZoomPanPinchContentRef,
 } from "react-zoom-pan-pinch";
 import type { ZoomableMediaOnTransform } from "../../hooks/useZoomableMedia";
-import { IMAGE_VIEWER_ZOOM_MAX, IMAGE_VIEWER_ZOOM_MIN } from "../../lib/imageViewerZoom";
+import {
+  IMAGE_VIEWER_ZOOM_MAX,
+  IMAGE_VIEWER_ZOOM_MIN,
+} from "../../lib/imageViewerZoom";
 
 export function ZoomableMedia({
   resetKey,

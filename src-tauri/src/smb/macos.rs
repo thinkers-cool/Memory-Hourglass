@@ -33,15 +33,14 @@ pub fn list_shares(req: &SmbListRequest) -> Result<Vec<SmbShareEntry>> {
 }
 
 pub fn mount(mount_path: &Path, req: &SmbConnectRequest) -> Result<()> {
-    let share_url = format!(
-        "//{}:{}@{}",
-        percent_encode(&req.username),
-        percent_encode(&req.password),
-        req.host
-    );
+    store_internet_password(&req.host, &req.username, &req.password)?;
+    let share_url = format!("//{}@{}", percent_encode(&req.username), req.host);
     let share_url = format!("{}/{}", share_url, req.share);
 
     let mut command = subprocess_command("mount_smbfs");
+    if req.read_only {
+        command.arg("-o").arg("ro");
+    }
     command.arg(&share_url).arg(mount_path);
     let output = run_with_timeout(&mut command, SMB_LIST_TIMEOUT)?;
 
@@ -70,12 +69,32 @@ pub fn unmount(mount_path: &Path) -> Result<()> {
 }
 
 fn smbutil_target(req: &SmbListRequest) -> String {
-    format!(
-        "//{}:{}@{}",
-        percent_encode(&req.username),
-        percent_encode(&req.password),
-        req.host
-    )
+    let _ = store_internet_password(&req.host, &req.username, &req.password);
+    format!("//{}@{}", percent_encode(&req.username), req.host)
+}
+
+fn store_internet_password(host: &str, username: &str, password: &str) -> Result<()> {
+    let status = subprocess_command("security")
+        .args([
+            "add-internet-password",
+            "-a",
+            username,
+            "-s",
+            host,
+            "-w",
+            password,
+            "-r",
+            "smb ",
+            "-U",
+        ])
+        .status()
+        .map_err(AppError::from)?;
+    if status.success() {
+        return Ok(());
+    }
+    Err(AppError::Library(
+        "could not store SMB credentials in keychain".into(),
+    ))
 }
 
 fn smbutil_list_error_message(detail: &str) -> String {
@@ -180,14 +199,19 @@ IPC$                                            Pipe    IPC Service ()
     }
 
     #[test]
-    fn smbutil_target_includes_encoded_credentials() {
+    fn smbutil_target_includes_encoded_username() {
+        let dir = tempfile::tempdir().unwrap();
+        let security = dir.path().join("security.sh");
+        crate::test_support::unix::write_executable(&security, "#!/bin/sh\nexit 0\n");
+        std::env::set_var("MEMHG_TEST_SECURITY", security.to_string_lossy().as_ref());
         let target = smbutil_target(&SmbListRequest {
             host: "nas".into(),
             username: "a/b".into(),
             password: "p@ss".into(),
         });
         assert!(target.contains("%2F"));
-        assert!(target.contains("%40"));
+        assert!(!target.contains("%40"));
+        std::env::remove_var("MEMHG_TEST_SECURITY");
     }
 
     #[test]
@@ -207,16 +231,12 @@ IPC$                                            Pipe    IPC Service ()
         .unwrap();
         assert!(matches!(shares, SmbutilListStep::Shares(_)));
 
-        let retry = process_smbutil_list_attempt(
-            "Authenticate successfully\n",
-            "",
-            true,
-            0,
-        )
-        .unwrap();
+        let retry =
+            process_smbutil_list_attempt("Authenticate successfully\n", "", true, 0).unwrap();
         assert!(matches!(retry, SmbutilListStep::Retry));
 
-        let stop = process_smbutil_list_attempt("Authenticate successfully\n", "", true, 1).unwrap();
+        let stop =
+            process_smbutil_list_attempt("Authenticate successfully\n", "", true, 1).unwrap();
         assert!(matches!(stop, SmbutilListStep::Stop));
 
         let err = process_smbutil_list_attempt("", "failed", false, 0).unwrap_err();

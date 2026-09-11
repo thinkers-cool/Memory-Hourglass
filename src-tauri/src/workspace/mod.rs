@@ -116,8 +116,9 @@ pub fn init_workspace_at(path: &Path, read_only: bool) -> Result<WorkspaceInfo> 
         )));
     }
 
-    let canonical = std::fs::canonicalize(path)
-        .map_err(|_| AppError::Workspace(format!("workspace path not found: {}", path.display())))?;
+    let canonical = std::fs::canonicalize(path).map_err(|_| {
+        AppError::Workspace(format!("workspace path not found: {}", path.display()))
+    })?;
     if !canonical.is_dir() {
         return Err(AppError::Workspace(format!(
             "workspace path is not a directory: {}",
@@ -183,8 +184,9 @@ pub fn read_manifest(path: &Path) -> Result<WorkspaceManifest> {
 }
 
 pub fn workspace_info(path: &Path) -> Result<WorkspaceInfo> {
-    let canonical = std::fs::canonicalize(path)
-        .map_err(|_| AppError::Workspace(format!("workspace path not found: {}", path.display())))?;
+    let canonical = std::fs::canonicalize(path).map_err(|_| {
+        AppError::Workspace(format!("workspace path not found: {}", path.display()))
+    })?;
     let manifest = read_manifest(&canonical)?;
     Ok(WorkspaceInfo {
         path: canonical.to_string_lossy().to_string(),
@@ -368,10 +370,7 @@ pub async fn read_workspace_summary_counts(path: &Path) -> WorkspaceSummaryCount
     }
 }
 
-async fn count_table(
-    pool: &sqlx::sqlite::SqlitePool,
-    table: WorkspaceCountTable,
-) -> u32 {
+async fn count_table(pool: &sqlx::sqlite::SqlitePool, table: WorkspaceCountTable) -> u32 {
     let query = match table {
         WorkspaceCountTable::Roots => "SELECT COUNT(*) FROM source_root",
         WorkspaceCountTable::Albums => "SELECT COUNT(*) FROM album",
@@ -530,7 +529,9 @@ mod tests {
         let workspace_root = dir.path().join("Demo");
         std::fs::create_dir_all(&workspace_root).unwrap();
         init_workspace_at(&workspace_root, false).unwrap();
-        let catalog = Catalog::open(&workspace_root.join(CATALOG_DB)).await.unwrap();
+        let catalog = Catalog::open(&workspace_root.join(CATALOG_DB))
+            .await
+            .unwrap();
         sqlx::query(
             "INSERT INTO source_root (path, kind, scan_policy, status) VALUES (?, 'local', 'manual', 'idle')",
         )
@@ -699,7 +700,9 @@ mod tests {
         let dir = tempdir().unwrap();
         let app_data = dir.path().join("app");
         let service = WorkspaceService::load(app_data).unwrap();
-        let err = service.validate_open(&dir.path().join("missing")).unwrap_err();
+        let err = service
+            .validate_open(&dir.path().join("missing"))
+            .unwrap_err();
         assert!(err.to_string().contains("not found"));
         let file = dir.path().join("file.txt");
         std::fs::write(&file, b"x").unwrap();

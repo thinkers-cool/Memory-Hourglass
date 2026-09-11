@@ -11,10 +11,7 @@ pub const MINIMAL_XMP: &[u8] = br#"<?xpacket begin='' id='W5M0MpCehiHzreSzNTczkc
 <?xpacket end='w'?>"#;
 
 pub fn uses_xmp_sidecar_write(path: &Path) -> bool {
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     matches!(asset_kind(ext), "video" | "raw")
 }
 
@@ -26,11 +23,7 @@ pub fn xmp_sidecar_path(media_path: &Path) -> PathBuf {
     media_path.with_file_name(format!("{}.xmp", file_name))
 }
 
-pub fn workspace_sidecar_path(
-    workspace_xmp_dir: &Path,
-    root_id: i64,
-    rel_path: &str,
-) -> PathBuf {
+pub fn workspace_sidecar_path(workspace_xmp_dir: &Path, root_id: i64, rel_path: &str) -> PathBuf {
     workspace_xmp_dir
         .join(root_id.to_string())
         .join(format!("{}.xmp", rel_path))

@@ -88,14 +88,14 @@ describe("applyRangeSelection", () => {
   const items = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }];
 
   it("replaces selection for shift range", () => {
-    expect(
-      applyRangeSelection(items, 0, 2, new Set([99]), false),
-    ).toEqual(new Set([1, 2, 3]));
+    expect(applyRangeSelection(items, 0, 2, new Set([99]), false)).toEqual(
+      new Set([1, 2, 3]),
+    );
   });
 
   it("merges selection for additive range", () => {
-    expect(
-      applyRangeSelection(items, 0, 2, new Set([99]), true),
-    ).toEqual(new Set([99, 1, 2, 3]));
+    expect(applyRangeSelection(items, 0, 2, new Set([99]), true)).toEqual(
+      new Set([99, 1, 2, 3]),
+    );
   });
 });

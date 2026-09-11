@@ -105,7 +105,25 @@ describe("useSlideshowPreload", () => {
     const noThumb = { ...card(1), thumb_path: null };
     renderHook(() => useSlideshowPreload([noThumb], 0));
 
-    await waitFor(() => expect(imageSrcs.some((src) => src.includes("1.jpg"))).toBe(true));
+    await waitFor(() =>
+      expect(imageSrcs.some((src) => src.includes("1.jpg"))).toBe(true),
+    );
+  });
+
+  it("preloads images without decode support", async () => {
+    const imageSrcs: string[] = [];
+    class MockImage {
+      set src(value: string) {
+        imageSrcs.push(value);
+      }
+    }
+    vi.stubGlobal("Image", MockImage as unknown as typeof Image);
+
+    renderHook(() => useSlideshowPreload([card(1)], 0));
+    await waitFor(() =>
+      expect(imageSrcs.some((src) => src.includes("1.jpg"))).toBe(true),
+    );
+    vi.unstubAllGlobals();
   });
 
   it("clears video preload after timeout", async () => {

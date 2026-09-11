@@ -49,7 +49,9 @@ export function ExportDialog({
   return (
     <dialog open className="modal modal-open">
       <div className="modal-box surface-card max-w-md">
-        <h3 className="font-semibold text-lg mb-4">{t("dialogs:export.title")}</h3>
+        <h3 className="font-semibold text-lg mb-4">
+          {t("dialogs:export.title")}
+        </h3>
 
         <p className="label text-sm mb-4">
           {t("dialogs:export.selected", { count: state.assetIds.length })}
@@ -57,7 +59,9 @@ export function ExportDialog({
 
         <div className="space-y-3">
           <fieldset className="fieldset">
-            <legend className="fieldset-legend">{t("dialogs:export.destination")}</legend>
+            <legend className="fieldset-legend">
+              {t("dialogs:export.destination")}
+            </legend>
             <div className="join w-full">
               <input
                 type="text"
@@ -78,7 +82,9 @@ export function ExportDialog({
           </fieldset>
 
           <fieldset className="fieldset">
-            <legend className="fieldset-legend">{t("dialogs:export.layout")}</legend>
+            <legend className="fieldset-legend">
+              {t("dialogs:export.layout")}
+            </legend>
             <div className="join">
               <button
                 type="button"
@@ -105,7 +111,9 @@ export function ExportDialog({
           </fieldset>
 
           <fieldset className="fieldset">
-            <legend className="fieldset-legend">{t("dialogs:export.renameTemplate")}</legend>
+            <legend className="fieldset-legend">
+              {t("dialogs:export.renameTemplate")}
+            </legend>
             <input
               type="text"
               className={`${INPUT_CONTROL_FULL_CLASS} w-full`}
@@ -113,7 +121,9 @@ export function ExportDialog({
               disabled={exporting}
               onChange={(e) =>
                 updateOptions({
-                  rename_template: e.target.value.trim() ? e.target.value : undefined,
+                  rename_template: e.target.value.trim()
+                    ? e.target.value
+                    : undefined,
                 })
               }
             />
@@ -123,7 +133,9 @@ export function ExportDialog({
           </fieldset>
 
           <fieldset className="fieldset">
-            <legend className="fieldset-legend">{t("dialogs:export.format")}</legend>
+            <legend className="fieldset-legend">
+              {t("dialogs:export.format")}
+            </legend>
             <select
               className={SELECT_CONTROL_CLASS}
               value={state.options.format ?? ""}
@@ -133,17 +145,23 @@ export function ExportDialog({
               }
             >
               {FORMAT_OPTIONS.map((o) => (
-                <option key={o.labelKey} value={o.value}>{t(`dialogs:${o.labelKey}`)}</option>
+                <option key={o.labelKey} value={o.value}>
+                  {t(`dialogs:${o.labelKey}`)}
+                </option>
               ))}
             </select>
           </fieldset>
 
           {state.progress && (
             <fieldset className="fieldset">
-              <legend className="fieldset-legend">{t("dialogs:export.progress")}</legend>
+              <legend className="fieldset-legend">
+                {t("dialogs:export.progress")}
+              </legend>
               <div className="flex justify-between gap-2 text-xs mb-1">
                 <span className="truncate">{progressLabel}</span>
-                <span className="shrink-0">{state.progress.done}/{state.progress.total}</span>
+                <span className="shrink-0">
+                  {state.progress.done}/{state.progress.total}
+                </span>
               </div>
               <progress
                 className="progress progress-primary w-full"
@@ -155,7 +173,11 @@ export function ExportDialog({
         </div>
 
         <div className="modal-action">
-          <button type="button" className="btn btn-ghost btn-interactive btn-sm" onClick={onClose}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-interactive btn-sm"
+            onClick={onClose}
+          >
             {exportDone ? t("common:action.close") : t("common:action.cancel")}
           </button>
           <button
@@ -164,12 +186,16 @@ export function ExportDialog({
             disabled={exporting || !state.destination}
             onClick={onStart}
           >
-            {exporting ? t("dialogs:export.exporting") : t("common:action.export")}
+            {exporting
+              ? t("dialogs:export.exporting")
+              : t("common:action.export")}
           </button>
         </div>
       </div>
       <form method="dialog" className="modal-backdrop">
-        <button type="button" className="sr-only" onClick={onClose}>{t("common:action.close")}</button>
+        <button type="button" className="sr-only" onClick={onClose}>
+          {t("common:action.close")}
+        </button>
       </form>
     </dialog>
   );

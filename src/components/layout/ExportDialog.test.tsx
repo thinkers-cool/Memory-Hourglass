@@ -73,7 +73,11 @@ describe("ExportDialog", () => {
       <ExportDialog
         state={{
           ...baseState,
-          options: { flat: false, rename_template: undefined, format: undefined },
+          options: {
+            flat: false,
+            rename_template: undefined,
+            format: undefined,
+          },
         }}
         onClose={vi.fn()}
         onUpdate={vi.fn()}
@@ -192,7 +196,9 @@ describe("ExportDialog", () => {
     expect(screen.getByText("Export complete")).toBeInTheDocument();
     expect(screen.getByRole("progressbar")).toHaveAttribute("value", "2");
     await user.click(
-      screen.getByRole("dialog").querySelector(".modal-action button.btn-ghost") as Element,
+      screen
+        .getByRole("dialog")
+        .querySelector(".modal-action button.btn-ghost") as Element,
     );
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -236,7 +242,9 @@ describe("ExportDialog", () => {
         onStart={vi.fn()}
       />,
     );
-    fireEvent.change(screen.getByDisplayValue("name"), { target: { value: "   " } });
+    fireEvent.change(screen.getByDisplayValue("name"), {
+      target: { value: "   " },
+    });
     expect(onUpdate).toHaveBeenCalledWith({
       options: { flat: true, rename_template: undefined, format: "jpeg" },
     });

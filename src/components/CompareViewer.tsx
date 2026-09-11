@@ -43,10 +43,24 @@ function ComparePane({
   onTagMenuOpenChange: (id: number, open: boolean) => void;
   onAlbumMenuOpenChange: (id: number, open: boolean) => void;
   onRate: (id: number, rating: number) => void;
-  onToggleTag: (id: number, tagId: number, add: boolean) => void | Promise<void>;
-  onCreateTag: (id: number, tagName: string) => string | void | Promise<string | void>;
-  onToggleAlbum: (id: number, albumId: number, add: boolean) => void | Promise<void>;
-  onCreateAlbum: (id: number, name: string) => string | void | Promise<string | void>;
+  onToggleTag: (
+    id: number,
+    tagId: number,
+    add: boolean,
+  ) => void | Promise<void>;
+  onCreateTag: (
+    id: number,
+    tagName: string,
+  ) => string | void | Promise<string | void>;
+  onToggleAlbum: (
+    id: number,
+    albumId: number,
+    add: boolean,
+  ) => void | Promise<void>;
+  onCreateAlbum: (
+    id: number,
+    name: string,
+  ) => string | void | Promise<string | void>;
   onExport: (id: number) => void;
   onDelete: (id: number) => void;
 }) {
@@ -59,7 +73,11 @@ function ComparePane({
       <div className="navbar min-h-0 shrink-0 border-b border-divider-subtle px-3 py-1">
         <div className="navbar-start min-w-0">
           <span className="truncate text-sm">
-            {t("compare.counter", { index: index + 1, total, fileName: item.file_name })}
+            {t("compare.counter", {
+              index: index + 1,
+              total,
+              fileName: item.file_name,
+            })}
           </span>
         </div>
         <div className="navbar-end gap-1">
@@ -89,7 +107,11 @@ function ComparePane({
           onTransform={zoom.onTransform}
         >
           {item.kind === "video" ? (
-            <video src={mediaSrc} controls className="max-h-full max-w-full object-contain" />
+            <video
+              src={mediaSrc}
+              controls
+              className="max-h-full max-w-full object-contain"
+            />
           ) : (
             <img
               src={mediaSrc}
@@ -109,16 +131,24 @@ function ComparePane({
             tagMenuOpen={tagMenuId === item.id}
             onTagMenuOpenChange={(open) => onTagMenuOpenChange(item.id, open)}
             albumMenuOpen={albumMenuId === item.id}
-            onAlbumMenuOpenChange={(open) => onAlbumMenuOpenChange(item.id, open)}
+            onAlbumMenuOpenChange={(open) =>
+              onAlbumMenuOpenChange(item.id, open)
+            }
             onRate={(rating) => onRate(item.id, rating)}
             onToggleTag={(tagId, add) => onToggleTag(item.id, tagId, add)}
             onCreateTag={(tagName) => onCreateTag(item.id, tagName)}
-            onToggleAlbum={(albumId, add) => onToggleAlbum(item.id, albumId, add)}
+            onToggleAlbum={(albumId, add) =>
+              onToggleAlbum(item.id, albumId, add)
+            }
             onCreateAlbum={(name) => onCreateAlbum(item.id, name)}
             onExport={() => onExport(item.id)}
             onDelete={() => onDelete(item.id)}
-            selectedTagKeys={(compareDetails[item.id]?.tag_ids ?? []).map(String)}
-            selectedAlbumKeys={(compareDetails[item.id]?.album_ids ?? []).map(String)}
+            selectedTagKeys={(compareDetails[item.id]?.tag_ids ?? []).map(
+              String,
+            )}
+            selectedAlbumKeys={(compareDetails[item.id]?.album_ids ?? []).map(
+              String,
+            )}
           />
         </div>
       </div>
@@ -152,10 +182,24 @@ export function CompareViewer({
   onToggleStamp: () => void;
   onClose: () => void;
   onRate: (id: number, rating: number) => void;
-  onToggleTag: (id: number, tagId: number, add: boolean) => void | Promise<void>;
-  onCreateTag: (id: number, tagName: string) => string | void | Promise<string | void>;
-  onToggleAlbum: (id: number, albumId: number, add: boolean) => void | Promise<void>;
-  onCreateAlbum: (id: number, name: string) => string | void | Promise<string | void>;
+  onToggleTag: (
+    id: number,
+    tagId: number,
+    add: boolean,
+  ) => void | Promise<void>;
+  onCreateTag: (
+    id: number,
+    tagName: string,
+  ) => string | void | Promise<string | void>;
+  onToggleAlbum: (
+    id: number,
+    albumId: number,
+    add: boolean,
+  ) => void | Promise<void>;
+  onCreateAlbum: (
+    id: number,
+    name: string,
+  ) => string | void | Promise<string | void>;
   onExport: (id: number) => void;
   onDelete: (id: number) => void;
 }) {

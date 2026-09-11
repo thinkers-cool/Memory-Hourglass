@@ -1,9 +1,9 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AssetGridCard } from "./AssetGridCard";
 import type { AssetCard } from "../types";
 import { cellWidthForColumn, GRID_GAP_PX } from "../lib/gridSettings";
 import { stampIndicatorState, type StampConfig } from "../lib/stamp";
+import { VirtualGridRow } from "./VirtualGridRow";
 
 export function VirtualGrid({
   items,
@@ -76,9 +76,15 @@ export function VirtualGrid({
 
   useEffect(() => {
     rowVirtualizer.measure();
-  }, [cellSizePx, columnCount]);
+  }, [cellSizePx, columnCount, rowVirtualizer]);
 
-  const scrollToSelectedRowRef = useRef<() => void>(() => {});
+  const stampIndicatorFor = useCallback(
+    (card: AssetCard) =>
+      stampIndicatorState(card, stampConfig, stampArmed, stampMatchedIds),
+    [stampArmed, stampConfig, stampMatchedIds],
+  );
+
+  const scrollToSelectedRowRef = useRef<() => void>(null!);
   scrollToSelectedRowRef.current = () => {
     const idx = itemsRef.current.findIndex((item) => item.id === selectedId);
     if (idx < 0) return;
@@ -106,7 +112,8 @@ export function VirtualGrid({
     const onScroll = () => {
       if (!onLoadMore || !hasMore || loadingMore) return;
       const nearBottom =
-        el.scrollHeight - el.scrollTop - el.clientHeight < (cellSizePx + GRID_GAP_PX) * 2;
+        el.scrollHeight - el.scrollTop - el.clientHeight <
+        (cellSizePx + GRID_GAP_PX) * 2;
       if (nearBottom) onLoadMore();
     };
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -126,36 +133,20 @@ export function VirtualGrid({
           style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
         >
           {rowVirtualizer.getVirtualItems().map((virtualRow) => (
-            <div
+            <VirtualGridRow
               key={virtualRow.key}
-              className="absolute top-0 left-0 grid w-full items-start"
-              style={{
-                height: `${cellSizePx}px`,
-                transform: `translateY(${virtualRow.start}px)`,
-                gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
-                gap: `${GRID_GAP_PX}px`,
-              }}
-            >
-              {Array.from({ length: columnCount }, (_, col) => {
-                const card = items[virtualRow.index * columnCount + col];
-                if (!card) return <div key={col} />;
-                return (
-                  <AssetGridCard
-                    key={`${virtualRow.index}-${card.id}`}
-                    card={card}
-                    selected={selectedId === card.id || selectedIds.has(card.id)}
-                    stampIndicator={stampIndicatorState(
-                      card,
-                      stampConfig,
-                      stampArmed,
-                      stampMatchedIds,
-                    )}
-                    onSelect={(multi, range) => onSelect(card, multi, range)}
-                    onOpenFullView={() => onOpenFullView(card)}
-                  />
-                );
-              })}
-            </div>
+              virtualRowIndex={virtualRow.index}
+              virtualRowStart={virtualRow.start}
+              cellSizePx={cellSizePx}
+              columnCount={columnCount}
+              gapPx={GRID_GAP_PX}
+              items={items}
+              selectedId={selectedId}
+              selectedIds={selectedIds}
+              stampIndicatorFor={stampIndicatorFor}
+              onSelect={onSelect}
+              onOpenFullView={onOpenFullView}
+            />
           ))}
         </div>
       </div>

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { usePopoverDismiss } from "../../hooks/usePopoverDismiss";
@@ -25,7 +32,10 @@ import {
   MENU_ITEM_BUTTON_CLASS,
   MENU_POPOVER_CLASS,
 } from "../../lib/formControlClass";
-import { getDisplayValue, getMultiDisplayValue } from "../../lib/filterChipDisplay";
+import {
+  getDisplayValue,
+  getMultiDisplayValue,
+} from "../../lib/filterChipDisplay";
 
 export interface FilterDef {
   id: string;
@@ -86,12 +96,10 @@ export function FilterChipBar({
   const [pendingChipId, setPendingChipId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const [prevFilters, setPrevFilters] = useState(filters);
-  if (filters !== prevFilters) {
-    setPrevFilters(filters);
+  useEffect(() => {
     setOpenChip(null);
     setPendingChipId(null);
-  }
+  }, [filters]);
 
   const filterHasValue = useCallback(
     (f: FilterDef) => {
@@ -103,10 +111,7 @@ export function FilterChipBar({
   );
 
   const activeFilters = useMemo(
-    () =>
-      filters.filter(
-        (f) => filterHasValue(f) || pendingChipId === f.id,
-      ),
+    () => filters.filter((f) => filterHasValue(f) || pendingChipId === f.id),
     [filters, filterHasValue, pendingChipId],
   );
   const availableFilters = useMemo(
@@ -241,7 +246,9 @@ export function FilterChipBar({
           {!iconOnly ? (
             <>
               {t("filter.add")}
-              {availableFilters.length > 0 ? <Plus className="h-3 w-3" /> : null}
+              {availableFilters.length > 0 ? (
+                <Plus className="h-3 w-3" />
+              ) : null}
             </>
           ) : null}
         </button>
@@ -258,7 +265,9 @@ export function FilterChipBar({
                       type="button"
                       onClick={() => handleAddFilter(f)}
                     >
-                      {Icon && <Icon className="h-3.5 w-3.5 text-content-faint" />}
+                      {Icon && (
+                        <Icon className="h-3.5 w-3.5 text-content-faint" />
+                      )}
                       {f.label}
                     </button>
                   </li>
@@ -273,48 +282,48 @@ export function FilterChipBar({
         ref={chipsRef}
         className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden"
       >
-      {activeFilters.map((f) => (
-        <div key={f.id} className="relative shrink-0">
-          <Chip
-            iconOnly={iconOnly}
-            dateGte={dateGte}
-            dateLte={dateLte}
-            filter={f}
-            isOpen={openChip === f.id}
-            value={values[f.id] ?? ""}
-            selectedValues={multiValues[f.id] ?? []}
-            onChange={(v) => onFilterChange(f.id, v)}
-            onDateChange={onDateChange}
-            onRemove={() => handleRemoveFilter(f)}
-            onClose={() => handleChipDismiss(f.id)}
-            onToggle={() => {
-              if (openChip === f.id) {
-                handleChipDismiss(f.id);
-              } else {
-                setOpenChip(f.id);
-              }
-            }}
-          />
-        </div>
-      ))}
+        {activeFilters.map((f) => (
+          <div key={f.id} className="relative shrink-0">
+            <Chip
+              iconOnly={iconOnly}
+              dateGte={dateGte}
+              dateLte={dateLte}
+              filter={f}
+              isOpen={openChip === f.id}
+              value={values[f.id] ?? ""}
+              selectedValues={multiValues[f.id] ?? []}
+              onChange={(v) => onFilterChange(f.id, v)}
+              onDateChange={onDateChange}
+              onRemove={() => handleRemoveFilter(f)}
+              onClose={() => handleChipDismiss(f.id)}
+              onToggle={() => {
+                if (openChip === f.id) {
+                  handleChipDismiss(f.id);
+                } else {
+                  setOpenChip(f.id);
+                }
+              }}
+            />
+          </div>
+        ))}
 
-      {hasActive ? (
-        <button
-          className={`btn btn-ghost btn-interactive btn-sm h-8 min-h-0 shrink-0 text-content-faint hover:text-error ${
-            iconOnly ? "btn-square w-8 px-0" : "gap-1 text-xs font-normal"
-          }`}
-          type="button"
-          title={t("aria.clearAllFilters")}
-          aria-label={t("aria.clearAllFilters")}
-          onClick={() => {
-            setPendingChipId(null);
-            onClearAll();
-          }}
-        >
-          <X className="h-3.5 w-3.5" />
-          {!iconOnly ? t("filter.clearAll") : null}
-        </button>
-      ) : null}
+        {hasActive ? (
+          <button
+            className={`btn btn-ghost btn-interactive btn-sm h-8 min-h-0 shrink-0 text-content-faint hover:text-error ${
+              iconOnly ? "btn-square w-8 px-0" : "gap-1 text-xs font-normal"
+            }`}
+            type="button"
+            title={t("aria.clearAllFilters")}
+            aria-label={t("aria.clearAllFilters")}
+            onClick={() => {
+              setPendingChipId(null);
+              onClearAll();
+            }}
+          >
+            <X className="h-3.5 w-3.5" />
+            {!iconOnly ? t("filter.clearAll") : null}
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -442,11 +451,15 @@ function Chip({
             <FilterIcon className="h-3.5 w-3.5 shrink-0 text-content-faint" />
           ) : null}
           {!iconOnly ? (
-            <span className="font-medium text-content-faint">{filter.label}</span>
+            <span className="font-medium text-content-faint">
+              {filter.label}
+            </span>
           ) : null}
           {displayValue ? (
             <>
-              {!iconOnly ? <span className="text-content-quaternary">:</span> : null}
+              {!iconOnly ? (
+                <span className="text-content-quaternary">:</span>
+              ) : null}
               <span
                 className={`font-medium text-base-content ${
                   iconOnly ? "max-w-[4.5rem] truncate" : ""

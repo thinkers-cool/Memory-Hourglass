@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { mockLibraryActions } from "../test/fixtures";
 import { handleSelectionShortcuts } from "./keyboardShortcuts";
 
@@ -77,18 +77,28 @@ describe("handleSelectionShortcuts", () => {
 
   it("handles library batch remove", () => {
     const actions = mockLibraryActions();
-    handleSelectionShortcuts(keyEvent("r", { ctrlKey: true }), actions, libraryOptions);
+    handleSelectionShortcuts(
+      keyEvent("r", { ctrlKey: true }),
+      actions,
+      libraryOptions,
+    );
     expect(actions.batchRemove).toHaveBeenCalled();
   });
 
   it("returns false for unrelated keys", () => {
     const actions = mockLibraryActions();
-    expect(handleSelectionShortcuts(keyEvent("z"), actions, libraryOptions)).toBe(false);
+    expect(
+      handleSelectionShortcuts(keyEvent("z"), actions, libraryOptions),
+    ).toBe(false);
   });
 
   it("handles uppercase remove and purge shortcuts", () => {
     const actions = mockLibraryActions();
-    handleSelectionShortcuts(keyEvent("R", { ctrlKey: true }), actions, libraryOptions);
+    handleSelectionShortcuts(
+      keyEvent("R", { ctrlKey: true }),
+      actions,
+      libraryOptions,
+    );
     handleSelectionShortcuts(keyEvent("P", { ctrlKey: true }), actions, {
       ...libraryOptions,
       trashMode: true,

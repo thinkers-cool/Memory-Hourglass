@@ -1,81 +1,110 @@
 use crate::catalog::models::SourceRoot;
+use crate::commands::context::trace_command;
 use crate::error::Result;
 use crate::library::{FolderEntry, RelinkPreview, RootStats, SmbSourceInput};
 use crate::state::AppState;
 use tauri::State;
 
-#[tauri::command] pub async fn add_root(path: String, state: State<'_, AppState>) -> Result<SourceRoot> {
-    state
-        .with_active(|ws| async move {
-            let root = ws.library.add_local_root(&path).await?;
-            ws.notify_roots_refresh();
-            Ok(root)
-        })
-        .await
+#[tauri::command]
+pub async fn add_root(path: String, state: State<'_, AppState>) -> Result<SourceRoot> {
+    trace_command("add_root", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move {
+                let root = ws.library.add_local_root(&path).await?;
+                ws.notify_roots_refresh();
+                Ok(root)
+            })
+            .await
+    })
+    .await
 }
 
-#[tauri::command] pub async fn add_smb_source(
+#[tauri::command]
+pub async fn add_smb_source(
     input: SmbSourceInput,
     state: State<'_, AppState>,
 ) -> Result<SourceRoot> {
-    state
-        .with_active(|ws| async move {
-            let root = ws.library.add_smb_source(input).await?;
-            ws.notify_roots_refresh();
-            Ok(root)
-        })
-        .await
+    trace_command("add_smb_source", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move {
+                let root = ws.library.add_smb_source(input).await?;
+                ws.notify_roots_refresh();
+                Ok(root)
+            })
+            .await
+    })
+    .await
 }
 
-#[tauri::command] pub async fn relink_root(
-    id: i64,
-    path: String,
-    state: State<'_, AppState>,
-) -> Result<SourceRoot> {
-    state
-        .with_active(|ws| async move { ws.library.relink_root(id, &path).await })
-        .await
+#[tauri::command]
+pub async fn relink_root(id: i64, path: String, state: State<'_, AppState>) -> Result<SourceRoot> {
+    trace_command("relink_root", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move { ws.library.relink_root(id, &path).await })
+            .await
+    })
+    .await
 }
 
-#[tauri::command] pub async fn preview_relink(
+#[tauri::command]
+pub async fn preview_relink(
     id: i64,
     path: String,
     state: State<'_, AppState>,
 ) -> Result<RelinkPreview> {
-    state
-        .with_active(|ws| async move { ws.library.preview_relink(id, &path).await })
-        .await
+    trace_command("preview_relink", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move { ws.library.preview_relink(id, &path).await })
+            .await
+    })
+    .await
 }
 
-#[tauri::command] pub async fn list_root_stats(state: State<'_, AppState>) -> Result<Vec<RootStats>> {
-    state
-        .with_active(|ws| async move { ws.library.list_root_stats().await })
-        .await
+#[tauri::command]
+pub async fn list_root_stats(state: State<'_, AppState>) -> Result<Vec<RootStats>> {
+    trace_command("list_root_stats", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move { ws.library.list_root_stats().await })
+            .await
+    })
+    .await
 }
 
-#[tauri::command] pub async fn remove_root(id: i64, state: State<'_, AppState>) -> Result<()> {
-    state
-        .with_active(|ws| async move {
-            ws.library.remove_root(id).await?;
-            ws.notify_roots_refresh();
-            Ok(())
-        })
-        .await
+#[tauri::command]
+pub async fn remove_root(id: i64, state: State<'_, AppState>) -> Result<()> {
+    trace_command("remove_root", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move {
+                ws.library.remove_root(id).await?;
+                ws.notify_roots_refresh();
+                Ok(())
+            })
+            .await
+    })
+    .await
 }
 
-#[tauri::command] pub async fn list_roots(state: State<'_, AppState>) -> Result<Vec<SourceRoot>> {
-    state
-        .with_active(|ws| async move { ws.library.list_roots().await })
-        .await
+#[tauri::command]
+pub async fn list_roots(state: State<'_, AppState>) -> Result<Vec<SourceRoot>> {
+    trace_command("list_roots", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move { ws.library.list_roots().await })
+            .await
+    })
+    .await
 }
 
-#[tauri::command] pub async fn list_folder_children(
+#[tauri::command]
+pub async fn list_folder_children(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<FolderEntry>> {
-    state
-        .with_active(|ws| async move { ws.library.list_folder_children(&path).await })
-        .await
+    trace_command("list_folder_children", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move { ws.library.list_folder_children(&path).await })
+            .await
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -92,7 +121,11 @@ mod tests {
         state
             .with_active(|ws| async move {
                 let mut refresh = ws.roots_refresh.subscribe();
-                let root = ws.library.add_local_root(photos.to_str().unwrap()).await.unwrap();
+                let root = ws
+                    .library
+                    .add_local_root(photos.to_str().unwrap())
+                    .await
+                    .unwrap();
                 ws.notify_roots_refresh();
                 refresh.changed().await.unwrap();
                 assert!(root.id > 0);
@@ -121,7 +154,11 @@ mod tests {
         let (state, _guard) = AppState::test_with_fresh_workspace().await.unwrap();
         state
             .with_active(|ws| async move {
-                let root = ws.library.add_local_root(photos.to_str().unwrap()).await.unwrap();
+                let root = ws
+                    .library
+                    .add_local_root(photos.to_str().unwrap())
+                    .await
+                    .unwrap();
                 let mut refresh = ws.roots_refresh.subscribe();
                 ws.library.remove_root(root.id).await.unwrap();
                 ws.notify_roots_refresh();

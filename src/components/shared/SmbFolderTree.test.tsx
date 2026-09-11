@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../api/client";
@@ -75,7 +75,9 @@ describe("SmbFolderTree", () => {
   });
 
   it("handles load errors by showing empty children", async () => {
-    vi.mocked(api.listFolderChildren).mockRejectedValue(new Error("read failed"));
+    vi.mocked(api.listFolderChildren).mockRejectedValue(
+      new Error("read failed"),
+    );
     render(
       <SmbFolderTree
         rootPath="/smb/root"
@@ -126,5 +128,22 @@ describe("SmbFolderTree", () => {
     expect(screen.queryByText("Photos")).not.toBeInTheDocument();
     await user.keyboard(" ");
     await waitFor(() => expect(screen.getByText("Photos")).toBeInTheDocument());
+  });
+
+  it("ignores unrelated keys on folder chevrons", async () => {
+    render(
+      <SmbFolderTree
+        rootPath="/smb/root"
+        rootLabel="NAS"
+        selectedRelativePath=""
+        onSelect={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText("Photos")).toBeInTheDocument());
+    const chevron = screen.getAllByLabelText("Collapse folder")[0];
+    fireEvent.keyDown(chevron, { key: "ArrowDown" });
+    expect(screen.getByText("Photos")).toBeInTheDocument();
+    fireEvent.keyDown(chevron, { key: " " });
+    expect(screen.queryByText("Photos")).not.toBeInTheDocument();
   });
 });

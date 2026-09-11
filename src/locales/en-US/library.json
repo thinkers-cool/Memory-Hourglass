@@ -9,6 +9,11 @@
     "pathNotFound": "Path not found",
     "removeWorkspace": "Remove workspace"
   },
+  "syncState": {
+    "missing": "Missing",
+    "new": "New",
+    "modified": "Modified"
+  },
   "nav": {
     "library": "Library",
     "collection": "Collection",
@@ -184,6 +189,7 @@
     "connectingSmbShare": "Connecting SMB share…",
     "smbShareConnected": "SMB share connected — scanning…",
     "scanning": "Scanning…",
+    "addedFolderScanning": "Added folder — scanning…",
     "noSlideshowItems": "No items to slideshow",
     "selectTwoToCompare": "Select at least 2 items to compare",
     "selectItemsToStamp": "Select items to stamp",

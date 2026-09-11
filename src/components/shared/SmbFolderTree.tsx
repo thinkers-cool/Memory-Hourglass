@@ -96,37 +96,49 @@ export function SmbFolderTree({
   selectedRelativePath: string;
   onSelect: (relativePath: string) => void;
 }) {
-  const [root, setRoot] = useState<TreeNode>(() => createRootNode(rootPath, rootLabel));
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set([""]));
+  const [root, setRoot] = useState<TreeNode>(() =>
+    createRootNode(rootPath, rootLabel),
+  );
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
+    () => new Set([""]),
+  );
 
-  const loadChildren = useCallback(async (node: TreeNode) => {
-    setRoot((current) => updateNode(current, node.path, (value) => ({ ...value, loading: true })));
-    try {
-      const entries = await api.listFolderChildren(node.path);
-      const children = entries.map((entry) => ({
-        name: entry.name,
-        path: entry.path,
-        relativePath: relativeFolderPath(rootPath, entry.path),
-        children: null,
-        loading: false,
-      }));
+  const loadChildren = useCallback(
+    async (node: TreeNode) => {
       setRoot((current) =>
         updateNode(current, node.path, (value) => ({
           ...value,
-          children,
-          loading: false,
+          loading: true,
         })),
       );
-    } catch {
-      setRoot((current) =>
-        updateNode(current, node.path, (value) => ({
-          ...value,
-          children: [],
+      try {
+        const entries = await api.listFolderChildren(node.path);
+        const children = entries.map((entry) => ({
+          name: entry.name,
+          path: entry.path,
+          relativePath: relativeFolderPath(rootPath, entry.path),
+          children: null,
           loading: false,
-        })),
-      );
-    }
-  }, [rootPath]);
+        }));
+        setRoot((current) =>
+          updateNode(current, node.path, (value) => ({
+            ...value,
+            children,
+            loading: false,
+          })),
+        );
+      } catch {
+        setRoot((current) =>
+          updateNode(current, node.path, (value) => ({
+            ...value,
+            children: [],
+            loading: false,
+          })),
+        );
+      }
+    },
+    [rootPath],
+  );
 
   useEffect(() => {
     setRoot(createRootNode(rootPath, rootLabel));

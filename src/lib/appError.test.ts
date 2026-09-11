@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
-import { parseAppError, userFacingErrorMessage, errorNotification } from "./appError";
+import {
+  parseAppError,
+  userFacingErrorMessage,
+  errorNotification,
+} from "./appError";
 
 describe("parseAppError", () => {
   it("parses structured workspace payload", () => {
@@ -11,9 +15,7 @@ describe("parseAppError", () => {
       }),
     );
     expect(payload.code).toBe("workspace_not_a_workspace");
-    expect(
-      userFacingErrorMessage(payload),
-    ).toContain("not a workspace");
+    expect(userFacingErrorMessage(payload)).toContain("not a workspace");
   });
 
   it("parses structured invoke error objects", () => {
@@ -37,7 +39,10 @@ describe("parseAppError", () => {
   });
 
   it("builds error notifications", () => {
-    const notification = errorNotification({ code: "library", message: "disk full" });
+    const notification = errorNotification({
+      code: "library",
+      message: "disk full",
+    });
     expect(notification.kind).toBe("error");
     expect(notification.text).toBe("disk full");
   });
@@ -66,7 +71,10 @@ describe("parseAppError", () => {
   });
 
   it("returns payload message when no translation exists", () => {
-    const payload = parseAppError({ code: "library", message: "custom backend detail" });
+    const payload = parseAppError({
+      code: "library",
+      message: "custom backend detail",
+    });
     expect(userFacingErrorMessage(payload)).toBe("custom backend detail");
   });
 
@@ -83,7 +91,9 @@ describe("parseAppError", () => {
       code: "not_found",
       message: "The requested item was not found.",
     });
-    expect(userFacingErrorMessage(payload)).toBe("The requested item was not found.");
+    expect(userFacingErrorMessage(payload)).toBe(
+      "The requested item was not found.",
+    );
   });
 
   it("returns raw detail for non-workspace codes with translation", () => {
@@ -95,7 +105,9 @@ describe("parseAppError", () => {
   });
 
   it("uses generic fallback for empty unstructured errors", () => {
-    expect(parseAppError("   ").message).toBe(i18n.t("errors:generic.fallback"));
+    expect(parseAppError("   ").message).toBe(
+      i18n.t("errors:generic.fallback"),
+    );
   });
 
   it("returns translated message for workspace codes with custom detail", () => {
@@ -114,13 +126,18 @@ describe("parseAppError", () => {
       return originalExists(key as never);
     });
     expect(
-      userFacingErrorMessage({ code: "custom_code", message: "backend detail" }),
+      userFacingErrorMessage({
+        code: "custom_code",
+        message: "backend detail",
+      }),
     ).toBe("backend detail");
     vi.restoreAllMocks();
   });
 
   it("rejects malformed structured invoke payloads", () => {
     expect(parseAppError({ code: "library" }).code).toBe("workspace");
-    expect(parseAppError(JSON.stringify({ code: 1, message: "x" })).code).toBe("workspace");
+    expect(parseAppError(JSON.stringify({ code: 1, message: "x" })).code).toBe(
+      "workspace",
+    );
   });
 });

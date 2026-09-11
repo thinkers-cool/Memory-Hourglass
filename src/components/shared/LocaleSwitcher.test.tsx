@@ -21,7 +21,11 @@ describe("LocaleSwitcher", () => {
     await changeLocale("en-US");
     render(
       <>
-        <LocaleSwitcher iconOnly={false} size="nav" menuPlacement="float-top-end" />
+        <LocaleSwitcher
+          iconOnly={false}
+          size="nav"
+          menuPlacement="float-top-end"
+        />
         <button type="button">Outside</button>
       </>,
     );
@@ -30,16 +34,18 @@ describe("LocaleSwitcher", () => {
     await user.click(screen.getByRole("button", { name: "Language" }));
     expect(screen.getByRole("radio", { name: "English" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Outside" }));
-    expect(screen.queryByRole("radio", { name: "English" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("radio", { name: "English" }),
+    ).not.toBeInTheDocument();
   });
 
   it("positions menu using fallback dimensions before measure", async () => {
     const user = userEvent.setup();
     await changeLocale("en-US");
-    render(<LocaleSwitcher />);
+    render(<LocaleSwitcher menuPlacement="float-bottom-end" />);
     await user.click(screen.getByRole("button", { name: "Language" }));
+    window.dispatchEvent(new Event("scroll"));
     expect(screen.getByRole("radio", { name: "English" })).toBeInTheDocument();
-    window.dispatchEvent(new Event("resize"));
   });
 
   it("positions menu using measured dimensions", async () => {
@@ -51,8 +57,14 @@ describe("LocaleSwitcher", () => {
       expect(document.body.querySelector(".surface-popover")).toBeTruthy();
     });
     const menu = document.body.querySelector(".surface-popover") as HTMLElement;
-    Object.defineProperty(menu, "offsetWidth", { configurable: true, value: 180 });
-    Object.defineProperty(menu, "offsetHeight", { configurable: true, value: 120 });
+    Object.defineProperty(menu, "offsetWidth", {
+      configurable: true,
+      value: 180,
+    });
+    Object.defineProperty(menu, "offsetHeight", {
+      configurable: true,
+      value: 120,
+    });
     await act(async () => {
       window.dispatchEvent(new Event("resize"));
     });

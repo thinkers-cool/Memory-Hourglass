@@ -39,7 +39,9 @@ export function ThemePreviewSwatches({
     >
       <span
         className="h-2.5 w-2.5 rounded-full ring-1 ring-base-content/10"
-        style={{ backgroundColor: `var(${THEME_PREVIEW_VARS.background}, var(--color-base-200))` }}
+        style={{
+          backgroundColor: `var(${THEME_PREVIEW_VARS.background}, var(--color-base-200))`,
+        }}
       />
       <span
         className="h-2.5 w-2.5 rounded-full ring-1 ring-base-content/10"

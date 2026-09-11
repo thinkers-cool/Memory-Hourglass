@@ -6,7 +6,10 @@ export async function enterWindowFullscreen(): Promise<void> {
     await getCurrentWindow().setFullscreen(true);
     return;
   }
-  if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+  if (
+    !document.fullscreenElement &&
+    document.documentElement.requestFullscreen
+  ) {
     await document.documentElement.requestFullscreen();
   }
 }

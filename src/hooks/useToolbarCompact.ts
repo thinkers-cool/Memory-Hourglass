@@ -26,7 +26,7 @@ export function useToolbarCompact(
     observer.observe(element);
 
     return () => observer.disconnect();
-  }, [threshold]);
+  }, [rootRef, threshold]);
 
   return compact;
 }

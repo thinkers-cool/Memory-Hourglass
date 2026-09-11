@@ -28,15 +28,14 @@ describe("StartPage", () => {
   };
 
   it("centers branding when no workspaces are registered", () => {
-    render(
-      <StartPage
-        recent={[]}
-        {...defaultProps}
-      />,
-    );
+    render(<StartPage recent={[]} {...defaultProps} />);
 
-    expect(screen.getByRole("button", { name: "Open Workspace" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create Workspace" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open Workspace" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Create Workspace" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Workspaces")).not.toBeInTheDocument();
     expect(screen.queryByText("No workspaces yet")).not.toBeInTheDocument();
   });
@@ -62,7 +61,9 @@ describe("StartPage", () => {
 
     expect(screen.getByText("Workspaces")).toBeInTheDocument();
     expect(screen.getByText("/tmp/demo")).toBeInTheDocument();
-    expect(screen.getByText("2 Libraries · 1 Album · 5 Tags")).toBeInTheDocument();
+    expect(
+      screen.getByText("2 Libraries · 1 Album · 5 Tags"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Path not found")).not.toBeInTheDocument();
   });
 
@@ -105,19 +106,23 @@ describe("StartPage", () => {
       </>,
     );
     await user.click(screen.getByRole("button", { name: "Create Workspace" }));
-    expect(screen.getByRole("menuitem", { name: "Read-Write Workspace" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Read-Write Workspace" }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Outside" }));
-    expect(screen.queryByRole("menuitem", { name: "Read-Write Workspace" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Read-Write Workspace" }),
+    ).not.toBeInTheDocument();
   });
 
   it("starts read-write create flow from dropdown", async () => {
     const user = userEvent.setup();
-    render(
-      <StartPage recent={[]} {...defaultProps} />,
-    );
+    render(<StartPage recent={[]} {...defaultProps} />);
 
     await user.click(screen.getByRole("button", { name: "Create Workspace" }));
-    await user.click(screen.getByRole("menuitem", { name: "Read-Write Workspace" }));
+    await user.click(
+      screen.getByRole("menuitem", { name: "Read-Write Workspace" }),
+    );
     expect(onCreate).toHaveBeenCalledWith(false);
   });
 
@@ -142,17 +147,19 @@ describe("StartPage", () => {
 
     const row = screen.getByText("/tmp/readonly").closest("button");
     expect(row).not.toBeNull();
-    expect(within(row as HTMLElement).getByText("Read Only")).toBeInTheDocument();
+    expect(
+      within(row as HTMLElement).getByText("Read Only"),
+    ).toBeInTheDocument();
   });
 
   it("starts read-only create flow from dropdown", async () => {
     const user = userEvent.setup();
-    render(
-      <StartPage recent={[]} {...defaultProps} />,
-    );
+    render(<StartPage recent={[]} {...defaultProps} />);
 
     await user.click(screen.getByRole("button", { name: "Create Workspace" }));
-    await user.click(screen.getByRole("menuitem", { name: "Read-Only Workspace" }));
+    await user.click(
+      screen.getByRole("menuitem", { name: "Read-Only Workspace" }),
+    );
     expect(onCreate).toHaveBeenCalledWith(true);
   });
 

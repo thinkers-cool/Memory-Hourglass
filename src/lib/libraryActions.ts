@@ -36,9 +36,13 @@ export type LibraryActions = {
   openTagMenu: () => void;
   openAlbumMenu: () => void;
   toggleTagOnSelection: (tagId: number, add: boolean) => void;
-  createTagOnSelection: (tagName: string) => string | void | Promise<string | void>;
+  createTagOnSelection: (
+    tagName: string,
+  ) => string | void | Promise<string | void>;
   toggleAlbumOnSelection: (albumId: number, add: boolean) => void;
-  createAlbumOnSelection: (name: string) => string | void | Promise<string | void>;
+  createAlbumOnSelection: (
+    name: string,
+  ) => string | void | Promise<string | void>;
   batchRemove: () => void;
   batchPurge: () => void;
   softDeleteDuplicate: (id: number) => void;
@@ -72,10 +76,24 @@ export type LibraryActions = {
   openCompare: () => void;
   closeCompare: () => void;
   rateAsset: (id: number, rating: number) => void;
-  toggleTagOnAsset: (id: number, tagId: number, add: boolean) => void | Promise<void>;
-  createTagOnAsset: (id: number, tagName: string) => string | void | Promise<string | void>;
-  toggleAlbumOnAsset: (id: number, albumId: number, add: boolean) => void | Promise<void>;
-  createAlbumOnAsset: (id: number, name: string) => string | void | Promise<string | void>;
+  toggleTagOnAsset: (
+    id: number,
+    tagId: number,
+    add: boolean,
+  ) => void | Promise<void>;
+  createTagOnAsset: (
+    id: number,
+    tagName: string,
+  ) => string | void | Promise<string | void>;
+  toggleAlbumOnAsset: (
+    id: number,
+    albumId: number,
+    add: boolean,
+  ) => void | Promise<void>;
+  createAlbumOnAsset: (
+    id: number,
+    name: string,
+  ) => string | void | Promise<string | void>;
   deleteAsset: (id: number) => void;
   disarmStamp: () => void;
   setStampRating: (rating: number | null) => void;

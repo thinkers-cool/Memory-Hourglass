@@ -73,7 +73,10 @@ fn image_format_from_path(path: &Path) -> Result<image::ImageFormat> {
         "webp" => Ok(image::ImageFormat::WebP),
         "tif" | "tiff" => Ok(image::ImageFormat::Tiff),
         "bmp" => Ok(image::ImageFormat::Bmp),
-        other => Err(AppError::Metadata(format!("unsupported image extension: {}", other))),
+        other => Err(AppError::Metadata(format!(
+            "unsupported image extension: {}",
+            other
+        ))),
     }
 }
 
@@ -130,8 +133,7 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let source = dir.path().join("input.png");
-        let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
-            ImageBuffer::from_pixel(4, 4, Rgb([120, 80, 40]));
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_pixel(4, 4, Rgb([120, 80, 40]));
         img.save(&source).unwrap();
         let svc = ThumbService::new(dir.path().join("thumbs"));
         let key = svc.ensure_thumbnail(2, &source).unwrap();
@@ -213,8 +215,8 @@ mod tests {
         let blocker = dir.path().join("not-a-dir");
         std::fs::write(&blocker, b"x").unwrap();
         let svc = ThumbService::new(blocker.join("thumbs"));
-        let img = image::load_from_memory(include_bytes!("../../tests/fixtures/minimal.jpg"))
-            .unwrap();
+        let img =
+            image::load_from_memory(include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
         let err = svc.resize_and_save(1, img).unwrap_err();
         assert!(!err.to_string().is_empty());
     }
@@ -268,8 +270,7 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let source = dir.path().join("anim.gif");
-        let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
-            ImageBuffer::from_pixel(4, 4, Rgb([200, 100, 50]));
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_pixel(4, 4, Rgb([200, 100, 50]));
         img.save(&source).unwrap();
         let svc = ThumbService::new(dir.path().join("thumbs"));
         let key = svc.ensure_thumbnail(8, &source).unwrap();
@@ -286,8 +287,8 @@ mod tests {
         std::fs::create_dir_all(&thumb_dir).unwrap();
         std::fs::set_permissions(&thumb_dir, std::fs::Permissions::from_mode(0o500)).unwrap();
         let svc = ThumbService::new(thumb_dir);
-        let img = image::load_from_memory(include_bytes!("../../tests/fixtures/minimal.jpg"))
-            .unwrap();
+        let img =
+            image::load_from_memory(include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
         let err = svc.resize_and_save(3, img).unwrap_err();
         assert!(!err.to_string().is_empty());
     }

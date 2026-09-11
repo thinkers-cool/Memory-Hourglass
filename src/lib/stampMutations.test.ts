@@ -25,7 +25,9 @@ describe("runStampToggle", () => {
 
     expect(result.applied).toBe(2);
     expect(result.unstamped).toBe(0);
-    expect(api.batchUpdateAssetMeta).toHaveBeenCalledWith([10, 11], { rating: 3 });
+    expect(api.batchUpdateAssetMeta).toHaveBeenCalledWith([10, 11], {
+      rating: 3,
+    });
     expect(api.batchAppendTags).toHaveBeenCalledWith([10, 11], 1);
     expect(api.addAlbumItems).toHaveBeenCalledWith(2, [10, 11]);
   });
@@ -58,6 +60,28 @@ describe("runStampToggle", () => {
     expect(result.applied).toBe(0);
     expect(result.unstamped).toBe(1);
     expect(api.batchUpdateAssetMeta).toHaveBeenCalledWith([10], { rating: 0 });
+    expect(api.batchRemoveTags).toHaveBeenCalledWith([10], 1);
+    expect(api.removeAlbumItems).toHaveBeenCalledWith(2, [10]);
+  });
+
+  it("stamps and unstamps tag-only config without rating updates", async () => {
+    const config = { rating: null, tag_ids: [1], album_ids: [2] };
+    await runStampToggle([10], config, async () => ({
+      rating: null,
+      tag_ids: [],
+      album_ids: [],
+    }));
+    expect(api.batchUpdateAssetMeta).not.toHaveBeenCalled();
+    expect(api.batchAppendTags).toHaveBeenCalledWith([10], 1);
+    expect(api.addAlbumItems).toHaveBeenCalledWith(2, [10]);
+
+    vi.clearAllMocks();
+    await runStampToggle([10], config, async () => ({
+      rating: null,
+      tag_ids: [1],
+      album_ids: [2],
+    }));
+    expect(api.batchUpdateAssetMeta).not.toHaveBeenCalled();
     expect(api.batchRemoveTags).toHaveBeenCalledWith([10], 1);
     expect(api.removeAlbumItems).toHaveBeenCalledWith(2, [10]);
   });

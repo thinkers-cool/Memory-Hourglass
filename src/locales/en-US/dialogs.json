@@ -17,7 +17,9 @@
     "formatJpeg": "JPEG",
     "formatPng": "PNG",
     "progress": "Progress",
-    "exporting": "Exporting…"
+    "exporting": "Exporting…",
+    "selectDestination": "Select a destination folder",
+    "started": "Export started"
   },
   "smb": {
     "title": "Add network source",

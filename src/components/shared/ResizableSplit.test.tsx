@@ -1,4 +1,11 @@
-import { act, createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ResizableSplit, ResizableTrailingPanel } from "./ResizableSplit";
 
@@ -56,9 +63,13 @@ describe("ResizableSplit", () => {
         />
       </div>,
     );
-    const splitRoot = container.querySelector(".flex.min-h-0.min-w-0.flex-1") as HTMLElement;
+    const splitRoot = container.querySelector(
+      ".flex.min-h-0.min-w-0.flex-1",
+    ) as HTMLElement;
     mockRect(splitRoot, { width: 800, left: 0, right: 800 });
-    const divider = container.querySelector(".cursor-col-resize") as HTMLElement;
+    const divider = container.querySelector(
+      ".cursor-col-resize",
+    ) as HTMLElement;
     divider.setPointerCapture = vi.fn();
     divider.releasePointerCapture = vi.fn();
 
@@ -108,9 +119,13 @@ describe("ResizableTrailingPanel", () => {
         />
       </div>,
     );
-    const panelRoot = container.querySelector(".relative.z-0.flex") as HTMLElement;
+    const panelRoot = container.querySelector(
+      ".relative.z-0.flex",
+    ) as HTMLElement;
     mockRect(panelRoot, { width: 800, left: 0, right: 800 });
-    const divider = container.querySelector(".cursor-col-resize") as HTMLElement;
+    const divider = container.querySelector(
+      ".cursor-col-resize",
+    ) as HTMLElement;
     divider.setPointerCapture = vi.fn();
 
     fireEvent.pointerDown(divider, { clientX: 520, pointerId: 2 });
@@ -222,6 +237,25 @@ describe("ResizableTrailingPanel", () => {
     }
   });
 
+  it("keeps side panel mounted after width transition while open", () => {
+    render(
+      <div style={{ width: 800, height: 400 }}>
+        <ResizableTrailingPanel
+          main={<div>Main</div>}
+          side={<div>Side</div>}
+          sideWidth={280}
+          onSideWidthChange={vi.fn()}
+          minMain={280}
+          minSide={240}
+          showSide
+        />
+      </div>,
+    );
+    const sideContainer = screen.getByText("Side").parentElement?.parentElement;
+    fireWidthTransitionEnd(sideContainer!);
+    expect(screen.getByText("Side")).toBeInTheDocument();
+  });
+
   it("ignores non-width transition events while side panel is open", () => {
     render(
       <div style={{ width: 800, height: 400 }}>
@@ -237,7 +271,9 @@ describe("ResizableTrailingPanel", () => {
       </div>,
     );
     const sideContainer = screen.getByText("Side").parentElement?.parentElement;
-    const event = createEvent.transitionEnd(sideContainer!, { propertyName: "opacity" });
+    const event = createEvent.transitionEnd(sideContainer!, {
+      propertyName: "opacity",
+    });
     Object.defineProperty(event, "propertyName", { value: "opacity" });
     fireEvent(sideContainer!, event);
     expect(screen.getByText("Side")).toBeInTheDocument();

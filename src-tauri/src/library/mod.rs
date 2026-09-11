@@ -12,11 +12,15 @@ use std::path::{Path, PathBuf};
 
 pub mod dirs;
 
-pub use dirs::{list_child_directories, resolve_share_subfolder, FolderEntry};
+pub use dirs::{
+    list_child_directories, resolve_path_under_root, resolve_share_subfolder, validate_file_name,
+    validate_rel_path, FolderEntry,
+};
 
 pub struct LibraryService {
     pool: SqlitePool,
     mount_dir: PathBuf,
+    read_only: bool,
 }
 
 fn cleanup_smb_mount_for_root(
@@ -26,8 +30,33 @@ fn cleanup_smb_mount_for_root(
     username: &str,
 ) -> Result<()> {
     let share_mount = share_mount_point(mount_dir, host, share, username);
-    if share_mount.exists() { unmount_share(&share_mount)?; }
+    if share_mount.exists() {
+        unmount_share(&share_mount)?;
+    }
     delete_credentials(host, share, username)
+}
+
+async fn validate_browsable_path(path: &str, mount_dir: &Path, pool: &SqlitePool) -> Result<()> {
+    let canonical = std::fs::canonicalize(path)
+        .map_err(|_| AppError::Library(format!("path not found: {}", path)))?;
+    if mount_dir
+        .canonicalize()
+        .map(|mount_path| canonical.starts_with(&mount_path))
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+    let roots = SourceRootRepo::new(pool.clone()).list_roots().await?;
+    for root in roots {
+        if let Ok(root_path) = std::fs::canonicalize(&root.path) {
+            if canonical.starts_with(&root_path) {
+                return Ok(());
+            }
+        }
+    }
+    Err(AppError::InvalidInput(
+        "path is outside allowed library locations".into(),
+    ))
 }
 
 async fn relink_smb_root_if_needed(
@@ -52,7 +81,21 @@ async fn relink_smb_root_if_needed(
 
 impl LibraryService {
     pub fn new(pool: SqlitePool, mount_dir: PathBuf) -> Self {
-        Self { pool, mount_dir }
+        Self::with_mount_mode(pool, mount_dir, false)
+    }
+
+    pub fn with_mount_mode(pool: SqlitePool, mount_dir: PathBuf, read_only: bool) -> Self {
+        Self {
+            pool,
+            mount_dir,
+            read_only,
+        }
+    }
+
+    fn apply_mount_mode(&self, req: SmbConnectRequest) -> SmbConnectRequest {
+        let mut req = req;
+        req.read_only = self.read_only;
+        req
     }
 
     pub async fn add_local_root(&self, path: &str) -> Result<SourceRoot> {
@@ -63,13 +106,8 @@ impl LibraryService {
         }
 
         let repo = SourceRootRepo::new(self.pool.clone());
-        repo.insert_root(
-            canonical.to_string_lossy().as_ref(),
-            "local",
-            "watch",
-            None,
-        )
-        .await
+        repo.insert_root(canonical.to_string_lossy().as_ref(), "local", "watch", None)
+            .await
     }
 
     pub async fn add_smb_source(&self, input: SmbSourceInput) -> Result<SourceRoot> {
@@ -90,17 +128,12 @@ impl LibraryService {
 
         let poll = Some(poll_secs.unwrap_or(300).max(30));
         let repo = SourceRootRepo::new(self.pool.clone());
-        repo.insert_root(
-            canonical.to_string_lossy().as_ref(),
-            "smb",
-            "poll",
-            poll,
-        )
-        .await
+        repo.insert_root(canonical.to_string_lossy().as_ref(), "smb", "poll", poll)
+            .await
     }
 
     pub async fn mount_smb_for_browse(&self, req: &SmbConnectRequest) -> Result<String> {
-        let req = req.clone();
+        let req = self.apply_mount_mode(req.clone());
         let mount_path = browse_mount_point(&self.mount_dir, &req.host, &req.share, &req.username);
         let mount_req = req.clone();
         let mount_path_for_return = mount_path.clone();
@@ -111,6 +144,7 @@ impl LibraryService {
     }
 
     pub async fn list_folder_children(&self, path: &str) -> Result<Vec<FolderEntry>> {
+        validate_browsable_path(path, &self.mount_dir, &self.pool).await?;
         let path = path.to_string();
         tokio::task::spawn_blocking(move || list_child_directories(Path::new(&path)))
             .await
@@ -118,9 +152,8 @@ impl LibraryService {
     }
 
     pub async fn connect_smb_share(&self, req: &SmbConnectRequest) -> Result<SourceRoot> {
-        let req = req.clone();
-        let share_mount =
-            share_mount_point(&self.mount_dir, &req.host, &req.share, &req.username);
+        let req = self.apply_mount_mode(req.clone());
+        let share_mount = share_mount_point(&self.mount_dir, &req.host, &req.share, &req.username);
         let mount_dir = self.mount_dir.clone();
         let mount_req = req.clone();
         tokio::task::spawn_blocking(move || ensure_share_mounted(&mount_dir, &mount_req))
@@ -197,20 +230,15 @@ impl LibraryService {
 
             let root_path = Path::new(&root.path);
             let share_mount = share_mount_point(&self.mount_dir, host, share, username);
-            let share_sub_path = resolve_share_sub_path(
-                &self.mount_dir,
-                root_path,
-                host,
-                share,
-                username,
-            );
+            let share_sub_path =
+                resolve_share_sub_path(&self.mount_dir, root_path, host, share, username);
 
             let mount_ready = if is_mounted(&share_mount) {
                 true
             } else {
                 match load_credentials(host, share, username) {
                     Ok(password) => {
-                        let req = SmbConnectRequest {
+                        let req = self.apply_mount_mode(SmbConnectRequest {
                             host: host.to_string(),
                             share: share.to_string(),
                             username: username.to_string(),
@@ -218,15 +246,14 @@ impl LibraryService {
                             domain: None,
                             poll_secs: root.poll_secs,
                             sub_path: None,
-                        };
+                            read_only: false,
+                        });
                         let mount_dir = self.mount_dir.clone();
                         let mount_result = tokio::task::spawn_blocking(move || {
                             ensure_share_mounted(&mount_dir, &req)
                         })
                         .await
-                        .map_err(|error| {
-                            AppError::Library(format!("SMB mount failed: {}", error))
-                        });
+                        .map_err(|error| AppError::Library(format!("SMB mount failed: {}", error)));
                         match mount_result {
                             Ok(Ok(())) => true,
                             Ok(Err(error)) => {
@@ -368,11 +395,18 @@ mod tests {
         let dir = tempdir().unwrap();
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
-        std::fs::write(photos.join("a.jpg"), include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
+        std::fs::write(
+            photos.join("a.jpg"),
+            include_bytes!("../../tests/fixtures/minimal.jpg"),
+        )
+        .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let library = LibraryService::new(catalog.pool().clone(), dir.path().to_path_buf());
-        let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
+        let root = library
+            .add_local_root(photos.to_str().unwrap())
+            .await
+            .unwrap();
         ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
@@ -382,7 +416,10 @@ mod tests {
         std::fs::create_dir_all(&moved).unwrap();
         std::fs::copy(photos.join("a.jpg"), moved.join("a.jpg")).unwrap();
 
-        let preview = library.preview_relink(root.id, moved.to_str().unwrap()).await.unwrap();
+        let preview = library
+            .preview_relink(root.id, moved.to_str().unwrap())
+            .await
+            .unwrap();
         assert_eq!(preview.matched, 1);
         assert_eq!(preview.total_sampled, 1);
     }
@@ -393,7 +430,10 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let library = LibraryService::new(catalog.pool().clone(), dir.path().to_path_buf());
 
-        let root = library.add_local_root(dir.path().to_str().unwrap()).await.unwrap();
+        let root = library
+            .add_local_root(dir.path().to_str().unwrap())
+            .await
+            .unwrap();
         assert!(root.path.contains(dir.path().to_str().unwrap()));
 
         library.remove_root(root.id).await.unwrap();
@@ -436,7 +476,10 @@ mod tests {
         std::fs::write(&file, b"x").unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let library = LibraryService::new(catalog.pool().clone(), dir.path().to_path_buf());
-        assert!(library.add_local_root(file.to_str().unwrap()).await.is_err());
+        assert!(library
+            .add_local_root(file.to_str().unwrap())
+            .await
+            .is_err());
     }
 
     #[tokio::test]
@@ -445,7 +488,10 @@ mod tests {
         std::fs::create_dir_all(dir.path().join("nested")).unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let library = LibraryService::new(catalog.pool().clone(), dir.path().to_path_buf());
-        let entries = library.list_folder_children(dir.path().to_str().unwrap()).await.unwrap();
+        let entries = library
+            .list_folder_children(dir.path().to_str().unwrap())
+            .await
+            .unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].name, "nested");
     }
@@ -469,6 +515,7 @@ mod tests {
                 domain: None,
                 poll_secs: Some(60),
                 sub_path: Some("nested".into()),
+                read_only: false,
             })
             .await
             .unwrap();
@@ -535,10 +582,17 @@ mod tests {
         let dir = tempdir().unwrap();
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
-        std::fs::write(photos.join("a.jpg"), include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
+        std::fs::write(
+            photos.join("a.jpg"),
+            include_bytes!("../../tests/fixtures/minimal.jpg"),
+        )
+        .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let library = LibraryService::new(catalog.pool().clone(), dir.path().to_path_buf());
-        let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
+        let root = library
+            .add_local_root(photos.to_str().unwrap())
+            .await
+            .unwrap();
         ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
@@ -566,6 +620,7 @@ mod tests {
                 domain: None,
                 poll_secs: Some(60),
                 sub_path: Some("album".into()),
+                read_only: false,
             }))
             .await
             .unwrap();
@@ -617,7 +672,10 @@ mod tests {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let library = LibraryService::new(catalog.pool().clone(), dir.path().join("mounts"));
-        let root = library.add_local_root(dir.path().to_str().unwrap()).await.unwrap();
+        let root = library
+            .add_local_root(dir.path().to_str().unwrap())
+            .await
+            .unwrap();
         sqlx::query("UPDATE source_root SET smb_mounted = 1 WHERE id = ?")
             .bind(root.id)
             .execute(catalog.pool())
@@ -635,13 +693,7 @@ mod tests {
         let host = format!("mount-fail-{}", std::process::id());
         crate::smb::store_credentials(&host, "photos", "user", "secret").unwrap();
         let root = repo
-            .insert_smb_mount_root(
-                "/missing/smb/library",
-                Some(300),
-                &host,
-                "photos",
-                "user",
-            )
+            .insert_smb_mount_root("/missing/smb/library", Some(300), &host, "photos", "user")
             .await
             .unwrap();
         let library = LibraryService::new(catalog.pool().clone(), dir.path().join("mounts"));
@@ -682,17 +734,73 @@ mod tests {
         let library = LibraryService::new(catalog.pool().clone(), dir.path().join("mounts"));
         let file = dir.path().join("file.txt");
         std::fs::write(&file, b"x").unwrap();
-        assert!(library.add_smb_root(file.to_str().unwrap(), None).await.is_err());
+        assert!(library
+            .add_smb_root(file.to_str().unwrap(), None)
+            .await
+            .is_err());
         assert!(library.relink_root(999, "/missing").await.is_err());
 
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
-        let root = library.add_smb_root(photos.to_str().unwrap(), Some(15)).await.unwrap();
+        let root = library
+            .add_smb_root(photos.to_str().unwrap(), Some(15))
+            .await
+            .unwrap();
         assert_eq!(root.poll_secs, Some(30));
         let moved = dir.path().join("moved");
         std::fs::create_dir_all(&moved).unwrap();
-        let relinked = library.relink_root(root.id, moved.to_str().unwrap()).await.unwrap();
+        let relinked = library
+            .relink_root(root.id, moved.to_str().unwrap())
+            .await
+            .unwrap();
         assert!(relinked.path.contains("moved"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn read_only_workspace_mounts_smb_with_ro_option() {
+        let dir = tempdir().unwrap();
+        let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
+        let mount_dir = dir.path().join("mounts");
+        std::fs::create_dir_all(&mount_dir).unwrap();
+        let args_log = mount_dir.join("mount-args.txt");
+        let security = mount_dir.join("security.sh");
+        crate::test_support::unix::write_executable(&security, "#!/bin/sh\nexit 0\n");
+        std::env::set_var("MEMHG_TEST_SECURITY", security.to_string_lossy().as_ref());
+        let script = mount_dir.join("mount_smbfs.sh");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\necho \"$@\" > \"{}\"\nfor last in \"$@\"; do mount_point=\"$last\"; done\nmkdir -p \"$mount_point\"\necho 1 > \"$mount_point/.memhg_test_mounted\"\n",
+                args_log.display()
+            ),
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        std::env::set_var("MEMHG_TEST_MOUNT_SMBFS", script.to_string_lossy().as_ref());
+        let library = LibraryService::with_mount_mode(catalog.pool().clone(), mount_dir, true);
+        library
+            .mount_smb_for_browse(&SmbConnectRequest {
+                host: "nas".into(),
+                share: "photos".into(),
+                username: "guest".into(),
+                password: "secret".into(),
+                domain: None,
+                poll_secs: None,
+                sub_path: None,
+                read_only: false,
+            })
+            .await
+            .unwrap();
+        let args = std::fs::read_to_string(args_log).unwrap();
+        assert!(args.contains("-o"));
+        assert!(args.contains("ro"));
+        std::env::remove_var("MEMHG_TEST_MOUNT_SMBFS");
+        std::env::remove_var("MEMHG_TEST_SECURITY");
     }
 
     #[tokio::test]
@@ -723,6 +831,7 @@ mod tests {
                 domain: None,
                 poll_secs: None,
                 sub_path: None,
+                read_only: false,
             })
             .await
             .unwrap();
@@ -757,13 +866,7 @@ mod tests {
         let host = format!("spawn-fail-{}", std::process::id());
         crate::smb::store_credentials(&host, "photos", "user", "secret").unwrap();
         let root = repo
-            .insert_smb_mount_root(
-                "/missing/library",
-                Some(300),
-                &host,
-                "photos",
-                "user",
-            )
+            .insert_smb_mount_root("/missing/library", Some(300), &host, "photos", "user")
             .await
             .unwrap();
         let library = LibraryService::new(catalog.pool().clone(), mount_dir.clone());
@@ -843,10 +946,16 @@ mod tests {
         let library = LibraryService::new(catalog.pool().clone(), dir.path().to_path_buf());
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
-        let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
+        let root = library
+            .add_local_root(photos.to_str().unwrap())
+            .await
+            .unwrap();
         let file = dir.path().join("file.txt");
         std::fs::write(&file, b"x").unwrap();
-        assert!(library.relink_root(root.id, file.to_str().unwrap()).await.is_err());
+        assert!(library
+            .relink_root(root.id, file.to_str().unwrap())
+            .await
+            .is_err());
     }
 
     #[tokio::test]
@@ -854,7 +963,10 @@ mod tests {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let library = LibraryService::new(catalog.pool().clone(), dir.path().join("mounts"));
-        library.add_local_root(dir.path().to_str().unwrap()).await.unwrap();
+        library
+            .add_local_root(dir.path().to_str().unwrap())
+            .await
+            .unwrap();
         library.ensure_smb_mounts_ready().await.unwrap();
     }
 
@@ -953,9 +1065,15 @@ mod tests {
             )
             .await
             .unwrap();
-        relink_smb_root_if_needed(&repo, root.id, &share_mount, "../escape", share_mount.to_str().unwrap())
-            .await
-            .unwrap();
+        relink_smb_root_if_needed(
+            &repo,
+            root.id,
+            &share_mount,
+            "../escape",
+            share_mount.to_str().unwrap(),
+        )
+        .await
+        .unwrap();
         let updated = repo.get_root(root.id).await.unwrap();
         assert_eq!(updated.path, share_mount.to_string_lossy());
     }
@@ -969,15 +1087,13 @@ mod tests {
         let share_mount = share_mount_point(&mount_dir, "nas", "photos", "user");
         let library_dir = share_mount.join("library");
         std::fs::create_dir_all(&library_dir).unwrap();
-        let library_path = library_dir.canonicalize().unwrap().to_string_lossy().to_string();
+        let library_path = library_dir
+            .canonicalize()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
         let root = repo
-            .insert_smb_mount_root(
-                library_path.as_str(),
-                Some(300),
-                "nas",
-                "photos",
-                "user",
-            )
+            .insert_smb_mount_root(library_path.as_str(), Some(300), "nas", "photos", "user")
             .await
             .unwrap();
         relink_smb_root_if_needed(&repo, root.id, &share_mount, "library", &library_path)
@@ -1029,13 +1145,7 @@ mod tests {
         let host = format!("panic-mount-{}", std::process::id());
         crate::smb::store_credentials(&host, "photos", "user", "secret").unwrap();
         let root = repo
-            .insert_smb_mount_root(
-                "/missing/panic/library",
-                Some(300),
-                &host,
-                "photos",
-                "user",
-            )
+            .insert_smb_mount_root("/missing/panic/library", Some(300), &host, "photos", "user")
             .await
             .unwrap();
         std::env::set_var("MEMHG_TEST_MOUNT_PANIC", "1");
@@ -1053,7 +1163,10 @@ mod tests {
         let library = LibraryService::new(catalog.pool().clone(), dir.path().to_path_buf());
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
-        let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
+        let root = library
+            .add_local_root(photos.to_str().unwrap())
+            .await
+            .unwrap();
         assert!(library
             .preview_relink(root.id, "/missing/relink/path")
             .await
@@ -1079,6 +1192,7 @@ mod tests {
                 domain: None,
                 poll_secs: Some(60),
                 sub_path: Some("missing/nested".into()),
+                read_only: false,
             })
             .await
             .unwrap_err();
@@ -1100,6 +1214,7 @@ mod tests {
                 domain: None,
                 poll_secs: None,
                 sub_path: None,
+                read_only: false,
             })
             .await
             .unwrap_err();
@@ -1122,6 +1237,7 @@ mod tests {
                 domain: None,
                 poll_secs: Some(60),
                 sub_path: None,
+                read_only: false,
             })
             .await
             .unwrap_err();
@@ -1148,17 +1264,27 @@ mod tests {
         let dir = tempdir().unwrap();
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
-        std::fs::write(photos.join("a.jpg"), include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
+        std::fs::write(
+            photos.join("a.jpg"),
+            include_bytes!("../../tests/fixtures/minimal.jpg"),
+        )
+        .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let library = LibraryService::new(catalog.pool().clone(), dir.path().to_path_buf());
-        let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
+        let root = library
+            .add_local_root(photos.to_str().unwrap())
+            .await
+            .unwrap();
         ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
         let moved = dir.path().join("moved");
         std::fs::create_dir_all(&moved).unwrap();
-        let preview = library.preview_relink(root.id, moved.to_str().unwrap()).await.unwrap();
+        let preview = library
+            .preview_relink(root.id, moved.to_str().unwrap())
+            .await
+            .unwrap();
         assert_eq!(preview.matched, 1);
         assert_eq!(preview.total_sampled, 1);
     }
@@ -1181,16 +1307,26 @@ mod tests {
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
         for name in ["a.jpg", "b.jpg", "c.jpg"] {
-            std::fs::write(photos.join(name), include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
+            std::fs::write(
+                photos.join(name),
+                include_bytes!("../../tests/fixtures/minimal.jpg"),
+            )
+            .unwrap();
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let library = LibraryService::new(catalog.pool().clone(), dir.path().to_path_buf());
-        let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
+        let root = library
+            .add_local_root(photos.to_str().unwrap())
+            .await
+            .unwrap();
         ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let preview = library.preview_relink(root.id, photos.to_str().unwrap()).await.unwrap();
+        let preview = library
+            .preview_relink(root.id, photos.to_str().unwrap())
+            .await
+            .unwrap();
         assert_eq!(preview.matched, 3);
         assert_eq!(preview.total_sampled, 3);
     }

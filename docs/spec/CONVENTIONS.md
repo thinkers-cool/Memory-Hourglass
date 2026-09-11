@@ -2,21 +2,21 @@
 
 ## Naming
 
-| Layer | Convention | Example |
-|-------|------------|---------|
-| React components | PascalCase file + export | `AssetGridCard.tsx` |
-| Hooks | `use` prefix, camelCase file | `useLibrary.ts` |
-| lib utilities | camelCase file | `libraryFilters.ts` |
-| Tauri commands | snake_case | `batch_append_tags` |
-| TS API wrappers | camelCase → snake_case invoke | `createWorkspace` → `create_workspace` |
-| DTO / JSON fields | snake_case | `file_name`, `capture_at` |
-| TS locals / props | camelCase | `gridColumnCount` |
-| Rust modules | lowercase | `index_pipeline` |
-| Rust services | `*Service` | `ScanService` |
-| Rust repos | `*Repo` | `AssetRepo` |
-| DB columns / enum values | snake_case | `sync_state: "ok"` |
-| Events | URI-style | `scan://progress` |
-| localStorage keys | `memhg-*` prefix | `memhg-theme` |
+| Layer                    | Convention                    | Example                                |
+| ------------------------ | ----------------------------- | -------------------------------------- |
+| React components         | PascalCase file + export      | `AssetGridCard.tsx`                    |
+| Hooks                    | `use` prefix, camelCase file  | `useLibrary.ts`                        |
+| lib utilities            | camelCase file                | `libraryFilters.ts`                    |
+| Tauri commands           | snake_case                    | `batch_append_tags`                    |
+| TS API wrappers          | camelCase → snake_case invoke | `createWorkspace` → `create_workspace` |
+| DTO / JSON fields        | snake_case                    | `file_name`, `capture_at`              |
+| TS locals / props        | camelCase                     | `gridColumnCount`                      |
+| Rust modules             | lowercase                     | `index_pipeline`                       |
+| Rust services            | `*Service`                    | `ScanService`                          |
+| Rust repos               | `*Repo`                       | `AssetRepo`                            |
+| DB columns / enum values | snake_case                    | `sync_state: "ok"`                     |
+| Events                   | URI-style                     | `scan://progress`                      |
+| localStorage keys        | `memhg-*` prefix              | `memhg-theme`                          |
 
 ## Frontend Patterns
 
@@ -51,16 +51,16 @@
 
 ### Backend (cargo test)
 
-- Integration: `src-tauri/tests/` (`e2e_workflow`, `library_features`, `collection_workflow`, `workspace_workflow`, `command_handlers/`).
+- Integration: `src-tauri/tests/` (`e2e_workflow`, `library_features`, `collection_workflow`, `workspace_workflow`, `activity_workflow`, `command_handlers/` including `command_workflows` and `multi_asset`).
 - Unit tests in `#[cfg(test)]` modules; helpers: `AppState::test_with_fresh_workspace()`, `test_support.rs`.
 - Default: `npm run test:rust` (`--test-threads=1`).
 
 **Coverage** (`npm run test:rust:coverage`):
 
-| Check | Threshold |
-|-------|-----------|
-| Zero-hit lines | 0 |
-| Regions | 100% |
+| Check          | Threshold |
+| -------------- | --------- |
+| Zero-hit lines | 0         |
+| Regions        | 100%      |
 
 - In scope: service modules (`catalog/`, `scan/`, `query/`, `library/`, `export/`, `smb/`, …).
 - Out of scope: `commands/**` (covered by `command_handlers/`), `main.rs`, `lib.rs`, `test_support.rs`, production `smb/credentials.rs`.
@@ -77,12 +77,12 @@ Scan/SMB tests use `MEMHG_TEST_*` env vars; reset hooks between tests.
 - Icons: `lucide-react`.
 - Surface utilities: `.app-canvas`, `.surface-panel`, `.surface-toolbar`, `.surface-card`, `.surface-popover`, `.surface-float`.
 
-| Module | Role |
-|--------|------|
-| `formControlClass.ts` | Input/select shells, menu lists |
+| Module                | Role                               |
+| --------------------- | ---------------------------------- |
+| `formControlClass.ts` | Input/select shells, menu lists    |
 | `interactionClass.ts` | Active/hover row and option states |
-| `buttonClass.ts` | Ghost interactive buttons |
-| `ratingStars.ts` | Star formatting |
+| `buttonClass.ts`      | Ghost interactive buttons          |
+| `ratingStars.ts`      | Star formatting                    |
 
 ## Internationalization
 

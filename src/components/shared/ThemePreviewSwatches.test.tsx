@@ -14,7 +14,9 @@ describe("ThemePreviewSwatches", () => {
         }}
       />,
     );
-    const swatches = container.querySelectorAll("span[style*='background-color']");
+    const swatches = container.querySelectorAll(
+      "span[style*='background-color']",
+    );
     expect(swatches).toHaveLength(3);
     expect(swatches[0]).toHaveStyle({ backgroundColor: "#111111" });
     expect(swatches[1]).toHaveStyle({ backgroundColor: "#222222" });

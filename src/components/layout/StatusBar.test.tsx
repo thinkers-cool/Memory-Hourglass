@@ -73,9 +73,9 @@ describe("StatusBar", () => {
         busy={false}
       />,
     );
-    expect(screen.getByText("Tagged 2 item(s)").closest(".stat-value")).toHaveClass(
-      "text-success",
-    );
+    expect(
+      screen.getByText("Tagged 2 item(s)").closest(".stat-value"),
+    ).toHaveClass("text-success");
   });
 
   it("shows spinner during active progress", () => {
@@ -107,6 +107,8 @@ describe("StatusBar", () => {
         busy={false}
       />,
     );
-    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Close" }),
+    ).not.toBeInTheDocument();
   });
 });

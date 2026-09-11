@@ -51,7 +51,10 @@ export async function runStampToggle(
   };
 }
 
-async function stampAssets(assetIds: number[], config: StampConfig): Promise<void> {
+async function stampAssets(
+  assetIds: number[],
+  config: StampConfig,
+): Promise<void> {
   if (config.rating !== null) {
     await api.batchUpdateAssetMeta(assetIds, { rating: config.rating });
   }
@@ -63,7 +66,10 @@ async function stampAssets(assetIds: number[], config: StampConfig): Promise<voi
   }
 }
 
-async function unstampAssets(assetIds: number[], config: StampConfig): Promise<void> {
+async function unstampAssets(
+  assetIds: number[],
+  config: StampConfig,
+): Promise<void> {
   if (config.rating !== null) {
     await api.batchUpdateAssetMeta(assetIds, { rating: 0 });
   }

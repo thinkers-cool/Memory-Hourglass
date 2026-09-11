@@ -25,7 +25,9 @@ async fn workspace_commands_roundtrip() {
         .await
         .unwrap();
     let after_remove = list_recent_workspaces(state.clone()).await.unwrap();
-    assert!(after_remove.iter().all(|entry| entry.path != workspace_path));
+    assert!(after_remove
+        .iter()
+        .all(|entry| entry.path != workspace_path));
 
     close_workspace(state.clone()).await.unwrap();
     assert!(get_active_workspace(state.clone()).await.unwrap().is_none());

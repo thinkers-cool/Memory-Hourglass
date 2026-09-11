@@ -24,7 +24,9 @@ export function notificationText(notification: Notification | null): string {
   return notification?.text.trim() ?? "";
 }
 
-export function isErrorNotification(notification: Notification | null): boolean {
+export function isErrorNotification(
+  notification: Notification | null,
+): boolean {
   return notification?.kind === "error";
 }
 

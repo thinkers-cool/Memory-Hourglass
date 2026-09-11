@@ -51,10 +51,7 @@ function applyChange(
   return next;
 }
 
-function removeFilter(
-  bar: FilterBarState,
-  id: string,
-): FilterBarState {
+function removeFilter(bar: FilterBarState, id: string): FilterBarState {
   let next = bar;
   removeLibraryFilter(id, (update) => {
     next = typeof update === "function" ? update(bar) : update;
@@ -203,17 +200,31 @@ describe("libraryFilters", () => {
 
   it("builds filter definitions from tags and albums", () => {
     const tags: TagDto[] = [
-      { id: 1, name: "travel", parent_id: null, color: "#ff0000", asset_count: 4 },
+      {
+        id: 1,
+        name: "travel",
+        parent_id: null,
+        color: "#ff0000",
+        asset_count: 4,
+      },
     ];
     const albums: Album[] = [
-      { id: 7, name: "Summer", sort_mode: "date:desc", emoji: "☀️", asset_count: 12 },
+      {
+        id: 7,
+        name: "Summer",
+        sort_mode: "date:desc",
+        emoji: "☀️",
+        asset_count: 12,
+      },
     ];
     const defs = buildLibraryFilterDefs(tags, albums);
-    expect(defs.find((def) => def.id === FILTER_IDS.tag)?.statusOptions).toEqual(
-      ["1"],
-    );
     expect(
-      defs.find((def) => def.id === FILTER_IDS.album)?.statusOptionLabels?.["7"],
+      defs.find((def) => def.id === FILTER_IDS.tag)?.statusOptions,
+    ).toEqual(["1"]);
+    expect(
+      defs.find((def) => def.id === FILTER_IDS.album)?.statusOptionLabels?.[
+        "7"
+      ],
     ).toBe("☀️ Summer");
   });
 
@@ -252,20 +263,24 @@ describe("libraryFilters", () => {
       "ok",
     ]);
     expect(
-      applyChange(
-        { ...baseBar, syncStates: ["ok"] },
-        FILTER_IDS.sync,
-        "ok",
-      ).syncStates,
+      applyChange({ ...baseBar, syncStates: ["ok"] }, FILTER_IDS.sync, "ok")
+        .syncStates,
     ).toEqual([]);
-    expect(applyChange(baseBar, FILTER_IDS.delete, "deleted").deleteStatus).toBe(
-      "deleted",
+    expect(
+      applyChange(baseBar, FILTER_IDS.delete, "deleted").deleteStatus,
+    ).toBe("deleted");
+    expect(applyChange(baseBar, FILTER_IDS.camera, "Nikon").camera).toBe(
+      "Nikon",
     );
-    expect(applyChange(baseBar, FILTER_IDS.camera, "Nikon").camera).toBe("Nikon");
     expect(applyChange(baseBar, FILTER_IDS.tag, "2").tagIds).toEqual([2]);
-    expect(applyChange({ ...baseBar, tagIds: [2] }, FILTER_IDS.tag, "2").tagIds).toEqual([]);
+    expect(
+      applyChange({ ...baseBar, tagIds: [2] }, FILTER_IDS.tag, "2").tagIds,
+    ).toEqual([]);
     expect(applyChange(baseBar, FILTER_IDS.album, "2").albumIds).toEqual([2]);
-    expect(applyChange({ ...baseBar, albumIds: [2] }, FILTER_IDS.album, "2").albumIds).toEqual([]);
+    expect(
+      applyChange({ ...baseBar, albumIds: [2] }, FILTER_IDS.album, "2")
+        .albumIds,
+    ).toEqual([]);
     expect(applyChange(baseBar, FILTER_IDS.metadata, "sunset").metaSearch).toBe(
       "sunset",
     );
@@ -313,54 +328,70 @@ describe("libraryFilters", () => {
       sortDir: "asc",
     });
     let cleared = baseBar;
-    clearLibraryFilters((update) => {
-      cleared = typeof update === "function" ? update(baseBar) : update;
-    }, "rating", "asc");
+    clearLibraryFilters(
+      (update) => {
+        cleared = typeof update === "function" ? update(baseBar) : update;
+      },
+      "rating",
+      "asc",
+    );
     expect(cleared).toEqual(emptyFilterBarState("rating", "asc"));
   });
 
   it("detects active root, album, and tag sources", () => {
-    expect(
-      isRootSourceActive(3, baseBar, { root_id: 3 }),
-    ).toBe(true);
+    expect(isRootSourceActive(3, baseBar, { root_id: 3 })).toBe(true);
     expect(
       isRootSourceActive(3, { ...baseBar, ratingMin: 2 }, { root_id: 3 }),
     ).toBe(false);
     expect(
       isRootSourceActive(3, { ...baseBar, albumIds: [1] }, { root_id: 3 }),
     ).toBe(false);
-    expect(
-      isAlbumSourceActive(5, { ...baseBar, albumIds: [5] }, {}),
-    ).toBe(true);
-    expect(
-      isAlbumSourceActive(5, { ...baseBar, albumIds: [5, 6] }, {}),
-    ).toBe(false);
-    expect(
-      isTagSourceActive(1, { ...baseBar, tagIds: [1] }, {}),
-    ).toBe(true);
-    expect(
-      isTagSourceActive(1, { ...baseBar, tagIds: [1, 2] }, {}),
-    ).toBe(false);
+    expect(isAlbumSourceActive(5, { ...baseBar, albumIds: [5] }, {})).toBe(
+      true,
+    );
+    expect(isAlbumSourceActive(5, { ...baseBar, albumIds: [5, 6] }, {})).toBe(
+      false,
+    );
+    expect(isTagSourceActive(1, { ...baseBar, tagIds: [1] }, {})).toBe(true);
+    expect(isTagSourceActive(1, { ...baseBar, tagIds: [1, 2] }, {})).toBe(
+      false,
+    );
   });
 
   it("treats capture-only toolbar filters as active scope blockers", () => {
     expect(
-      isRootSourceActive(3, { ...baseBar, captureTo: "2024-12-31" }, { root_id: 3 }),
+      isRootSourceActive(
+        3,
+        { ...baseBar, captureTo: "2024-12-31" },
+        { root_id: 3 },
+      ),
     ).toBe(false);
   });
 
   it("rejects album and tag sources when conflicting filters are active", () => {
     expect(
-      isAlbumSourceActive(5, { ...baseBar, albumIds: [5], deleteStatus: "deleted" }, {}),
+      isAlbumSourceActive(
+        5,
+        { ...baseBar, albumIds: [5], deleteStatus: "deleted" },
+        {},
+      ),
     ).toBe(false);
     expect(
       isAlbumSourceActive(5, { ...baseBar, albumIds: [5], tagIds: [1] }, {}),
     ).toBe(false);
     expect(
-      isAlbumSourceActive(5, { ...baseBar, albumIds: [5], hasDuplicate: true }, {}),
+      isAlbumSourceActive(
+        5,
+        { ...baseBar, albumIds: [5], hasDuplicate: true },
+        {},
+      ),
     ).toBe(false);
     expect(
-      isTagSourceActive(1, { ...baseBar, tagIds: [1], deleteStatus: "deleted" }, {}),
+      isTagSourceActive(
+        1,
+        { ...baseBar, tagIds: [1], deleteStatus: "deleted" },
+        {},
+      ),
     ).toBe(false);
     expect(
       isTagSourceActive(1, { ...baseBar, tagIds: [1], albumIds: [2] }, {}),

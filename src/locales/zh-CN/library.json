@@ -9,6 +9,11 @@
     "pathNotFound": "路径未找到",
     "removeWorkspace": "移除工作区"
   },
+  "syncState": {
+    "missing": "缺失",
+    "new": "新增",
+    "modified": "已修改"
+  },
   "nav": {
     "library": "图库",
     "collection": "收藏夹",
@@ -184,6 +189,7 @@
     "connectingSmbShare": "正在连接 SMB 共享…",
     "smbShareConnected": "SMB 共享已连接 — 正在扫描…",
     "scanning": "正在扫描…",
+    "addedFolderScanning": "已添加文件夹 — 正在扫描…",
     "noSlideshowItems": "没有可播放幻灯片的项目",
     "selectTwoToCompare": "请至少选择 2 项以进行对比",
     "selectItemsToStamp": "请选择要应用快标的项目",

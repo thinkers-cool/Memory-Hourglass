@@ -15,7 +15,9 @@ export interface PickerItem {
   icon?: React.ReactNode;
 }
 
-const TRIGGER_CLASS = ghostBtnClass("btn-xs h-7 min-h-0 px-2.5 text-xs font-normal");
+const TRIGGER_CLASS = ghostBtnClass(
+  "btn-xs h-7 min-h-0 px-2.5 text-xs font-normal",
+);
 
 const INPUT_CLASS = `${INPUT_CONTROL_FULL_CLASS} h-7 px-2 text-xs`;
 
@@ -174,7 +176,9 @@ export function SelectionPickerPopover({
 
             <ul className={`${MENU_PICKER_LIST_CLASS} max-h-40`}>
               {items.length === 0 ? (
-                <li className="pointer-events-none px-2 py-1 text-xs opacity-45">{t("empty.noneYet")}</li>
+                <li className="pointer-events-none px-2 py-1 text-xs opacity-45">
+                  {t("empty.noneYet")}
+                </li>
               ) : (
                 items.map((item) => (
                   <li key={item.key}>

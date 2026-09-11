@@ -18,12 +18,12 @@ Local-first photo and video library for desktop. Organize media from local folde
 
 ## Stack
 
-| Layer | Technology |
-|-------|------------|
-| Desktop shell | [Tauri 2](https://v2.tauri.app/) |
-| Frontend | React 19, TypeScript, Vite, Tailwind 4, DaisyUI 5 |
-| Backend | Rust, Tokio, SQLx (SQLite) |
-| Metadata | [exiftool-rs](https://github.com/Le-Syl21/exiftool-rs) |
+| Layer         | Technology                                             |
+| ------------- | ------------------------------------------------------ |
+| Desktop shell | [Tauri 2](https://v2.tauri.app/)                       |
+| Frontend      | React 19, TypeScript, Vite, Tailwind 4, DaisyUI 5      |
+| Backend       | Rust, Tokio, SQLx (SQLite)                             |
+| Metadata      | [exiftool-rs](https://github.com/Le-Syl21/exiftool-rs) |
 
 ## Prerequisites
 
@@ -42,14 +42,14 @@ Frontend-only: `npm run dev`. Production build: `npm run tauri build`.
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run tauri dev` | Desktop app (development) |
-| `npm run dev` | Vite dev server only |
-| `npm run tauri build` | Production desktop build |
-| `npm test` | Frontend tests |
-| `npm run test:rust` | Rust tests |
-| `npm run test:all` | Full test suite |
+| Command               | Description               |
+| --------------------- | ------------------------- |
+| `npm run tauri dev`   | Desktop app (development) |
+| `npm run dev`         | Vite dev server only      |
+| `npm run tauri build` | Production desktop build  |
+| `npm test`            | Frontend tests            |
+| `npm run test:rust`   | Rust tests                |
+| `npm run test:all`    | Full test suite           |
 
 ## Project Layout
 
@@ -62,12 +62,12 @@ AGENTS.md         Agent guide (commands, boundaries)
 
 ## Documentation
 
-| Doc | Audience |
-|-----|----------|
-| [docs/spec/](docs/spec/README.md) | Architecture, data model, workflows, conventions |
-| [AGENTS.md](AGENTS.md) | Build commands and doc maintenance |
-| [src/AGENTS.md](src/AGENTS.md) | Frontend patterns |
-| [src-tauri/AGENTS.md](src-tauri/AGENTS.md) | Backend patterns |
+| Doc                                        | Audience                                         |
+| ------------------------------------------ | ------------------------------------------------ |
+| [docs/spec/](docs/spec/README.md)          | Architecture, data model, workflows, conventions |
+| [AGENTS.md](AGENTS.md)                     | Build commands and doc maintenance               |
+| [src/AGENTS.md](src/AGENTS.md)             | Frontend patterns                                |
+| [src-tauri/AGENTS.md](src-tauri/AGENTS.md) | Backend patterns                                 |
 
 ## License
 

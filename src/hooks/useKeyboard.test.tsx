@@ -4,7 +4,9 @@ import { mockLibraryActions } from "../test/fixtures";
 import { useKeyboard } from "./useKeyboard";
 
 function press(key: string, init: KeyboardEventInit = {}) {
-  window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, ...init }));
+  window.dispatchEvent(
+    new KeyboardEvent("keydown", { key, bubbles: true, ...init }),
+  );
 }
 
 function renderUseKeyboard(
@@ -52,7 +54,11 @@ describe("useKeyboard", () => {
 
   it("batch rates selected items", () => {
     const actions = mockLibraryActions();
-    renderUseKeyboard(actions, { selectionActive: true, selectionExportIds: [1], gridExportIds: [1] });
+    renderUseKeyboard(actions, {
+      selectionActive: true,
+      selectionExportIds: [1],
+      gridExportIds: [1],
+    });
     press("3");
     expect(actions.batchRate).toHaveBeenCalledWith(3);
   });
@@ -81,7 +87,9 @@ describe("useKeyboard", () => {
     renderUseKeyboard(actions);
     const input = document.createElement("input");
     document.body.appendChild(input);
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
     expect(actions.openFullView).not.toHaveBeenCalled();
     input.remove();
   });
@@ -94,18 +102,18 @@ describe("useKeyboard", () => {
     expect(actions.openGallery).not.toHaveBeenCalled();
   });
 
+  it("ignores space when stamp is not armed", () => {
+    const actions = mockLibraryActions();
+    renderUseKeyboard(actions, { stampArmed: false });
+    press(" ");
+    expect(actions.toggleStampOnTargets).not.toHaveBeenCalled();
+  });
+
   it("opens gallery on F12", () => {
     const actions = mockLibraryActions();
     renderUseKeyboard(actions);
     press("F12");
     expect(actions.openGallery).toHaveBeenCalledTimes(1);
-  });
-
-  it("stamps in full view on space when armed", () => {
-    const actions = mockLibraryActions();
-    renderUseKeyboard(actions, { fullView: true, stampArmed: true });
-    press(" ");
-    expect(actions.toggleStampOnTargets).toHaveBeenCalledTimes(1);
   });
 
   it("adjusts grid size with plus and minus", () => {
@@ -123,6 +131,20 @@ describe("useKeyboard", () => {
       renderUseKeyboard(actions, { fullView: true });
       press("4");
       expect(actions.rate).toHaveBeenCalledWith(4);
+    });
+
+    it("stamps on space when armed", () => {
+      const actions = mockLibraryActions();
+      renderUseKeyboard(actions, { fullView: true, stampArmed: true });
+      press(" ");
+      expect(actions.toggleStampOnTargets).toHaveBeenCalledTimes(1);
+    });
+
+    it("ignores space when stamp is not armed", () => {
+      const actions = mockLibraryActions();
+      renderUseKeyboard(actions, { fullView: true, stampArmed: false });
+      press(" ");
+      expect(actions.toggleStampOnTargets).not.toHaveBeenCalled();
     });
 
     it("navigates relative with arrow keys", () => {
@@ -165,7 +187,9 @@ describe("useKeyboard", () => {
       renderUseKeyboard(actions, { fullView: true });
       const input = document.createElement("textarea");
       document.body.appendChild(input);
-      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
       expect(actions.closeFullView).not.toHaveBeenCalled();
       input.remove();
     });
@@ -251,7 +275,10 @@ describe("useKeyboard", () => {
 
     it("opens tag, album, export, and compare menus", () => {
       const actions = mockLibraryActions();
-      renderUseKeyboard(actions, { selectionActive: true, selectionExportIds: [5] });
+      renderUseKeyboard(actions, {
+        selectionActive: true,
+        selectionExportIds: [5],
+      });
       press("T");
       press("A");
       press("E");
@@ -287,7 +314,10 @@ describe("useKeyboard", () => {
 
     it("batch removes with ctrl+R outside trash", () => {
       const actions = mockLibraryActions();
-      renderUseKeyboard(actions, { selectionActive: true, selectionExportIds: [1] });
+      renderUseKeyboard(actions, {
+        selectionActive: true,
+        selectionExportIds: [1],
+      });
       press("r", { ctrlKey: true });
       expect(actions.batchRemove).toHaveBeenCalledTimes(1);
     });

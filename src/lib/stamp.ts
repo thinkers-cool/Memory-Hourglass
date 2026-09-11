@@ -36,15 +36,23 @@ export function isStampConfigValid(config: StampConfig): boolean {
   );
 }
 
-export function stampReferencesTag(config: StampConfig, tagId: number): boolean {
+export function stampReferencesTag(
+  config: StampConfig,
+  tagId: number,
+): boolean {
   return config.tag_ids.includes(tagId);
 }
 
-export function stampReferencesAlbum(config: StampConfig, albumId: number): boolean {
+export function stampReferencesAlbum(
+  config: StampConfig,
+  albumId: number,
+): boolean {
   return config.album_ids.includes(albumId);
 }
 
-export function assetSnapshotFromDetail(detail: AssetDetail): StampAssetSnapshot {
+export function assetSnapshotFromDetail(
+  detail: AssetDetail,
+): StampAssetSnapshot {
   return {
     rating: detail.meta?.rating ?? null,
     tag_ids: detail.tag_ids,

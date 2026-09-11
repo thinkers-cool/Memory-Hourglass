@@ -50,7 +50,10 @@ describe("SmbConnectDialog", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "192.168.1.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "192.168.1.1",
+    );
     await user.type(screen.getByLabelText("Username"), "admin");
     await user.type(screen.getByLabelText("Password"), "secret");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
@@ -131,7 +134,10 @@ describe("SmbConnectDialog", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "10.0.0.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "10.0.0.1",
+    );
     await user.type(screen.getByLabelText("Username"), "user");
     await user.type(screen.getByLabelText("Password"), "pass");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
@@ -155,7 +161,10 @@ describe("SmbConnectDialog", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "10.0.0.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "10.0.0.1",
+    );
     await user.type(screen.getByLabelText("Username"), "user");
     await user.type(screen.getByLabelText("Password"), "pass");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
@@ -163,7 +172,9 @@ describe("SmbConnectDialog", () => {
       expect(screen.getByText("connection refused")).toBeInTheDocument();
     });
 
-    vi.mocked(api.listSmbShares).mockResolvedValue([{ name: "media", comment: "" }]);
+    vi.mocked(api.listSmbShares).mockResolvedValue([
+      { name: "media", comment: "" },
+    ]);
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     await waitFor(() => expect(screen.getByText("media")).toBeInTheDocument());
     vi.mocked(api.mountSmbForBrowse).mockRejectedValue(
@@ -177,7 +188,9 @@ describe("SmbConnectDialog", () => {
 
   it("navigates back from shares and folders steps", async () => {
     const user = userEvent.setup();
-    vi.mocked(api.listSmbShares).mockResolvedValue([{ name: "media", comment: "" }]);
+    vi.mocked(api.listSmbShares).mockResolvedValue([
+      { name: "media", comment: "" },
+    ]);
     vi.mocked(api.mountSmbForBrowse).mockResolvedValue("/tmp/media");
     vi.mocked(api.listFolderChildren).mockResolvedValue([]);
     render(
@@ -190,7 +203,10 @@ describe("SmbConnectDialog", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "10.0.0.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "10.0.0.1",
+    );
     await user.type(screen.getByLabelText("Username"), "user");
     await user.type(screen.getByLabelText("Password"), "pass");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
@@ -209,7 +225,9 @@ describe("SmbConnectDialog", () => {
   it("includes custom poll interval on connect", async () => {
     const user = userEvent.setup();
     const onConnect = vi.fn();
-    vi.mocked(api.listSmbShares).mockResolvedValue([{ name: "media", comment: "" }]);
+    vi.mocked(api.listSmbShares).mockResolvedValue([
+      { name: "media", comment: "" },
+    ]);
     vi.mocked(api.mountSmbForBrowse).mockResolvedValue("/tmp/media");
     vi.mocked(api.listFolderChildren).mockResolvedValue([]);
     render(
@@ -222,7 +240,10 @@ describe("SmbConnectDialog", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "10.0.0.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "10.0.0.1",
+    );
     await user.type(screen.getByLabelText("Username"), "user");
     await user.type(screen.getByLabelText("Password"), "pass");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
@@ -268,7 +289,10 @@ describe("SmbConnectDialog", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "10.0.0.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "10.0.0.1",
+    );
     await user.type(screen.getByLabelText("Username"), "user");
     await user.type(screen.getByLabelText("Password"), "pass");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
@@ -289,12 +313,16 @@ describe("SmbConnectDialog", () => {
     );
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
     await user.click(screen.getByRole("button", { name: "Mounted folder" }));
-    expect(screen.getByRole("button", { name: "Choose folder" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Choose folder" }),
+    ).toBeInTheDocument();
   });
 
   it("ignores sign in and continue when credentials are incomplete", async () => {
     const user = userEvent.setup();
-    vi.mocked(api.listSmbShares).mockResolvedValue([{ name: "media", comment: "" }]);
+    vi.mocked(api.listSmbShares).mockResolvedValue([
+      { name: "media", comment: "" },
+    ]);
     vi.mocked(api.mountSmbForBrowse).mockResolvedValue("/tmp/media");
     vi.mocked(api.listFolderChildren).mockResolvedValue([]);
     const onConnect = vi.fn();
@@ -310,7 +338,10 @@ describe("SmbConnectDialog", () => {
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
     expect(api.listSmbShares).not.toHaveBeenCalled();
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "10.0.0.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "10.0.0.1",
+    );
     await user.type(screen.getByLabelText("Username"), "user");
     await user.type(screen.getByLabelText("Password"), "pass");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
@@ -339,11 +370,18 @@ describe("SmbConnectDialog", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "10.0.0.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "10.0.0.1",
+    );
     await user.type(screen.getByLabelText("Username"), "user");
     await user.type(screen.getByLabelText("Password"), "pass");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Continue" }),
+      ).toBeInTheDocument(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(api.mountSmbForBrowse).not.toHaveBeenCalled();
   });
@@ -360,7 +398,10 @@ describe("SmbConnectDialog", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "10.0.0.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "10.0.0.1",
+    );
     await user.type(screen.getByLabelText("Password"), "pass");
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
     expect(api.listSmbShares).not.toHaveBeenCalled();
@@ -378,7 +419,10 @@ describe("SmbConnectDialog", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "10.0.0.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "10.0.0.1",
+    );
     await user.type(screen.getByLabelText("Username"), "user");
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
     expect(api.listSmbShares).not.toHaveBeenCalled();
@@ -396,7 +440,10 @@ describe("SmbConnectDialog", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "10.0.0.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "10.0.0.1",
+    );
     await user.type(screen.getByLabelText("Username"), "   ");
     await user.type(screen.getByLabelText("Password"), "pass");
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
@@ -405,7 +452,9 @@ describe("SmbConnectDialog", () => {
 
   it("selects share when listing returns entries without names", async () => {
     const user = userEvent.setup();
-    vi.mocked(api.listSmbShares).mockResolvedValue([{ name: undefined as unknown as string, comment: "" }]);
+    vi.mocked(api.listSmbShares).mockResolvedValue([
+      { name: undefined as unknown as string, comment: "" },
+    ]);
     render(
       <SmbConnectDialog
         open
@@ -416,17 +465,26 @@ describe("SmbConnectDialog", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "10.0.0.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "10.0.0.1",
+    );
     await user.type(screen.getByLabelText("Username"), "user");
     await user.type(screen.getByLabelText("Password"), "pass");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Continue" }),
+      ).toBeInTheDocument(),
+    );
   });
 
   it("ignores add when mount path is empty", async () => {
     const user = userEvent.setup();
     const onConnect = vi.fn();
-    vi.mocked(api.listSmbShares).mockResolvedValue([{ name: "media", comment: "" }]);
+    vi.mocked(api.listSmbShares).mockResolvedValue([
+      { name: "media", comment: "" },
+    ]);
     vi.mocked(api.mountSmbForBrowse).mockResolvedValue("");
     render(
       <SmbConnectDialog
@@ -438,12 +496,17 @@ describe("SmbConnectDialog", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "10.0.0.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "10.0.0.1",
+    );
     await user.type(screen.getByLabelText("Username"), "user");
     await user.type(screen.getByLabelText("Password"), "pass");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Add" })).toBeDisabled());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Add" })).toBeDisabled(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(onConnect).not.toHaveBeenCalled();
   });

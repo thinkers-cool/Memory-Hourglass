@@ -70,6 +70,20 @@ describe("useStamp", () => {
     expect(result.current.matchedIds.size).toBe(0);
   });
 
+  it("removes tag and album ids when toggled off", () => {
+    const { result } = renderHook(() => useStamp(tags, albums));
+
+    act(() => {
+      result.current.toggleStampTag(1, true);
+      result.current.toggleStampAlbum(10, true);
+      result.current.toggleStampTag(1, false);
+      result.current.toggleStampAlbum(10, false);
+    });
+
+    expect(result.current.config.tag_ids).toEqual([]);
+    expect(result.current.config.album_ids).toEqual([]);
+  });
+
   it("ignores duplicate tag and album toggles", () => {
     const { result } = renderHook(() => useStamp(tags, albums));
 

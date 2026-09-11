@@ -33,9 +33,10 @@ export function useSlideshow({
   const [settings, setSettings] = useState(loadSlideshowSettings);
   const [playing, setPlaying] = useState(true);
   const [shuffleOrder, setShuffleOrder] = useState<number[]>([]);
-  const [transition, setTransition] = useState<{ from: number; to: number } | null>(
-    null,
-  );
+  const [transition, setTransition] = useState<{
+    from: number;
+    to: number;
+  } | null>(null);
   const lastIndexRef = useRef(index);
   const dwellTimerRef = useRef<number | null>(null);
   const videoTimerRef = useRef<number | null>(null);
@@ -68,7 +69,7 @@ export function useSlideshow({
       prevLengthRef.current = items.length;
       setShuffleOrder(buildShuffleOrder(items, index));
     }
-  }, [settings.shuffle, items.length, index, shuffleOrder.length]);
+  }, [settings.shuffle, items, items.length, index, shuffleOrder.length]);
 
   const toggleShuffle = useCallback(() => {
     setSettings((prev) => {
@@ -80,7 +81,7 @@ export function useSlideshow({
       }
       return { ...prev, shuffle };
     });
-  }, [items.length, index]);
+  }, [items, index]);
 
   const clearTimers = useCallback(() => {
     if (dwellTimerRef.current !== null) {

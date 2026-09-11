@@ -66,14 +66,17 @@ export function assetFilterScope(filter: AssetFilter): AssetFilter {
 
 export function buildFilterFromBar(filterBar: FilterBarState): AssetFilter {
   const filter: AssetFilter = {};
-  if (filterBar.ratingMin !== "") filter.rating_min = Number(filterBar.ratingMin);
-  if (filterBar.syncStates.length > 0) filter.sync_states = [...filterBar.syncStates];
+  if (filterBar.ratingMin !== "")
+    filter.rating_min = Number(filterBar.ratingMin);
+  if (filterBar.syncStates.length > 0)
+    filter.sync_states = [...filterBar.syncStates];
   if (filterBar.camera) filter.camera = filterBar.camera;
   if (filterBar.tagIds.length > 0) filter.tag_ids = [...filterBar.tagIds];
   if (filterBar.albumIds.length > 0) {
     filter.album_ids = [...filterBar.albumIds];
   }
-  if (filterBar.metaSearch.trim()) filter.meta_search = filterBar.metaSearch.trim();
+  if (filterBar.metaSearch.trim())
+    filter.meta_search = filterBar.metaSearch.trim();
   if (filterBar.hasGps) filter.has_gps = true;
   if (filterBar.hasDuplicate) filter.has_duplicate = true;
   const from = dateInputToUnix(filterBar.captureFrom);
@@ -132,7 +135,10 @@ export function buildLibraryFilterDefs(
   albums: Album[],
 ): FilterDef[] {
   const albumLabels = Object.fromEntries(
-    albums.map((album) => [String(album.id), `${albumEmoji(album.emoji)} ${album.name}`]),
+    albums.map((album) => [
+      String(album.id),
+      `${albumEmoji(album.emoji)} ${album.name}`,
+    ]),
   );
   const tagLabels = Object.fromEntries(
     tags.map((tag) => [String(tag.id), tag.name]),
@@ -221,7 +227,9 @@ export function buildLibraryFilterDefs(
   ];
 }
 
-export function filterValuesFromBar(bar: FilterBarState): Record<string, string> {
+export function filterValuesFromBar(
+  bar: FilterBarState,
+): Record<string, string> {
   const values: Record<string, string> = {};
   if (bar.ratingMin !== "") values[FILTER_IDS.rating] = String(bar.ratingMin);
   if (bar.deleteStatus) values[FILTER_IDS.delete] = bar.deleteStatus;
@@ -259,7 +267,10 @@ export function applyLibraryFilterChange(
       }));
       break;
     case FILTER_IDS.sync:
-      setFilterBar((prev) => ({ ...prev, syncStates: toggleListValue(prev.syncStates, value) }));
+      setFilterBar((prev) => ({
+        ...prev,
+        syncStates: toggleListValue(prev.syncStates, value),
+      }));
       break;
     case FILTER_IDS.delete:
       setFilterBar((prev) => ({
@@ -407,13 +418,15 @@ export function isAlbumSourceActive(
   extraFilter: AssetFilter,
 ): boolean {
   if (hasToolbarFilters(filterBar)) return false;
-  if (filterBar.deleteStatus || filterBar.tagIds.length > 0 || filterBar.hasDuplicate) {
+  if (
+    filterBar.deleteStatus ||
+    filterBar.tagIds.length > 0 ||
+    filterBar.hasDuplicate
+  ) {
     return false;
   }
   if (Object.keys(assetFilterScope(extraFilter)).length > 0) return false;
-  return (
-    filterBar.albumIds.length === 1 && filterBar.albumIds[0] === albumId
-  );
+  return filterBar.albumIds.length === 1 && filterBar.albumIds[0] === albumId;
 }
 
 export function isTagSourceActive(

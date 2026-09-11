@@ -93,11 +93,7 @@ mod tests {
     fn indexes_jpeg_metadata_and_thumbnail() {
         let dir = tempdir().unwrap();
         let photo = dir.path().join("sample.jpg");
-        std::fs::write(
-            &photo,
-            include_bytes!("../../tests/fixtures/minimal.jpg"),
-        )
-        .unwrap();
+        std::fs::write(&photo, include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
 
         let thumb_dir = dir.path().join("thumbs");
         let ctx = MetadataContext::in_place(photo.clone());

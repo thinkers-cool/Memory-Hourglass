@@ -49,7 +49,11 @@ export function NamePromptDialog({
         {emojiPicker && (
           <div className="mb-3 flex items-center gap-2">
             <span className="text-xs opacity-60">{t("label.emoji")}</span>
-            <EmojiPickerPopover value={emoji} disabled={busy} onChange={setEmoji} />
+            <EmojiPickerPopover
+              value={emoji}
+              disabled={busy}
+              onChange={setEmoji}
+            />
           </div>
         )}
         <fieldset className="fieldset">
@@ -67,7 +71,11 @@ export function NamePromptDialog({
           />
         </fieldset>
         <div className="modal-action">
-          <button type="button" className="btn btn-ghost btn-interactive btn-sm" onClick={onClose}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-interactive btn-sm"
+            onClick={onClose}
+          >
             {t("action.cancel")}
           </button>
           <button
@@ -81,7 +89,9 @@ export function NamePromptDialog({
         </div>
       </div>
       <form method="dialog" className="modal-backdrop">
-        <button type="button" className="sr-only" onClick={onClose}>{t("action.close")}</button>
+        <button type="button" className="sr-only" onClick={onClose}>
+          {t("action.close")}
+        </button>
       </form>
     </dialog>
   );

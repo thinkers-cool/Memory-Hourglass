@@ -22,10 +22,9 @@ impl ActivityRepo {
     }
 
     pub async fn next_seq(&self, tx: &mut Transaction<'_, sqlx::Sqlite>) -> Result<i64> {
-        let row: (Option<i64>,) =
-            sqlx::query_as("SELECT MAX(seq) FROM activity_log")
-                .fetch_one(&mut **tx)
-                .await?;
+        let row: (Option<i64>,) = sqlx::query_as("SELECT MAX(seq) FROM activity_log")
+            .fetch_one(&mut **tx)
+            .await?;
         Ok(row.0.unwrap_or(0) + 1)
     }
 

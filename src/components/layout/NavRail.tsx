@@ -4,7 +4,11 @@ import { useTranslation } from "react-i18next";
 import { MemHG } from "../MemHG";
 import { AppearanceControls } from "../shared/AppearanceControls";
 
-const TABS: { id: "library" | "collections"; labelKey: string; icon: LucideIcon }[] = [
+const TABS: {
+  id: "library" | "collections";
+  labelKey: string;
+  icon: LucideIcon;
+}[] = [
   { id: "library", labelKey: "nav.library", icon: Library },
   { id: "collections", labelKey: "nav.collection", icon: Bookmark },
 ];
@@ -37,7 +41,9 @@ export function NavRail({
                 type="button"
                 title={label}
                 className={`btn btn-ghost btn-interactive btn-square h-11 min-h-0 w-11 ${
-                  active === tab.id ? "menu-active bg-interactive-selected-strong" : ""
+                  active === tab.id
+                    ? "menu-active bg-interactive-selected-strong"
+                    : ""
                 }`}
                 onClick={() => onChange(tab.id)}
               >

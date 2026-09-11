@@ -16,15 +16,15 @@ import {
 
 describe("clampPanelWidth", () => {
   it("rounds and clamps within bounds", () => {
-    expect(clampPanelWidth(250.6, LEFT_PANEL_WIDTH_MIN, LEFT_PANEL_WIDTH_MAX)).toBe(
-      251,
-    );
-    expect(clampPanelWidth(50, LEFT_PANEL_WIDTH_MIN, LEFT_PANEL_WIDTH_MAX)).toBe(
-      LEFT_PANEL_WIDTH_MIN,
-    );
-    expect(clampPanelWidth(999, LEFT_PANEL_WIDTH_MIN, LEFT_PANEL_WIDTH_MAX)).toBe(
-      LEFT_PANEL_WIDTH_MAX,
-    );
+    expect(
+      clampPanelWidth(250.6, LEFT_PANEL_WIDTH_MIN, LEFT_PANEL_WIDTH_MAX),
+    ).toBe(251);
+    expect(
+      clampPanelWidth(50, LEFT_PANEL_WIDTH_MIN, LEFT_PANEL_WIDTH_MAX),
+    ).toBe(LEFT_PANEL_WIDTH_MIN);
+    expect(
+      clampPanelWidth(999, LEFT_PANEL_WIDTH_MIN, LEFT_PANEL_WIDTH_MAX),
+    ).toBe(LEFT_PANEL_WIDTH_MAX);
   });
 });
 

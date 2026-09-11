@@ -90,18 +90,13 @@ async fn open_workspace_fails_when_registry_unwritable() {
     let info = workspace::init_workspace_at(&ws_path, false).unwrap();
     let app_data = dir.path().join("app");
     let state = AppState::new(app_data.clone()).unwrap();
-    state
-        .open_workspace(Path::new(&info.path))
-        .await
-        .unwrap();
+    state.open_workspace(Path::new(&info.path)).await.unwrap();
     let second = dir.path().join("Second");
     std::fs::create_dir_all(&second).unwrap();
     let second_info = workspace::init_workspace_at(&second, false).unwrap();
     let registry = app_data.join("workspaces.json");
     deny_access(&registry);
-    let result = state
-        .open_workspace(Path::new(&second_info.path))
-        .await;
+    let result = state.open_workspace(Path::new(&second_info.path)).await;
     allow_access(&registry, 0o644);
     assert!(result.is_err());
 }
@@ -112,12 +107,14 @@ fn workspace_registry_save_fails_when_app_data_unwritable() {
     let dir = tempdir().unwrap();
     let app_data = dir.path().join("app");
     let mut service = WorkspaceService::load(app_data.clone()).unwrap();
-    service.registry_mut().touch_recent(&memhg_lib::workspace::WorkspaceInfo {
-        path: "/tmp/ws".into(),
-        name: "Demo".into(),
-        id: "id".into(),
-        read_only: false,
-    });
+    service
+        .registry_mut()
+        .touch_recent(&memhg_lib::workspace::WorkspaceInfo {
+            path: "/tmp/ws".into(),
+            name: "Demo".into(),
+            id: "id".into(),
+            read_only: false,
+        });
     service.save_registry().unwrap();
     let registry = app_data.join("workspaces.json");
     deny_access(&registry);
@@ -175,6 +172,7 @@ async fn connect_smb_share_reports_mount_failure() {
             domain: None,
             poll_secs: None,
             sub_path: None,
+            read_only: false,
         })
         .await;
     std::env::remove_var("MEMHG_TEST_MOUNT_SMBFS");

@@ -1,14 +1,15 @@
 use crate::activity::record::record_export_completed;
 use crate::activity::ActivityRecorder;
 use crate::catalog::models::ExportOptions;
+use crate::commands::context::trace_command;
 use crate::error::Result;
 use crate::export::{ExportManifest, ExportService};
 use crate::jobs::JobQueue;
 use crate::state::AppState;
 use serde::Serialize;
 use std::path::Path;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Runtime, State};
 
 #[derive(Clone, Copy, Serialize)]
@@ -110,14 +111,8 @@ pub(crate) async fn run_export_job<R: Runtime>(params: ExportJobParams<R>) {
 
     if let Ok(manifest) = &result {
         let recorder = ActivityRecorder::new(activity_pool.clone());
-        let _ = record_export_completed(
-            &recorder,
-            None,
-            job_id,
-            asset_ids.len(),
-            &destination,
-        )
-        .await;
+        let _ =
+            record_export_completed(&recorder, None, job_id, asset_ids.len(), &destination).await;
         let (phase, message) = if manifest.failed.is_empty() {
             (JobPhase::Completed, "export completed".into())
         } else if manifest.copied.is_empty() {
@@ -164,7 +159,8 @@ pub(crate) async fn run_export_job<R: Runtime>(params: ExportJobParams<R>) {
     jobs.finish().await;
 }
 
-#[tauri::command] pub async fn start_export<R: Runtime>(
+#[tauri::command]
+pub async fn start_export<R: Runtime>(
     asset_ids: Vec<i64>,
     destination: String,
     options: Option<ExportOptions>,
@@ -172,83 +168,98 @@ pub(crate) async fn run_export_job<R: Runtime>(params: ExportJobParams<R>) {
     app: AppHandle<R>,
     state: State<'_, AppState>,
 ) -> Result<i64> {
-    let (export, jobs, cancel, activity_pool) = state
-        .with_active(|ws| async move {
-            ws.jobs.try_start("export").await?;
-            Ok((
-                ws.export_service(),
-                ws.jobs.clone(),
-                ws.jobs.cancel_flag(),
-                ws.catalog.pool().clone(),
-            ))
-        })
-        .await?;
-
-    let opts = options.unwrap_or(ExportOptions {
-        flat: true,
-        rename_template: None,
-        format: None,
-    });
-    tauri::async_runtime::spawn(run_export_job(ExportJobParams {
-        asset_ids,
-        destination,
-        opts,
-        job_id,
-        app,
-        export,
-        jobs,
-        cancel,
-        activity_pool,
-    }));
-
-    Ok(job_id)
-}
-
-#[tauri::command] pub async fn cancel_export(state: State<'_, AppState>) -> Result<()> {
-    state
-        .with_active(|ws| async move {
-            ws.jobs.request_cancel();
-            Ok(())
-        })
-        .await
-}
-
-#[tauri::command] pub async fn get_export_status(state: State<'_, AppState>) -> Result<ExportStatus> {
-    state
-        .with_active(|ws| async move {
-            let latest = ws.export_service().latest_job().await?;
-            Ok(match latest {
-                None => ExportStatus {
-                    job_id: None,
-                    status: "idle".into(),
-                    manifest: None,
-                },
-                Some((id, status, manifest)) => ExportStatus {
-                    job_id: Some(id),
-                    status,
-                    manifest: Some(manifest),
-                },
+    trace_command("start_export", |_correlation_id| async move {
+        let (export, jobs, cancel, activity_pool) = state
+            .with_active(|ws| async move {
+                ws.jobs.try_start("export").await?;
+                Ok((
+                    ws.export_service(),
+                    ws.jobs.clone(),
+                    ws.jobs.cancel_flag(),
+                    ws.catalog.pool().clone(),
+                ))
             })
-        })
-        .await
+            .await?;
+
+        let opts = options.unwrap_or(ExportOptions {
+            flat: true,
+            rename_template: None,
+            format: None,
+        });
+        tauri::async_runtime::spawn(run_export_job(ExportJobParams {
+            asset_ids,
+            destination,
+            opts,
+            job_id,
+            app,
+            export,
+            jobs,
+            cancel,
+            activity_pool,
+        }));
+
+        Ok(job_id)
+    })
+    .await
 }
 
-#[tauri::command] pub async fn list_export_jobs(state: State<'_, AppState>) -> Result<Vec<ExportJobSummary>> {
-    state
-        .with_active(|ws| async move {
-            let rows = ws.export_service().list_jobs().await?;
-            Ok(rows
-                .into_iter()
-                .map(|(id, status, created_at, manifest)| ExportJobSummary {
-                    id,
-                    status,
-                    created_at,
-                    copied_count: manifest.copied.len(),
-                    failed_count: manifest.failed.len(),
+#[tauri::command]
+pub async fn cancel_export(state: State<'_, AppState>) -> Result<()> {
+    trace_command("cancel_export", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move {
+                ws.jobs.request_cancel();
+                Ok(())
+            })
+            .await
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn get_export_status(state: State<'_, AppState>) -> Result<ExportStatus> {
+    trace_command("get_export_status", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move {
+                let latest = ws.export_service().latest_job().await?;
+                Ok(match latest {
+                    None => ExportStatus {
+                        job_id: None,
+                        status: "idle".into(),
+                        manifest: None,
+                    },
+                    Some((id, status, manifest)) => ExportStatus {
+                        job_id: Some(id),
+                        status,
+                        manifest: Some(manifest),
+                    },
                 })
-                .collect())
-        })
-        .await
+            })
+            .await
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn list_export_jobs(state: State<'_, AppState>) -> Result<Vec<ExportJobSummary>> {
+    trace_command("list_export_jobs", |_correlation_id| async move {
+        state
+            .with_active(|ws| async move {
+                let rows = ws.export_service().list_jobs().await?;
+                Ok(rows
+                    .into_iter()
+                    .map(|(id, status, created_at, manifest)| ExportJobSummary {
+                        id,
+                        status,
+                        created_at,
+                        copied_count: manifest.copied.len(),
+                        failed_count: manifest.failed.len(),
+                    })
+                    .collect())
+            })
+            .await
+    })
+    .await
 }
 
 #[cfg(test)]

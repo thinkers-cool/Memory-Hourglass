@@ -10,7 +10,10 @@ import {
   Star,
 } from "lucide-react";
 import { ghostBtnClass } from "../../lib/buttonClass";
-import { MENU_ITEM_BUTTON_CLASS, MENU_POPOVER_CLASS } from "../../lib/formControlClass";
+import {
+  MENU_ITEM_BUTTON_CLASS,
+  MENU_POPOVER_CLASS,
+} from "../../lib/formControlClass";
 import { DEFAULT_SORT_DIR } from "../../lib/sortSettings";
 import type { SortDir, SortMode } from "../../types";
 
@@ -41,11 +44,13 @@ export function SortDropdown({
   const { t } = useTranslation("common");
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const current = SORT_OPTIONS.find((opt) => opt.value === sort) ?? SORT_OPTIONS[0];
+  const current =
+    SORT_OPTIONS.find((opt) => opt.value === sort) ?? SORT_OPTIONS[0];
   const CurrentIcon = current.icon;
   const currentLabel = t(current.labelKey);
   const DirIcon = sortDir === "desc" ? ArrowDown : ArrowUp;
-  const sortDirLabel = sortDir === "desc" ? t("sort.descending") : t("sort.ascending");
+  const sortDirLabel =
+    sortDir === "desc" ? t("sort.descending") : t("sort.ascending");
 
   usePopoverDismiss({
     open,
@@ -63,7 +68,9 @@ export function SortDropdown({
         <button
           type="button"
           className={`${ghostBtnClass("btn-sm join-item h-8 min-h-0 border border-control-border bg-control/65")} ${
-            compact ? "btn-square w-8 px-0" : "gap-1.5 px-2.5 text-xs font-normal"
+            compact
+              ? "btn-square w-8 px-0"
+              : "gap-1.5 px-2.5 text-xs font-normal"
           }`}
           title={t("sort.sortBy", { field: currentLabel })}
           aria-label={t("sort.sortBy", { field: currentLabel })}
@@ -71,7 +78,9 @@ export function SortDropdown({
         >
           <CurrentIcon className="h-3.5 w-3.5 text-content-faint" />
           {!compact ? (
-            <span className="font-medium text-content-muted">{currentLabel}</span>
+            <span className="font-medium text-content-muted">
+              {currentLabel}
+            </span>
           ) : null}
         </button>
         <button

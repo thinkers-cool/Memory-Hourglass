@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { exportProgressLabel, isJobFinished, toExportProgress } from "./jobProgress";
+import {
+  exportProgressLabel,
+  isJobFinished,
+  toExportProgress,
+} from "./jobProgress";
 
 describe("jobProgress", () => {
   it("detects finished phases", () => {

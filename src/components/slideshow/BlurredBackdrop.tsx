@@ -20,7 +20,9 @@ export function BlurredBackdrop({ card }: { card: AssetCard }) {
 
 export function useProgressiveImage(card: AssetCard) {
   const fullSrc = convertFileSrc(card.abs_path);
-  const previewSrc = card.thumb_path ? convertFileSrc(card.thumb_path) : fullSrc;
+  const previewSrc = card.thumb_path
+    ? convertFileSrc(card.thumb_path)
+    : fullSrc;
   const [src, setSrc] = useState(previewSrc);
 
   useEffect(() => {

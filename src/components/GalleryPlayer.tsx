@@ -27,7 +27,10 @@ import { useSlideshowFullscreen } from "../hooks/useSlideshowFullscreen";
 import { useSlideshow } from "../hooks/useSlideshow";
 import { exitWindowFullscreen } from "../lib/windowFullscreen";
 import { coerceIntervalMs, slideshowThemeLabel } from "../lib/slideshow/timing";
-import type { SlideshowIntervalMs, SlideshowTheme } from "../lib/slideshow/types";
+import type {
+  SlideshowIntervalMs,
+  SlideshowTheme,
+} from "../lib/slideshow/types";
 import type { AssetCard } from "../types";
 
 const ICON_CLASS = "h-4 w-4";
@@ -170,7 +173,8 @@ export function GalleryPlayer({
       }
     };
     window.addEventListener("keydown", onKey, { capture: true });
-    return () => window.removeEventListener("keydown", onKey, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", onKey, { capture: true });
   }, [
     closeSlideshow,
     goPrev,
@@ -225,7 +229,11 @@ export function GalleryPlayer({
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-end p-4">
         <div className="pointer-events-auto flex items-center gap-1 rounded-full bg-black/50 p-1.5 backdrop-blur-sm">
-          <IconButton label={t("slideshow.previous")} onClick={goPrev} disabled={!settings.loop && atStart}>
+          <IconButton
+            label={t("slideshow.previous")}
+            onClick={goPrev}
+            disabled={!settings.loop && atStart}
+          >
             <ChevronLeft className={ICON_CLASS} />
           </IconButton>
           <IconButton
@@ -238,7 +246,11 @@ export function GalleryPlayer({
               <Play className={ICON_CLASS} />
             )}
           </IconButton>
-          <IconButton label={t("slideshow.next")} onClick={goNext} disabled={!settings.loop && atEnd}>
+          <IconButton
+            label={t("slideshow.next")}
+            onClick={goNext}
+            disabled={!settings.loop && atEnd}
+          >
             <ChevronRight className={ICON_CLASS} />
           </IconButton>
           <span className="mx-0.5 h-5 w-px bg-white/20" />
@@ -262,7 +274,11 @@ export function GalleryPlayer({
             <ThemeIcon theme={theme} />
           </IconButton>
           <IconButton
-            label={settings.muteVideos ? t("slideshow.unmuteVideos") : t("slideshow.muteVideos")}
+            label={
+              settings.muteVideos
+                ? t("slideshow.unmuteVideos")
+                : t("slideshow.muteVideos")
+            }
             onClick={toggleMute}
             active={!settings.muteVideos}
           >
@@ -272,10 +288,18 @@ export function GalleryPlayer({
               <Volume2 className={ICON_CLASS} />
             )}
           </IconButton>
-          <IconButton label={t("slideshow.loop")} onClick={toggleLoop} active={settings.loop}>
+          <IconButton
+            label={t("slideshow.loop")}
+            onClick={toggleLoop}
+            active={settings.loop}
+          >
             <Repeat className={ICON_CLASS} />
           </IconButton>
-          <IconButton label={t("slideshow.shuffle")} onClick={toggleShuffle} active={settings.shuffle}>
+          <IconButton
+            label={t("slideshow.shuffle")}
+            onClick={toggleShuffle}
+            active={settings.shuffle}
+          >
             <Shuffle className={ICON_CLASS} />
           </IconButton>
           <span className="mx-0.5 h-5 w-px bg-white/20" />

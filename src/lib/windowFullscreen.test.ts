@@ -96,4 +96,16 @@ describe("windowFullscreen", () => {
     });
     await expect(isWindowFullscreen()).resolves.toBe(true);
   });
+
+  it("skips browser exit when not fullscreen", async () => {
+    const exitFullscreen = vi.fn(async () => undefined);
+    document.exitFullscreen = exitFullscreen;
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      value: null,
+    });
+
+    await exitWindowFullscreen();
+    expect(exitFullscreen).not.toHaveBeenCalled();
+  });
 });

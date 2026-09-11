@@ -1,4 +1,10 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FilterChipBar } from "./FilterChipBar";
@@ -125,7 +131,9 @@ describe("FilterChipBar", () => {
     const onFilterChange = vi.fn();
     render(
       <FilterChipBar
-        filters={[{ id: "metadata", label: "Metadata", type: "text", debounceMs: 300 }]}
+        filters={[
+          { id: "metadata", label: "Metadata", type: "text", debounceMs: 300 },
+        ]}
         values={{ metadata: "" }}
         onFilterChange={onFilterChange}
         onFilterRemove={vi.fn()}
@@ -202,6 +210,23 @@ describe("FilterChipBar", () => {
     expect(onFilterChange).toHaveBeenCalledWith("sync", "ok");
   });
 
+  it("adds date filter as pending chip", async () => {
+    const user = userEvent.setup();
+    render(
+      <FilterChipBar
+        filters={[{ id: "capture", label: "Capture", type: "date" }]}
+        values={{}}
+        onFilterChange={vi.fn()}
+        onFilterRemove={vi.fn()}
+        onClearAll={vi.fn()}
+        onDateChange={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Filter/i }));
+    await user.click(screen.getByRole("button", { name: "Capture" }));
+    expect(screen.getByRole("button", { name: "Capture" })).toBeInTheDocument();
+  });
+
   it("adds multi status filter as pending chip", async () => {
     const user = userEvent.setup();
     render(
@@ -248,7 +273,9 @@ describe("FilterChipBar", () => {
     const onFilterChange = vi.fn();
     render(
       <FilterChipBar
-        filters={[{ id: "metadata", label: "Metadata", type: "text", debounceMs: 300 }]}
+        filters={[
+          { id: "metadata", label: "Metadata", type: "text", debounceMs: 300 },
+        ]}
         values={{ metadata: "lens" }}
         onFilterChange={onFilterChange}
         onFilterRemove={vi.fn()}
@@ -298,10 +325,15 @@ describe("FilterChipBar", () => {
     rerender(
       <FilterChipBar
         {...props}
-        filters={[...filters, { id: "metadata", label: "Metadata", type: "text" }]}
+        filters={[
+          ...filters,
+          { id: "metadata", label: "Metadata", type: "text" },
+        ]}
       />,
     );
-    expect(screen.queryByPlaceholderText("Filter by Camera")).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText("Filter by Camera"),
+    ).not.toBeInTheDocument();
   });
 
   it("dismisses pending text chip without a value", async () => {
@@ -337,7 +369,33 @@ describe("FilterChipBar", () => {
     await user.click(chip);
     expect(screen.getByPlaceholderText("Filter by Camera")).toBeInTheDocument();
     await user.click(chip);
-    expect(screen.queryByPlaceholderText("Filter by Camera")).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText("Filter by Camera"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("skips debounced onChange when draft matches committed value", async () => {
+    vi.useFakeTimers();
+    const onFilterChange = vi.fn();
+    render(
+      <FilterChipBar
+        filters={[
+          { id: "metadata", label: "Metadata", type: "text", debounceMs: 300 },
+        ]}
+        values={{ metadata: "lens" }}
+        onFilterChange={onFilterChange}
+        onFilterRemove={vi.fn()}
+        onClearAll={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: /Metadata/i })[0]!);
+    const input = screen.getByPlaceholderText("Filter by Metadata");
+    fireEvent.change(input, { target: { value: "lensx" } });
+    fireEvent.change(input, { target: { value: "lens" } });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(onFilterChange).not.toHaveBeenCalledWith("metadata", "lens");
   });
 
   it("debounces text filter changes", async () => {
@@ -345,7 +403,9 @@ describe("FilterChipBar", () => {
     const onFilterChange = vi.fn();
     render(
       <FilterChipBar
-        filters={[{ id: "metadata", label: "Metadata", type: "text", debounceMs: 300 }]}
+        filters={[
+          { id: "metadata", label: "Metadata", type: "text", debounceMs: 300 },
+        ]}
         values={{ metadata: "" }}
         onFilterChange={onFilterChange}
         onFilterRemove={vi.fn()}
@@ -406,7 +466,9 @@ describe("FilterChipBar", () => {
       />,
     );
     await user.click(screen.getByText(/from 2024-01-01/).closest("button")!);
-    fireEvent.change(screen.getByTitle("To"), { target: { value: "2024-12-31" } });
+    fireEvent.change(screen.getByTitle("To"), {
+      target: { value: "2024-12-31" },
+    });
     expect(onDateChange).toHaveBeenCalledWith("2024-01-01", "2024-12-31");
   });
 
@@ -458,7 +520,9 @@ describe("FilterChipBar", () => {
     await user.click(screen.getByRole("button", { name: /Add filter/i }));
     expect(screen.getByRole("button", { name: "Camera" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Outside" }));
-    expect(screen.queryByRole("button", { name: "Camera" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Camera" }),
+    ).not.toBeInTheDocument();
   });
 
   it("applies immediate text filter changes without debounce", async () => {
@@ -503,7 +567,9 @@ describe("FilterChipBar", () => {
     await user.click(screen.getByText("OK").closest("button")!);
     await user.click(screen.getByRole("button", { name: "Missing" }));
     expect(onFilterChange).toHaveBeenCalledWith("sync", "missing");
-    expect(screen.queryByRole("button", { name: "Missing" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Missing" }),
+    ).not.toBeInTheDocument();
   });
 
   it("closes text chip on enter", async () => {
@@ -524,7 +590,9 @@ describe("FilterChipBar", () => {
     fireEvent.change(input, { target: { value: "lens" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onFilterChange).toHaveBeenCalledWith("metadata", "lens");
-    expect(screen.queryByPlaceholderText("Filter by Metadata")).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText("Filter by Metadata"),
+    ).not.toBeInTheDocument();
   });
 
   it("removes date filter through chip remove handler", async () => {

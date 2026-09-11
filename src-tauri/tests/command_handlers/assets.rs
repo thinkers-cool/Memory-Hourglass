@@ -20,19 +20,12 @@ async fn asset_and_query_validation_errors() {
         .unwrap_err();
     assert!(purge_err.to_string().contains("confirm_token"));
 
-    let query_err = query_assets(
-        AssetFilter::default(),
-        None,
-        None,
-        None,
-        state.clone(),
-    )
-    .await
-    .unwrap_err();
+    let query_err = query_assets(AssetFilter::default(), None, None, None, state.clone())
+        .await
+        .unwrap_err();
     assert!(query_err.to_string().contains("sort is required"));
 
-    let no_workspace = AppState::new(fixture.hold.path().join("other-app-data"))
-        .unwrap();
+    let no_workspace = AppState::new(fixture.hold.path().join("other-app-data")).unwrap();
     let app = tauri::test::mock_builder()
         .manage(no_workspace)
         .build(tauri::test::mock_context(tauri::test::noop_assets()))
@@ -64,13 +57,9 @@ async fn asset_commands_handle_zero_counts_and_read_only_purge() {
     let photos = fixture.hold.path().join("purge-assets");
     let (_root_id, asset_id) = seed_scanned_asset(&fixture, &photos, "one.jpg").await;
 
-    let zero = soft_delete_assets(
-        vec![asset_id + 999],
-        handle.clone(),
-        state.clone(),
-    )
-    .await
-    .expect("soft delete");
+    let zero = soft_delete_assets(vec![asset_id + 999], handle.clone(), state.clone())
+        .await
+        .expect("soft delete");
     assert_eq!(zero, 0);
 
     let read_only_dir = fixture.hold.path().join("Read Only");

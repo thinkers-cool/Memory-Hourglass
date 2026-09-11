@@ -7,6 +7,8 @@ describe("optionRowClass", () => {
   });
 
   it("returns hover styling when inactive", () => {
-    expect(optionRowClass(false)).toContain("hover:bg-interactive-hover-strong");
+    expect(optionRowClass(false)).toContain(
+      "hover:bg-interactive-hover-strong",
+    );
   });
 });

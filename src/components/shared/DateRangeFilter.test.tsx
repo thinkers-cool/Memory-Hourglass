@@ -17,9 +17,7 @@ describe("DateRangeFilter", () => {
   it("updates from date", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(
-      <DateRangeFilter dateGte="" dateLte="" onChange={onChange} />,
-    );
+    render(<DateRangeFilter dateGte="" dateLte="" onChange={onChange} />);
     await user.type(screen.getByTitle("From"), "2024-06-01");
     expect(onChange).toHaveBeenCalled();
   });
@@ -35,9 +33,7 @@ describe("DateRangeFilter", () => {
   });
 
   it("hides clear button when both dates are empty", () => {
-    render(
-      <DateRangeFilter dateGte="" dateLte="" onChange={vi.fn()} />,
-    );
+    render(<DateRangeFilter dateGte="" dateLte="" onChange={vi.fn()} />);
     expect(screen.queryByTitle("Clear dates")).not.toBeInTheDocument();
   });
 

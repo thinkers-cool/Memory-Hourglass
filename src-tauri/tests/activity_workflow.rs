@@ -22,7 +22,10 @@ async fn activity_log_records_metadata_and_undo_restores_rating() {
     let thumb_dir = dir.path().join("thumbs");
 
     let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
-    let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
+    let root = library
+        .add_local_root(photos.to_str().unwrap())
+        .await
+        .unwrap();
     ScanService::new(pool.clone(), thumb_dir.clone())
         .scan_root(root.id, &ScanControl::noop())
         .await
@@ -34,12 +37,21 @@ async fn activity_log_records_metadata_and_undo_restores_rating() {
         .await
         .unwrap();
     let asset_id = listed.items.first().expect("asset").id;
-    let asset = AssetRepo::new(pool.clone()).get_asset(asset_id).await.unwrap();
+    let asset = AssetRepo::new(pool.clone())
+        .get_asset(asset_id)
+        .await
+        .unwrap();
 
     let before = AssetMetaPatch { rating: Some(3) };
     let after = AssetMetaPatch { rating: Some(4) };
-    query.apply_meta_patch(asset_id, before.clone()).await.unwrap();
-    query.apply_meta_patch(asset_id, after.clone()).await.unwrap();
+    query
+        .apply_meta_patch(asset_id, before.clone())
+        .await
+        .unwrap();
+    query
+        .apply_meta_patch(asset_id, after.clone())
+        .await
+        .unwrap();
 
     let recorder = ActivityRecorder::new(pool.clone());
     let activity_id = record_metadata_changed(
@@ -54,7 +66,11 @@ async fn activity_log_records_metadata_and_undo_restores_rating() {
     .await
     .unwrap();
 
-    let entries = recorder.repo().list_for_asset(asset_id, 0, 10).await.unwrap();
+    let entries = recorder
+        .repo()
+        .list_for_asset(asset_id, 0, 10)
+        .await
+        .unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].event_type, "asset.metadata_changed");
     assert!(entries[0].reversible);
@@ -69,7 +85,10 @@ async fn activity_log_records_metadata_and_undo_restores_rating() {
     let undo_id = undo_activity(&undo_ctx, activity_id).await.unwrap();
     assert!(undo_id > activity_id);
 
-    let meta = AssetMetaRepo::new(pool.clone()).get(asset_id).await.unwrap();
+    let meta = AssetMetaRepo::new(pool.clone())
+        .get(asset_id)
+        .await
+        .unwrap();
     assert_eq!(meta.and_then(|m| m.rating), Some(3));
 
     let original = recorder.repo().get(activity_id).await.unwrap();

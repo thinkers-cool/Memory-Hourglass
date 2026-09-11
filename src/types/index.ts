@@ -173,6 +173,20 @@ export interface JobProgress {
   file_name?: string;
 }
 
+export interface ExportStatus {
+  job_id: number | null;
+  status: string;
+  manifest: ExportManifest | null;
+}
+
+export interface ExportJobSummary {
+  id: number;
+  status: string;
+  created_at: number;
+  copied_count: number;
+  failed_count: number;
+}
+
 export interface Album {
   id: number;
   name: string;

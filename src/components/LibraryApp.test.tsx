@@ -1,8 +1,17 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api/client";
-import { handleGridCardClick, resetGridCardClickState } from "../lib/gridCardClick";
+import {
+  handleGridCardClick,
+  resetGridCardClickState,
+} from "../lib/gridCardClick";
 import { EMPTY_STAMP_CONFIG } from "../lib/stamp";
 import {
   emptyFilterBar,
@@ -40,7 +49,11 @@ vi.mock("./VirtualGrid", () => ({
     onOpenFullView,
     onLoadMore,
   }: {
-    onSelect: (card: typeof gridSampleCard, multi: boolean, range: boolean) => void;
+    onSelect: (
+      card: typeof gridSampleCard,
+      multi: boolean,
+      range: boolean,
+    ) => void;
     onOpenFullView: (card: typeof gridSampleCard) => void;
     onLoadMore?: () => void;
   }) => (
@@ -124,22 +137,6 @@ vi.mock("../hooks/useSlideshow", () => ({
     toggleMute: vi.fn(),
   }),
 }));
-
-function mockRect(element: HTMLElement, rect: Partial<DOMRect>) {
-  element.getBoundingClientRect = () =>
-    ({
-      x: 0,
-      y: 0,
-      top: 0,
-      left: 0,
-      right: 800,
-      bottom: 400,
-      width: 800,
-      height: 400,
-      toJSON: () => ({}),
-      ...rect,
-    }) as DOMRect;
-}
 
 function createMockLibrary(overrides: Record<string, unknown> = {}) {
   const actions = mockLibraryActions();
@@ -234,7 +231,11 @@ describe("LibraryApp", () => {
           open: true,
           assetIds: [1],
           destination: "",
-          options: { flat: true, rename_template: undefined, format: undefined },
+          options: {
+            flat: true,
+            rename_template: undefined,
+            format: undefined,
+          },
           jobId: null,
           progress: null,
         },
@@ -283,9 +284,13 @@ describe("LibraryApp", () => {
   });
 
   it("shows collection name prompt when open", () => {
-    useLibraryMock.mockReturnValue(createMockLibrary({ collectionDialogOpen: true }));
+    useLibraryMock.mockReturnValue(
+      createMockLibrary({ collectionDialogOpen: true }),
+    );
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    expect(screen.getByRole("heading", { name: "Save as Collection" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Save as Collection" }),
+    ).toBeInTheDocument();
   });
 
   it("renders compare viewer when compare is open", () => {
@@ -335,7 +340,9 @@ describe("LibraryApp", () => {
       }),
     );
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /Compare/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Compare/i }),
+    ).toBeInTheDocument();
   });
 
   it("shows inspector placeholder without detail", () => {
@@ -372,7 +379,9 @@ describe("LibraryApp", () => {
       }),
     );
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /^Restore/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Restore/i }),
+    ).toBeInTheDocument();
   });
 
   it("passes export toolbar action for all items when nothing selected", async () => {
@@ -409,12 +418,20 @@ describe("LibraryApp", () => {
     });
     useLibraryMock.mockReturnValue(library);
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: " ", bubbles: true }),
+    );
     expect(library.actions.toggleStampOnTargets).toHaveBeenCalled();
-    const compareBar = screen.getAllByRole("toolbar", { name: "Item actions" })[0];
-    await user.click(within(compareBar).getByRole("button", { name: "Export" }));
+    const compareBar = screen.getAllByRole("toolbar", {
+      name: "Item actions",
+    })[0];
+    await user.click(
+      within(compareBar).getByRole("button", { name: "Export" }),
+    );
     expect(library.actions.openExport).toHaveBeenCalledWith([1]);
-    await user.click(within(compareBar).getByRole("button", { name: "Delete" }));
+    await user.click(
+      within(compareBar).getByRole("button", { name: "Delete" }),
+    );
     expect(library.actions.deleteAsset).toHaveBeenCalledWith(1);
     await user.keyboard("{Escape}");
     expect(library.actions.closeCompare).toHaveBeenCalled();
@@ -443,10 +460,16 @@ describe("LibraryApp", () => {
     });
     useLibraryMock.mockReturnValue(library);
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    const selectionBar = screen.getByRole("toolbar", { name: "Selection actions" });
-    await user.click(within(selectionBar).getByRole("button", { name: /^Export/i }));
+    const selectionBar = screen.getByRole("toolbar", {
+      name: "Selection actions",
+    });
+    await user.click(
+      within(selectionBar).getByRole("button", { name: /^Export/i }),
+    );
     expect(library.actions.openExport).toHaveBeenCalledWith([1, 2]);
-    await user.click(within(selectionBar).getByRole("button", { name: /^Delete/i }));
+    await user.click(
+      within(selectionBar).getByRole("button", { name: /^Delete/i }),
+    );
     expect(library.actions.batchRemove).toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Clear selection" }));
     expect(library.actions.clearSelection).toHaveBeenCalled();
@@ -462,10 +485,16 @@ describe("LibraryApp", () => {
     });
     useLibraryMock.mockReturnValue(library);
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    const selectionBar = screen.getByRole("toolbar", { name: "Selection actions" });
-    await user.click(within(selectionBar).getByRole("button", { name: /^Restore/i }));
+    const selectionBar = screen.getByRole("toolbar", {
+      name: "Selection actions",
+    });
+    await user.click(
+      within(selectionBar).getByRole("button", { name: /^Restore/i }),
+    );
     expect(library.actions.restoreSelected).toHaveBeenCalled();
-    await user.click(within(selectionBar).getByRole("button", { name: /^Purge/i }));
+    await user.click(
+      within(selectionBar).getByRole("button", { name: /^Purge/i }),
+    );
     expect(library.actions.batchPurge).toHaveBeenCalled();
   });
 
@@ -476,7 +505,9 @@ describe("LibraryApp", () => {
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
     await user.type(screen.getByRole("textbox"), "Favorites");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(library.actions.submitSaveCollection).toHaveBeenCalledWith("Favorites");
+    expect(library.actions.submitSaveCollection).toHaveBeenCalledWith(
+      "Favorites",
+    );
   });
 
   it("confirms purge dialog", async () => {
@@ -505,8 +536,12 @@ describe("LibraryApp", () => {
       }),
     );
     render(<LibraryApp onCloseWorkspace={vi.fn()} readOnly />);
-    expect(screen.queryByRole("button", { name: /^Purge/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Purge" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Purge/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Purge" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Purge file")).not.toBeInTheDocument();
   });
 
@@ -525,7 +560,9 @@ describe("LibraryApp", () => {
     useLibraryMock.mockReturnValue(library);
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
     const exportDialog = screen.getByRole("dialog");
-    await user.click(within(exportDialog).getByRole("button", { name: "Export" }));
+    await user.click(
+      within(exportDialog).getByRole("button", { name: "Export" }),
+    );
     expect(library.startExportFromDialog).toHaveBeenCalled();
   });
 
@@ -595,7 +632,9 @@ describe("LibraryApp", () => {
     const user = userEvent.setup();
     const { container } = render(<LibraryApp onCloseWorkspace={vi.fn()} />);
 
-    const splitRoot = container.querySelector(".flex.min-h-0.min-w-0.flex-1") as HTMLElement;
+    const splitRoot = container.querySelector(
+      ".flex.min-h-0.min-w-0.flex-1",
+    ) as HTMLElement;
     splitRoot.getBoundingClientRect = () =>
       ({
         x: 0,
@@ -608,7 +647,9 @@ describe("LibraryApp", () => {
         height: 800,
         toJSON: () => ({}),
       }) as DOMRect;
-    const divider = container.querySelector(".cursor-col-resize") as HTMLElement;
+    const divider = container.querySelector(
+      ".cursor-col-resize",
+    ) as HTMLElement;
     divider.setPointerCapture = vi.fn();
     divider.releasePointerCapture = vi.fn();
     fireEvent.pointerDown(divider, { clientX: 240, pointerId: 1 });
@@ -675,9 +716,15 @@ describe("LibraryApp", () => {
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
     const gridButton = screen.getByRole("button", { name: "card" });
     fireEvent.click(gridButton);
-    expect(library.actions.selectAsset).toHaveBeenCalledWith(gridSampleCard, false, false);
+    expect(library.actions.selectAsset).toHaveBeenCalledWith(
+      gridSampleCard,
+      false,
+      false,
+    );
     fireEvent.click(gridButton);
-    expect(library.actions.openFullViewFor).toHaveBeenCalledWith(gridSampleCard);
+    expect(library.actions.openFullViewFor).toHaveBeenCalledWith(
+      gridSampleCard,
+    );
   });
 
   it("closes full view and navigates relative", async () => {
@@ -705,8 +752,12 @@ describe("LibraryApp", () => {
     useLibraryMock.mockReturnValue(library);
     const user = userEvent.setup();
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    const selectionBar = screen.getByRole("toolbar", { name: "Selection actions" });
-    await user.click(within(selectionBar).getByRole("button", { name: "Rate 3 stars" }));
+    const selectionBar = screen.getByRole("toolbar", {
+      name: "Selection actions",
+    });
+    await user.click(
+      within(selectionBar).getByRole("button", { name: "Rate 3 stars" }),
+    );
     expect(library.actions.batchRate).toHaveBeenCalledWith(3);
   });
 
@@ -737,7 +788,11 @@ describe("LibraryApp", () => {
           open: true,
           assetIds: [1],
           destination: "/tmp/out",
-          options: { flat: true, rename_template: undefined, format: undefined },
+          options: {
+            flat: true,
+            rename_template: undefined,
+            format: undefined,
+          },
           jobId: null,
           progress: null,
         },
@@ -781,7 +836,9 @@ describe("LibraryApp", () => {
         height: 800,
         toJSON: () => ({}),
       }) as DOMRect;
-    const divider = container.querySelector(".cursor-col-resize") as HTMLElement;
+    const divider = container.querySelector(
+      ".cursor-col-resize",
+    ) as HTMLElement;
     divider.setPointerCapture = vi.fn();
     divider.releasePointerCapture = vi.fn();
     fireEvent.pointerDown(divider, { clientX: 240, pointerId: 1 });
@@ -810,7 +867,9 @@ describe("LibraryApp", () => {
     });
     useLibraryMock.mockReturnValue(library);
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    await user.click(screen.getAllByRole("button", { name: /Rate 2 stars/i })[0]);
+    await user.click(
+      screen.getAllByRole("button", { name: /Rate 2 stars/i })[0],
+    );
     expect(library.actions.rateAsset).toHaveBeenCalledWith(1, 2);
     await user.click(screen.getAllByText("Tag")[0]);
     await user.click(screen.getAllByText("Album")[0]);
@@ -838,13 +897,20 @@ describe("LibraryApp", () => {
   it("connects smb share from dialog", async () => {
     const user = userEvent.setup();
     const library = createMockLibrary({ smbDialogOpen: true });
-    vi.mocked(api.listSmbShares).mockResolvedValue([{ name: "media", comment: "" }]);
+    vi.mocked(api.listSmbShares).mockResolvedValue([
+      { name: "media", comment: "" },
+    ]);
     vi.mocked(api.mountSmbForBrowse).mockResolvedValue("/tmp/media");
-    vi.mocked(api.listFolderChildren).mockResolvedValue([{ name: "Photos", path: "/tmp/media/Photos" }]);
+    vi.mocked(api.listFolderChildren).mockResolvedValue([
+      { name: "Photos", path: "/tmp/media/Photos" },
+    ]);
     useLibraryMock.mockReturnValue(library);
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
-    await user.type(screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"), "10.0.0.1");
+    await user.type(
+      screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
+      "10.0.0.1",
+    );
     await user.type(screen.getByLabelText("Username"), "user");
     await user.type(screen.getByLabelText("Password"), "pass");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
@@ -858,14 +924,19 @@ describe("LibraryApp", () => {
   it("adds mounted smb path from dialog", async () => {
     const user = userEvent.setup();
     const setSmbDialogOpen = vi.fn();
-    const library = createMockLibrary({ smbDialogOpen: true, setSmbDialogOpen });
+    const library = createMockLibrary({
+      smbDialogOpen: true,
+      setSmbDialogOpen,
+    });
     pickFolder.mockResolvedValue("/Volumes/nas/photos");
     useLibraryMock.mockReturnValue(library);
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "Choose folder" }));
     expect(pickFolder).toHaveBeenCalled();
     expect(setSmbDialogOpen).toHaveBeenCalledWith(false);
-    expect(library.actions.addMountedSmbPath).toHaveBeenCalledWith("/Volumes/nas/photos");
+    expect(library.actions.addMountedSmbPath).toHaveBeenCalledWith(
+      "/Volumes/nas/photos",
+    );
   });
 
   it("falls back to grid when full view has no selected id", () => {
@@ -909,7 +980,15 @@ describe("LibraryApp", () => {
         1: { tag_ids: [1], album_ids: [] },
         2: { tag_ids: [], album_ids: [] },
       },
-      albums: [{ id: 1, name: "Trip", emoji: "📷", sort_mode: "date:desc", asset_count: 0 }],
+      albums: [
+        {
+          id: 1,
+          name: "Trip",
+          emoji: "📷",
+          sort_mode: "date:desc",
+          asset_count: 0,
+        },
+      ],
     });
     useLibraryMock.mockReturnValue(library);
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
@@ -917,7 +996,9 @@ describe("LibraryApp", () => {
     await user.click(screen.getAllByText("trip")[1].closest("button")!);
     expect(library.actions.toggleTagOnAsset).toHaveBeenCalledWith(1, 1, false);
     await user.click(screen.getAllByText("Album")[0]);
-    const albumPopover = document.querySelector(".surface-popover") as HTMLElement;
+    const albumPopover = document.querySelector(
+      ".surface-popover",
+    ) as HTMLElement;
     await user.click(within(albumPopover).getByText("Trip"));
     expect(library.actions.toggleAlbumOnAsset).toHaveBeenCalledWith(1, 1, true);
   });
@@ -937,11 +1018,20 @@ describe("LibraryApp", () => {
     useLibraryMock.mockReturnValue(library);
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getAllByText("Tag")[0]);
-    await user.type(screen.getAllByPlaceholderText("New tag")[0], "beach{Enter}");
+    await user.type(
+      screen.getAllByPlaceholderText("New tag")[0],
+      "beach{Enter}",
+    );
     expect(library.actions.createTagOnAsset).toHaveBeenCalledWith(1, "beach");
     await user.click(screen.getAllByText("Album")[0]);
-    await user.type(screen.getAllByPlaceholderText("New album")[0], "Summer{Enter}");
-    expect(library.actions.createAlbumOnAsset).toHaveBeenCalledWith(1, "Summer");
+    await user.type(
+      screen.getAllByPlaceholderText("New album")[0],
+      "Summer{Enter}",
+    );
+    expect(library.actions.createAlbumOnAsset).toHaveBeenCalledWith(
+      1,
+      "Summer",
+    );
   });
 
   it("falls back to grid when full view selected id is missing from items", () => {

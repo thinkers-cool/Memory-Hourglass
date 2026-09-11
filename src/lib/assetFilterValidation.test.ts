@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseAssetFilter, parseSmartCollectionFilter } from "./assetFilterValidation";
+import {
+  parseAssetFilter,
+  parseSmartCollectionFilter,
+} from "./assetFilterValidation";
 
 describe("parseAssetFilter", () => {
   it("returns null for non-object values", () => {
@@ -68,7 +71,9 @@ describe("parseAssetFilter", () => {
 
 describe("parseSmartCollectionFilter", () => {
   it("parses valid json", () => {
-    expect(parseSmartCollectionFilter('{"tag_ids":[1]}')).toEqual({ tag_ids: [1] });
+    expect(parseSmartCollectionFilter('{"tag_ids":[1]}')).toEqual({
+      tag_ids: [1],
+    });
   });
 
   it("returns null for invalid json", () => {

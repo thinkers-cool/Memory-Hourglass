@@ -25,12 +25,25 @@ fn net_user(req: &SmbConnectRequest) -> String {
     }
 }
 
+fn store_windows_credential(target: &str, user: &str, password: &str) -> Result<()> {
+    let status = subprocess_command("cmdkey")
+        .args(["/generic:", target, "/user:", user, "/pass:", password])
+        .stdin(Stdio::null())
+        .status()
+        .map_err(AppError::from)?;
+    if status.success() {
+        return Ok(());
+    }
+    Err(AppError::Library("could not store SMB credentials".into()))
+}
+
 fn run_net_use(unc: &Path, user: &str, password: &str) -> Result<()> {
     let unc = unc.to_string_lossy();
+    store_windows_credential(unc.as_ref(), user, password)?;
     let user_arg = format!("/user:{}", user);
     let mut command = subprocess_command("net");
     command
-        .args(["use", unc.as_ref(), &user_arg, password, "/persistent:no"])
+        .args(["use", unc.as_ref(), &user_arg, "/persistent:no"])
         .stdin(Stdio::null());
     let output = run_with_timeout(&mut command, SMB_LIST_TIMEOUT)?;
     if output.status.success() {
@@ -68,17 +81,17 @@ pub fn list_shares_windows(req: &SmbListRequest) -> Result<Vec<SmbShareEntry>> {
     let stderr = String::from_utf8_lossy(&output.stderr);
     if !output.status.success() {
         let detail = combine_command_output(&stdout, &stderr);
-        return Err(AppError::Library(
-            if detail.is_empty() {
-                "could not list SMB shares; check host and credentials".into()
-            } else {
-                detail
-            },
-        ));
+        return Err(AppError::Library(if detail.is_empty() {
+            "could not list SMB shares; check host and credentials".into()
+        } else {
+            detail
+        }));
     }
     let shares = parse_net_view(&stdout);
     if shares.is_empty() {
-        return Err(AppError::Library("no SMB shares found on this server".into()));
+        return Err(AppError::Library(
+            "no SMB shares found on this server".into(),
+        ));
     }
     Ok(shares)
 }

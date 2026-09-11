@@ -6,11 +6,7 @@ type MemHGProps = {
   title?: string;
 };
 
-export function MemHG({
-  className,
-  size = 24,
-  title = "MemHG",
-}: MemHGProps) {
+export function MemHG({ className, size = 24, title = "MemHG" }: MemHGProps) {
   const reactId = useId();
   const maskId = `${reactId}-mask`;
   const gradientId = `${reactId}-gradient`;

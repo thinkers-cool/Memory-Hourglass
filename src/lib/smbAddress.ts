@@ -1,5 +1,8 @@
 export function parseSmbHost(raw: string): string | null {
-  const trimmed = raw.trim().replace(/^smb:\/\//i, "").replace(/\/+$/, "");
+  const trimmed = raw
+    .trim()
+    .replace(/^smb:\/\//i, "")
+    .replace(/\/+$/, "");
   if (!trimmed) return null;
   const slash = trimmed.indexOf("/");
   const host = (slash >= 0 ? trimmed.slice(0, slash) : trimmed).trim();
@@ -7,7 +10,9 @@ export function parseSmbHost(raw: string): string | null {
   return host;
 }
 
-export function parseSmbAddress(raw: string): { host: string; share: string } | null {
+export function parseSmbAddress(
+  raw: string,
+): { host: string; share: string } | null {
   const trimmed = raw.trim().replace(/^smb:\/\//i, "");
   const slash = trimmed.indexOf("/");
   if (slash <= 0) return null;

@@ -46,7 +46,9 @@ describe("SortDropdown", () => {
       />,
     );
     expect(screen.queryByText("Rating")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Sort by Rating/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Sort by Rating/i }),
+    ).toBeInTheDocument();
   });
 
   it("falls back to date for unknown sort mode", () => {
@@ -58,7 +60,9 @@ describe("SortDropdown", () => {
         onSortDirChange={vi.fn()}
       />,
     );
-    expect(screen.getByRole("button", { name: /Sort by Date/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Sort by Date/i }),
+    ).toBeInTheDocument();
   });
 
   it("toggles from ascending to descending", async () => {
@@ -92,7 +96,9 @@ describe("SortDropdown", () => {
     await user.click(screen.getByRole("button", { name: /Date/i }));
     expect(screen.getByRole("button", { name: "Name" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Outside" }));
-    expect(screen.queryByRole("button", { name: "Name" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Name" }),
+    ).not.toBeInTheDocument();
   });
 
   it("closes menu after selecting sort option", async () => {
@@ -107,6 +113,8 @@ describe("SortDropdown", () => {
     );
     await user.click(screen.getByRole("button", { name: /Date/i }));
     await user.click(screen.getByRole("button", { name: "Path" }));
-    expect(screen.queryByRole("button", { name: "Path" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Path" }),
+    ).not.toBeInTheDocument();
   });
 });

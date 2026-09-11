@@ -104,6 +104,10 @@ describe("GalleryPlayer", () => {
     await user.keyboard("{ArrowLeft}");
     await user.keyboard("{ArrowRight}");
     await user.keyboard(" ");
+    const playToggle = slideshowState.setPlaying.mock.calls.at(-1)?.[0];
+    if (typeof playToggle === "function") {
+      expect(playToggle(true)).toBe(false);
+    }
     await user.keyboard("t");
     await user.keyboard("i");
     await user.keyboard("m");
@@ -145,6 +149,20 @@ describe("GalleryPlayer", () => {
     expect(api.updateAssetMeta).toHaveBeenCalledWith(1, { rating: 5 });
   });
 
+  it("ignores rating keys when no current slide exists", async () => {
+    const user = userEvent.setup();
+    render(
+      <GalleryPlayer
+        items={[]}
+        index={0}
+        onClose={vi.fn()}
+        onNavigate={vi.fn()}
+      />,
+    );
+    await user.keyboard("3");
+    expect(api.updateAssetMeta).not.toHaveBeenCalled();
+  });
+
   it("clicks toolbar controls", async () => {
     const user = userEvent.setup();
     slideshowState.playing = false;
@@ -160,7 +178,12 @@ describe("GalleryPlayer", () => {
       />,
     );
     await user.click(screen.getByLabelText("Previous"));
-    await user.click(screen.getByLabelText("Play"));
+    const playButton = screen.getByLabelText("Play");
+    await user.click(playButton);
+    const clickToggle = slideshowState.setPlaying.mock.calls.at(-1)?.[0];
+    if (typeof clickToggle === "function") {
+      expect(clickToggle(false)).toBe(true);
+    }
     await user.click(screen.getByLabelText("Next"));
     await user.click(screen.getByLabelText("Interval: 5s"));
     await user.click(screen.getByLabelText(/Effect:/i));
@@ -203,6 +226,56 @@ describe("GalleryPlayer", () => {
     );
     expect(screen.getByText(/reduced motion/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Effects disabled/i)).toBeDisabled();
+  });
+
+  it("renders ken-burns and fade-zoom theme icons", () => {
+    slideshowState.theme = "ken-burns";
+    const { unmount } = render(
+      <GalleryPlayer
+        items={[sampleCard]}
+        index={0}
+        onClose={vi.fn()}
+        onNavigate={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText(/Effect:/i)).toBeInTheDocument();
+    unmount();
+
+    slideshowState.theme = "fade-zoom";
+    render(
+      <GalleryPlayer
+        items={[sampleCard]}
+        index={0}
+        onClose={vi.fn()}
+        onNavigate={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText(/Effect:/i)).toBeInTheDocument();
+  });
+
+  it("renders alternate interval icons", () => {
+    slideshowState.settings.intervalMs = 2000;
+    const { unmount } = render(
+      <GalleryPlayer
+        items={[sampleCard]}
+        index={0}
+        onClose={vi.fn()}
+        onNavigate={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText(/Interval:/i)).toBeInTheDocument();
+    unmount();
+
+    slideshowState.settings.intervalMs = 8000;
+    render(
+      <GalleryPlayer
+        items={[sampleCard]}
+        index={0}
+        onClose={vi.fn()}
+        onNavigate={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText(/Interval:/i)).toBeInTheDocument();
   });
 
   it("disables navigation at edges when loop is off", () => {

@@ -79,6 +79,29 @@ describe("message bus", () => {
     expect(getToast()).toBeNull();
   });
 
+  it("keeps replacement toast when an earlier timer expires", () => {
+    vi.useFakeTimers();
+    dispatchMessage({
+      id: "toast-a",
+      kind: "success",
+      text: "First",
+      duration_ms: 1000,
+      created_at: 0,
+    });
+    dispatchMessage({
+      id: "toast-b",
+      kind: "success",
+      text: "Second",
+      duration_ms: 3000,
+      created_at: 0,
+    });
+    expect(getToast()?.text).toBe("Second");
+    vi.advanceTimersByTime(1000);
+    expect(getToast()?.text).toBe("Second");
+    vi.advanceTimersByTime(2000);
+    expect(getToast()).toBeNull();
+  });
+
   it("dismisses only the matching toast id", () => {
     dispatchToast({ kind: "info", text: "Working", duration_ms: 0 });
     const id = getToast()?.id;

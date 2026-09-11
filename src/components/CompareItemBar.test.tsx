@@ -10,7 +10,9 @@ const albums = [
   { id: 1, name: "Trip", emoji: "📷", sort_mode: "date:desc", asset_count: 0 },
 ];
 
-function renderBar(overrides: Partial<Parameters<typeof CompareItemBar>[0]> = {}) {
+function renderBar(
+  overrides: Partial<Parameters<typeof CompareItemBar>[0]> = {},
+) {
   const props = {
     rating: 3,
     tags,
@@ -38,7 +40,9 @@ function renderBar(overrides: Partial<Parameters<typeof CompareItemBar>[0]> = {}
 describe("CompareItemBar", () => {
   it("renders item action toolbar", () => {
     renderBar();
-    expect(screen.getByRole("toolbar", { name: "Item actions" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("toolbar", { name: "Item actions" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Tag")).toBeInTheDocument();
     expect(screen.getByText("Album")).toBeInTheDocument();
   });

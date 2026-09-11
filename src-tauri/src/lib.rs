@@ -13,8 +13,8 @@ pub mod message;
 pub mod metadata;
 pub mod query;
 pub mod scan;
-pub mod sort;
 pub mod smb;
+pub mod sort;
 pub mod thumb;
 pub mod trace;
 pub mod watcher;
@@ -46,9 +46,7 @@ pub fn bootstrap_app<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> crate::err
     Ok(())
 }
 
-pub fn configure_builder<R: tauri::Runtime>(
-    builder: tauri::Builder<R>,
-) -> tauri::Builder<R> {
+pub fn configure_builder<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
