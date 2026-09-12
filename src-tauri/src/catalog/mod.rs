@@ -7,7 +7,6 @@ use crate::catalog::repo::{AssetMetaRepo, AssetRepo, RawTagRepo, SourceRootRepo,
 use crate::error::Result;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::path::Path;
-use std::str::FromStr;
 
 #[derive(Clone)]
 pub struct Catalog {
@@ -31,7 +30,8 @@ impl Catalog {
     pub async fn open(db_path: &Path) -> Result<Self> {
         ensure_db_parent_directory(db_path)?;
 
-        let options = SqliteConnectOptions::from_str(&format!("sqlite:{}", db_path.display()))?
+        let options = SqliteConnectOptions::new()
+            .filename(db_path)
             .create_if_missing(true)
             .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
             .foreign_keys(true);

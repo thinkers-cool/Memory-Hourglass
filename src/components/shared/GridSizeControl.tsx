@@ -8,6 +8,7 @@ import {
   GRID_COLUMN_COUNT_STEP,
   clampGridColumnCount,
 } from "../../lib/gridSettings";
+import { Tooltip, TOOLTIP_DELAY_MS } from "./Tooltip";
 
 export function GridSizeControl({
   value,
@@ -36,20 +37,34 @@ export function GridSizeControl({
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, [open]);
 
+  const trigger = (
+    <button
+      type="button"
+      className={`btn btn-ghost btn-interactive btn-xs h-8 min-h-0 ${
+        compact ? "btn-square w-8 px-0" : "gap-1 px-2 text-xs font-normal"
+      }`}
+      aria-label={columnsLabel}
+      onClick={() => setOpen((prev) => !prev)}
+    >
+      <LayoutGrid className="h-4 w-4" />
+      {!compact ? t("grid.label") : null}
+    </button>
+  );
+
   return (
     <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        className={`btn btn-ghost btn-interactive btn-xs h-8 min-h-0 ${
-          compact ? "btn-square w-8 px-0" : "gap-1 px-2 text-xs font-normal"
-        }`}
-        title={columnsLabel}
-        aria-label={columnsLabel}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        <LayoutGrid className="h-4 w-4" />
-        {!compact ? t("grid.label") : null}
-      </button>
+      {compact ? (
+        <Tooltip
+          tip={columnsLabel}
+          delayMs={TOOLTIP_DELAY_MS}
+          placement="bottom"
+          className="inline-flex"
+        >
+          {trigger}
+        </Tooltip>
+      ) : (
+        trigger
+      )}
 
       {open && (
         <div

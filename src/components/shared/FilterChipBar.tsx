@@ -27,6 +27,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { DateRangeFilter } from "./DateRangeFilter";
 import { ghostBtnClass } from "../../lib/buttonClass";
+import { IconTooltip, Tooltip, TOOLTIP_DELAY_MS } from "./Tooltip";
 import {
   INPUT_CONTROL_FULL_CLASS,
   MENU_ITEM_BUTTON_CLASS,
@@ -233,25 +234,31 @@ export function FilterChipBar({
       className="relative z-0 flex min-w-0 flex-1 items-center gap-1"
     >
       <div ref={menuRef} className="relative shrink-0">
-        <button
-          className={`btn btn-ghost btn-interactive btn-sm border border-dashed border-interactive-border hover:border-interactive-selected-border hover:bg-interactive-selected-subtle h-8 min-h-0 ${
-            iconOnly ? "btn-square w-8 px-0" : "gap-1 text-xs font-normal"
-          }`}
-          type="button"
-          title={t("aria.addFilter")}
-          aria-label={t("aria.addFilter")}
-          onClick={() => setMenuOpen(!menuOpen)}
+        <Tooltip
+          tip={iconOnly ? t("aria.addFilter") : undefined}
+          delayMs={TOOLTIP_DELAY_MS}
+          placement="bottom"
+          className="inline-flex"
         >
-          <Filter className="h-3.5 w-3.5" />
-          {!iconOnly ? (
-            <>
-              {t("filter.add")}
-              {availableFilters.length > 0 ? (
-                <Plus className="h-3 w-3" />
-              ) : null}
-            </>
-          ) : null}
-        </button>
+          <button
+            className={`btn btn-ghost btn-interactive btn-sm border border-dashed border-interactive-border hover:border-interactive-selected-border hover:bg-interactive-selected-subtle h-8 min-h-0 ${
+              iconOnly ? "btn-square w-8 px-0" : "gap-1 text-xs font-normal"
+            }`}
+            type="button"
+            aria-label={t("aria.addFilter")}
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            {!iconOnly ? (
+              <>
+                {t("filter.add")}
+                {availableFilters.length > 0 ? (
+                  <Plus className="h-3 w-3" />
+                ) : null}
+              </>
+            ) : null}
+          </button>
+        </Tooltip>
 
         {menuOpen && availableFilters.length > 0 && (
           <div className="surface-popover absolute left-0 top-full z-[60] mt-1 min-w-[160px] p-1">
@@ -308,21 +315,27 @@ export function FilterChipBar({
         ))}
 
         {hasActive ? (
-          <button
-            className={`btn btn-ghost btn-interactive btn-sm h-8 min-h-0 shrink-0 text-content-faint hover:text-error ${
-              iconOnly ? "btn-square w-8 px-0" : "gap-1 text-xs font-normal"
-            }`}
-            type="button"
-            title={t("aria.clearAllFilters")}
-            aria-label={t("aria.clearAllFilters")}
-            onClick={() => {
-              setPendingChipId(null);
-              onClearAll();
-            }}
+          <Tooltip
+            tip={iconOnly ? t("aria.clearAllFilters") : undefined}
+            delayMs={TOOLTIP_DELAY_MS}
+            placement="bottom"
+            className="inline-flex"
           >
-            <X className="h-3.5 w-3.5" />
-            {!iconOnly ? t("filter.clearAll") : null}
-          </button>
+            <button
+              className={`btn btn-ghost btn-interactive btn-sm h-8 min-h-0 shrink-0 text-content-faint hover:text-error ${
+                iconOnly ? "btn-square w-8 px-0" : "gap-1 text-xs font-normal"
+              }`}
+              type="button"
+              aria-label={t("aria.clearAllFilters")}
+              onClick={() => {
+                setPendingChipId(null);
+                onClearAll();
+              }}
+            >
+              <X className="h-3.5 w-3.5" />
+              {!iconOnly ? t("filter.clearAll") : null}
+            </button>
+          </Tooltip>
         ) : null}
       </div>
     </div>
@@ -438,15 +451,20 @@ function Chip({
         ref={chipRef}
         className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-md border border-solid border-control-border bg-interactive-selected-subtle text-xs transition-colors hover:border-interactive-selected-border"
       >
-        <button
-          className={`${ghostBtnClass("btn-xs h-full max-w-full border-0 bg-transparent shadow-none")} ${
-            iconOnly ? "gap-1 pl-2" : "gap-1.5 pl-2.5"
-          }`}
-          type="button"
-          title={iconOnly ? chipTitle : undefined}
-          aria-label={iconOnly ? chipTitle : undefined}
-          onClick={onToggle}
+        <Tooltip
+          tip={iconOnly ? chipTitle : undefined}
+          delayMs={TOOLTIP_DELAY_MS}
+          placement="bottom"
+          className={iconOnly ? "inline-flex" : undefined}
         >
+          <button
+            className={`${ghostBtnClass("btn-xs h-full max-w-full border-0 bg-transparent shadow-none")} ${
+              iconOnly ? "gap-1 pl-2" : "gap-1.5 pl-2.5"
+            }`}
+            type="button"
+            aria-label={iconOnly ? chipTitle : undefined}
+            onClick={onToggle}
+          >
           {FilterIcon ? (
             <FilterIcon className="h-3.5 w-3.5 shrink-0 text-content-faint" />
           ) : null}
@@ -469,19 +487,24 @@ function Chip({
               </span>
             </>
           ) : null}
-        </button>
-        <button
-          className={`${ghostBtnClass("btn-xs h-full min-h-0 rounded-none rounded-r-md border-0 border-l border-divider-subtle px-1.5 text-danger-text shadow-none hover:bg-danger-subtle hover:text-danger")}`}
-          type="button"
-          title={t("aria.removeFilter", { filter: filter.label })}
-          aria-label={t("aria.removeFilter", { filter: filter.label })}
-          onClick={(event) => {
-            event.stopPropagation();
-            onRemove();
-          }}
+          </button>
+        </Tooltip>
+        <IconTooltip
+          tip={t("aria.removeFilter", { filter: filter.label })}
+          placement="bottom"
         >
-          <X className="h-3 w-3" />
-        </button>
+          <button
+            className={`${ghostBtnClass("btn-xs h-full min-h-0 rounded-none rounded-r-md border-0 border-l border-divider-subtle px-1.5 text-danger-text shadow-none hover:bg-danger-subtle hover:text-danger")}`}
+            type="button"
+            aria-label={t("aria.removeFilter", { filter: filter.label })}
+            onClick={(event) => {
+              event.stopPropagation();
+              onRemove();
+            }}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </IconTooltip>
       </div>
 
       {isOpen && popoverPosition

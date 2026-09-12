@@ -11,6 +11,7 @@ import {
 import { ghostBtnClass } from "../../lib/buttonClass";
 import type { AppLocale } from "../../i18n/config";
 import { optionRowClass } from "../../lib/optionRowClass";
+import { Tooltip, TOOLTIP_DELAY_MS } from "./Tooltip";
 
 export type LocaleMenuPlacement = "float-top-end" | "float-bottom-end";
 
@@ -91,28 +92,42 @@ export function LocaleSwitcher({
 
   const close = () => setOpen(false);
 
+  const trigger = (
+    <button
+      ref={anchorRef}
+      type="button"
+      className={
+        iconOnly
+          ? TRIGGER_CLASS[size]
+          : ghostBtnClass(
+              "btn-sm h-8 min-h-0 max-w-32 gap-1 truncate text-xs font-normal",
+            )
+      }
+      aria-label={t("label.language")}
+      aria-expanded={open}
+      onClick={() => setOpen((prev) => !prev)}
+    >
+      <Languages className={ICON_CLASS[size]} />
+      {!iconOnly ? (
+        <span className="truncate">{localeLabel(locale)}</span>
+      ) : null}
+    </button>
+  );
+
   return (
     <>
-      <button
-        ref={anchorRef}
-        type="button"
-        className={
-          iconOnly
-            ? TRIGGER_CLASS[size]
-            : ghostBtnClass(
-                "btn-sm h-8 min-h-0 max-w-32 gap-1 truncate text-xs font-normal",
-              )
-        }
-        title={t("label.language")}
-        aria-label={t("label.language")}
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        <Languages className={ICON_CLASS[size]} />
-        {!iconOnly ? (
-          <span className="truncate">{localeLabel(locale)}</span>
-        ) : null}
-      </button>
+      {iconOnly ? (
+        <Tooltip
+          tip={t("label.language")}
+          delayMs={TOOLTIP_DELAY_MS}
+          placement="right"
+          className="inline-flex"
+        >
+          {trigger}
+        </Tooltip>
+      ) : (
+        trigger
+      )}
       {open &&
         createPortal(
           <div

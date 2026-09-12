@@ -21,6 +21,7 @@ import {
 } from "../../lib/themePreview";
 import { ghostBtnClass } from "../../lib/buttonClass";
 import { optionRowClass } from "../../lib/optionRowClass";
+import { Tooltip, TOOLTIP_DELAY_MS } from "./Tooltip";
 import { ThemePreviewSwatches } from "./ThemePreviewSwatches";
 
 export type ThemeMenuPlacement = "float-top-end" | "float-bottom-end";
@@ -113,28 +114,42 @@ export function ThemeSwitcher({
 
   const close = () => setOpen(false);
 
+  const trigger = (
+    <button
+      ref={anchorRef}
+      type="button"
+      className={
+        iconOnly
+          ? TRIGGER_CLASS[size]
+          : ghostBtnClass(
+              "btn-sm h-8 min-h-0 max-w-32 gap-1 truncate text-xs font-normal",
+            )
+      }
+      aria-label={t("aria.theme")}
+      aria-expanded={open}
+      onClick={() => setOpen((prev) => !prev)}
+    >
+      <Palette className={ICON_CLASS[size]} />
+      {!iconOnly ? (
+        <span className="truncate">{themeLabel(theme)}</span>
+      ) : null}
+    </button>
+  );
+
   return (
     <>
-      <button
-        ref={anchorRef}
-        type="button"
-        className={
-          iconOnly
-            ? TRIGGER_CLASS[size]
-            : ghostBtnClass(
-                "btn-sm h-8 min-h-0 max-w-32 gap-1 truncate text-xs font-normal",
-              )
-        }
-        title={t("label.theme")}
-        aria-label={t("aria.theme")}
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        <Palette className={ICON_CLASS[size]} />
-        {!iconOnly ? (
-          <span className="truncate">{themeLabel(theme)}</span>
-        ) : null}
-      </button>
+      {iconOnly ? (
+        <Tooltip
+          tip={t("label.theme")}
+          delayMs={TOOLTIP_DELAY_MS}
+          placement="right"
+          className="inline-flex"
+        >
+          {trigger}
+        </Tooltip>
+      ) : (
+        trigger
+      )}
       {open &&
         createPortal(
           <div

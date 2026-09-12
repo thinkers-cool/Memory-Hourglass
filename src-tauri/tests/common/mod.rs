@@ -1,3 +1,4 @@
+#[cfg(unix)]
 pub mod unix;
 
 use memhg_lib::commands::export::get_export_status;
@@ -148,6 +149,7 @@ pub async fn seed_extra_asset(
     root_id: i64,
     file_name: &str,
 ) -> i64 {
+    memhg_lib::scan::test_hooks::reset();
     std::fs::write(
         photos_dir.join(file_name),
         include_bytes!("../fixtures/minimal.jpg"),
@@ -156,9 +158,21 @@ pub async fn seed_extra_asset(
 
     let state = fixture.state();
     let handle = fixture.handle();
-    start_scan(root_id, handle, state.clone())
+    wait_for_jobs_idle(state.clone(), Duration::from_secs(30)).await;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    while start_scan(root_id, handle.clone(), state.clone())
         .await
-        .expect("start scan");
+        .is_err()
+    {
+        if tokio::time::Instant::now() >= deadline {
+            start_scan(root_id, handle, state.clone())
+                .await
+                .expect("start scan");
+            break;
+        }
+        wait_for_jobs_idle(state.clone(), Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
     let status = wait_for_scan(state.clone(), Duration::from_secs(30)).await;
     assert_eq!(status.stage, "done");
     wait_for_jobs_idle(state.clone(), Duration::from_secs(30)).await;

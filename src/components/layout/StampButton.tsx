@@ -7,6 +7,7 @@ import { ghostBtnClass } from "../../lib/buttonClass";
 import type { Album, TagDto } from "../../types";
 import type { StampConfig } from "../../lib/stamp";
 import { ShortcutHint } from "../shared/ShortcutHint";
+import { Tooltip, TOOLTIP_DELAY_MS } from "../shared/Tooltip";
 
 export function StampButton({
   compact,
@@ -61,27 +62,37 @@ export function StampButton({
     setConfigOpen((prev) => !prev);
   };
 
+  const stampTip = armed
+    ? t("library:stamp.armed")
+    : t("library:stamp.configure");
+
   return (
     <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        className={buttonClass}
-        title={armed ? t("library:stamp.armed") : t("library:stamp.configure")}
-        aria-label={t("common:aria.stamp")}
-        aria-pressed={armed}
-        aria-expanded={configOpen}
-        onClick={handleClick}
+      <Tooltip
+        tip={compact ? stampTip : undefined}
+        delayMs={TOOLTIP_DELAY_MS}
+        placement="bottom"
+        className="inline-flex"
       >
-        <Stamp className="h-3.5 w-3.5" />
-        {!compact ? (
-          <>
-            {t("library:stamp.label")}
-            {armed ? (
-              <ShortcutHint>{t("common:shortcut.space")}</ShortcutHint>
-            ) : null}
-          </>
-        ) : null}
-      </button>
+        <button
+          type="button"
+          className={buttonClass}
+          aria-label={t("common:aria.stamp")}
+          aria-pressed={armed}
+          aria-expanded={configOpen}
+          onClick={handleClick}
+        >
+          <Stamp className="h-3.5 w-3.5" />
+          {!compact ? (
+            <>
+              {t("library:stamp.label")}
+              {armed ? (
+                <ShortcutHint>{t("common:shortcut.space")}</ShortcutHint>
+              ) : null}
+            </>
+          ) : null}
+        </button>
+      </Tooltip>
 
       {configOpen && (
         <div ref={panelRef} className="absolute right-0 top-full z-[60] mt-1">

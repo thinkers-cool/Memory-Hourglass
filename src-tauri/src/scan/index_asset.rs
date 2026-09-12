@@ -1,13 +1,109 @@
 use crate::catalog::models::{AssetMeta, RawTag};
 use crate::metadata::{MetadataContext, MetadataService};
 use crate::thumb::ThumbService;
-use std::path::Path;
+use exiftool_rs::ExifTool;
+use rayon::prelude::*;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct IndexOutput {
     pub meta: AssetMeta,
     pub raw_tags: Vec<RawTag>,
     pub thumb_key: Option<String>,
+}
+
+pub struct BatchIndexItem {
+    pub asset_id: i64,
+    pub path: PathBuf,
+    pub metadata_ctx: MetadataContext,
+}
+
+fn index_parallelism() -> usize {
+    std::thread::available_parallelism()
+        .map(|count| (count.get() / 2).clamp(2, 4))
+        .unwrap_or(2)
+}
+
+fn empty_meta(asset_id: i64) -> AssetMeta {
+    AssetMeta {
+        asset_id,
+        capture_at: None,
+        camera: None,
+        lens: None,
+        rating: None,
+        latitude: None,
+        longitude: None,
+        keywords_json: None,
+    }
+}
+
+fn metadata_for_asset(
+    asset_id: i64,
+    metadata_ctx: &MetadataContext,
+    et: &ExifTool,
+) -> (AssetMeta, Vec<RawTag>) {
+    match MetadataService::read_meta_with(et, metadata_ctx) {
+        Ok((read, raw_tags)) => {
+            let meta = AssetMeta {
+                asset_id,
+                capture_at: read.capture_at,
+                camera: read.camera,
+                lens: read.lens,
+                rating: read.rating,
+                latitude: read.latitude,
+                longitude: read.longitude,
+                keywords_json: read.keywords_json,
+            };
+            (meta, raw_tags)
+        }
+        Err(_) => (empty_meta(asset_id), Vec::new()),
+    }
+}
+
+pub fn generate_thumb_on_disk(
+    asset_id: i64,
+    path: &Path,
+    thumb_dir: &Path,
+) -> Option<String> {
+    ThumbService::new(thumb_dir.to_path_buf())
+        .ensure_thumbnail(asset_id, path)
+        .ok()
+}
+
+pub fn index_batch_on_disk(items: &[BatchIndexItem], thumb_dir: &Path) -> Vec<(i64, IndexOutput)> {
+    if items.is_empty() {
+        return Vec::new();
+    }
+
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(index_parallelism())
+        .build()
+        .expect("index thread pool");
+
+    let thumb_keys = pool.install(|| {
+        items
+            .par_iter()
+            .map(|item| generate_thumb_on_disk(item.asset_id, &item.path, thumb_dir))
+            .collect::<Vec<_>>()
+    });
+
+    let et = ExifTool::new();
+    items
+        .iter()
+        .zip(thumb_keys)
+        .map(|(item, thumb_key)| {
+            let (meta, raw_tags) =
+                metadata_for_asset(item.asset_id, &item.metadata_ctx, &et);
+            (
+                item.asset_id,
+                IndexOutput {
+                    meta,
+                    raw_tags,
+                    thumb_key,
+                },
+            )
+        })
+        .collect()
 }
 
 pub fn index_asset_on_disk(
@@ -20,38 +116,9 @@ pub fn index_asset_on_disk(
         std::env::remove_var("MEMHG_TEST_INDEX_ON_DISK_PANIC");
         panic!("index on disk panic");
     }
-    let thumb_key = ThumbService::new(thumb_dir.to_path_buf())
-        .ensure_thumbnail(asset_id, path)
-        .ok();
-
-    let (read, raw_tags) = match MetadataService::read_meta(metadata_ctx) {
-        Ok((read, raw_tags)) => (read, raw_tags),
-        Err(_) => (
-            AssetMeta {
-                asset_id,
-                capture_at: None,
-                camera: None,
-                lens: None,
-                rating: None,
-                latitude: None,
-                longitude: None,
-                keywords_json: None,
-            },
-            Vec::new(),
-        ),
-    };
-
-    let meta = AssetMeta {
-        asset_id,
-        capture_at: read.capture_at,
-        camera: read.camera,
-        lens: read.lens,
-        rating: read.rating,
-        latitude: read.latitude,
-        longitude: read.longitude,
-        keywords_json: read.keywords_json,
-    };
-
+    let thumb_key = generate_thumb_on_disk(asset_id, path, thumb_dir);
+    let et = ExifTool::new();
+    let (meta, raw_tags) = metadata_for_asset(asset_id, metadata_ctx, &et);
     IndexOutput {
         meta,
         raw_tags,
@@ -114,5 +181,30 @@ mod tests {
         assert_eq!(output.meta.asset_id, 7);
         assert!(output.meta.capture_at.is_none());
         assert!(output.raw_tags.is_empty());
+    }
+
+    #[test]
+    fn index_batch_on_disk_processes_multiple_assets() {
+        let dir = tempdir().unwrap();
+        let photo_a = dir.path().join("a.jpg");
+        let photo_b = dir.path().join("b.jpg");
+        std::fs::write(&photo_a, include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
+        std::fs::write(&photo_b, include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
+        let thumb_dir = dir.path().join("thumbs");
+        let items = vec![
+            BatchIndexItem {
+                asset_id: 1,
+                path: photo_a.clone(),
+                metadata_ctx: MetadataContext::in_place(photo_a),
+            },
+            BatchIndexItem {
+                asset_id: 2,
+                path: photo_b.clone(),
+                metadata_ctx: MetadataContext::in_place(photo_b),
+            },
+        ];
+        let indexed = index_batch_on_disk(&items, &thumb_dir);
+        assert_eq!(indexed.len(), 2);
+        assert!(indexed.iter().all(|(_, output)| output.thumb_key.is_some()));
     }
 }

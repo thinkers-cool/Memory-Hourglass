@@ -3,8 +3,8 @@ use std::path::Path;
 use crate::error::{AppError, Result};
 
 use super::{
-    combine_command_output, list_shares_smbclient, percent_encode, run_with_timeout,
-    subprocess_command, SmbConnectRequest, SmbListRequest, SmbShareEntry, SMB_LIST_TIMEOUT,
+    combine_command_output, list_shares_smbclient, run_with_timeout, subprocess_command,
+    subprocess_status, SmbConnectRequest, SmbListRequest, SmbShareEntry, SMB_LIST_TIMEOUT,
 };
 
 pub fn list_shares(req: &SmbListRequest) -> Result<Vec<SmbShareEntry>> {
@@ -55,15 +55,13 @@ pub fn mount(mount_path: &Path, req: &SmbConnectRequest) -> Result<()> {
 }
 
 pub fn unmount(mount_path: &Path) -> Result<()> {
-    let status = subprocess_command("umount")
-        .arg(mount_path)
-        .status()
-        .map_err(AppError::from)?;
+    let mut umount = subprocess_command("umount");
+    umount.arg(mount_path);
+    let status = subprocess_status(&mut umount).map_err(AppError::from)?;
     if !status.success() {
-        let _ = subprocess_command("diskutil")
-            .arg("unmount")
-            .arg(mount_path)
-            .status();
+        let mut diskutil = subprocess_command("diskutil");
+        diskutil.arg("unmount").arg(mount_path);
+        let _ = subprocess_status(&mut diskutil);
     }
     Ok(())
 }
@@ -73,22 +71,39 @@ fn smbutil_target(req: &SmbListRequest) -> String {
     format!("//{}@{}", percent_encode(&req.username), req.host)
 }
 
+fn percent_encode(value: &str) -> String {
+    value
+        .chars()
+        .map(|c| match c {
+            '%' => "%25".to_string(),
+            '!' => "%21".to_string(),
+            '#' => "%23".to_string(),
+            '$' => "%24".to_string(),
+            '&' => "%26".to_string(),
+            '?' => "%3F".to_string(),
+            ':' => "%3A".to_string(),
+            '@' => "%40".to_string(),
+            '/' => "%2F".to_string(),
+            _ => c.to_string(),
+        })
+        .collect()
+}
+
 fn store_internet_password(host: &str, username: &str, password: &str) -> Result<()> {
-    let status = subprocess_command("security")
-        .args([
-            "add-internet-password",
-            "-a",
-            username,
-            "-s",
-            host,
-            "-w",
-            password,
-            "-r",
-            "smb ",
-            "-U",
-        ])
-        .status()
-        .map_err(AppError::from)?;
+    let mut security = subprocess_command("security");
+    security.args([
+        "add-internet-password",
+        "-a",
+        username,
+        "-s",
+        host,
+        "-w",
+        password,
+        "-r",
+        "smb ",
+        "-U",
+    ]);
+    let status = subprocess_status(&mut security).map_err(AppError::from)?;
     if status.success() {
         return Ok(());
     }
@@ -180,7 +195,36 @@ fn parse_smbutil_view(stdout: &str) -> Vec<SmbShareEntry> {
 mod tests {
     use super::*;
     use crate::smb::list_shares;
-    use crate::test_support::unix::write_executable;
+    use crate::smb::test_hooks::{self, HookReset, Stub};
+
+    fn smbutil_photos_table() -> Stub {
+        Stub::Output {
+            code: 0,
+            stdout: "Share                                           Type    Comments\nphotos                                          Disk    Family\n"
+                .into(),
+            stderr: String::new(),
+        }
+    }
+
+    fn smbutil_authenticate() -> Stub {
+        Stub::Output {
+            code: 0,
+            stdout: "Authenticate successfully\n".into(),
+            stderr: String::new(),
+        }
+    }
+
+    #[test]
+    fn percent_encodes_special_characters() {
+        assert_eq!(percent_encode("a/b@c"), "a%2Fb%40c");
+        assert_eq!(percent_encode("100%"), "100%25");
+        assert_eq!(percent_encode("2510111t!"), "2510111t%21");
+    }
+
+    #[test]
+    fn percent_encode_handles_all_reserved_chars() {
+        assert_eq!(percent_encode("#$&?:@/"), "%23%24%26%3F%3A%40%2F");
+    }
 
     #[test]
     fn parses_smbutil_view_output() {
@@ -200,10 +244,8 @@ IPC$                                            Pipe    IPC Service ()
 
     #[test]
     fn smbutil_target_includes_encoded_username() {
-        let dir = tempfile::tempdir().unwrap();
-        let security = dir.path().join("security.sh");
-        crate::test_support::unix::write_executable(&security, "#!/bin/sh\nexit 0\n");
-        std::env::set_var("MEMHG_TEST_SECURITY", security.to_string_lossy().as_ref());
+        let _hooks = HookReset::new();
+        test_hooks::set("security", Stub::Success);
         let target = smbutil_target(&SmbListRequest {
             host: "nas".into(),
             username: "a/b".into(),
@@ -211,7 +253,6 @@ IPC$                                            Pipe    IPC Service ()
         });
         assert!(target.contains("%2F"));
         assert!(!target.contains("%40"));
-        std::env::remove_var("MEMHG_TEST_SECURITY");
     }
 
     #[test]
@@ -251,13 +292,9 @@ IPC$                                            Pipe    IPC Service ()
 
     #[test]
     fn list_shares_macos_uses_fake_smbutil() {
-        let dir = tempfile::tempdir().unwrap();
-        let script = dir.path().join("smbutil.sh");
-        write_executable(
-            &script,
-            "#!/bin/sh\ncat <<'EOF'\nShare                                           Type    Comments\nphotos                                          Disk    Family\nEOF\n",
-        );
-        std::env::set_var("MEMHG_TEST_SMBUTIL", script.to_string_lossy().as_ref());
+        let _hooks = HookReset::new();
+        test_hooks::set("security", Stub::Success);
+        test_hooks::set("smbutil", smbutil_photos_table());
         let shares = list_shares(&SmbListRequest {
             host: "nas".into(),
             username: "user".into(),
@@ -266,24 +303,19 @@ IPC$                                            Pipe    IPC Service ()
         .unwrap();
         assert_eq!(shares.len(), 1);
         assert_eq!(shares[0].name, "photos");
-        std::env::remove_var("MEMHG_TEST_SMBUTIL");
     }
 
     #[test]
     fn list_shares_macos_falls_back_to_smbclient() {
-        let dir = tempfile::tempdir().unwrap();
-        let smbutil = dir.path().join("smbutil.sh");
-        write_executable(
-            &smbutil,
-            "#!/bin/sh\ncat <<'EOF'\nAuthenticate successfully\nEOF\n",
+        let _hooks = HookReset::new();
+        test_hooks::set("security", Stub::Success);
+        test_hooks::set_queue("smbutil", vec![smbutil_authenticate(), smbutil_authenticate()]);
+        test_hooks::set(
+            "smbclient",
+            Stub::SmbclientList {
+                shares: vec![("photos".into(), "Family".into())],
+            },
         );
-        let smbclient = dir.path().join("smbclient.sh");
-        write_executable(
-            &smbclient,
-            "#!/bin/sh\ncat <<'EOF'\nDisk|photos|Family\nEOF\n",
-        );
-        std::env::set_var("MEMHG_TEST_SMBUTIL", smbutil.to_string_lossy().as_ref());
-        std::env::set_var("MEMHG_TEST_SMBCLIENT", smbclient.to_string_lossy().as_ref());
         let shares = list_shares(&SmbListRequest {
             host: "nas".into(),
             username: "user".into(),
@@ -291,25 +323,19 @@ IPC$                                            Pipe    IPC Service ()
         })
         .unwrap();
         assert_eq!(shares.len(), 1);
-        std::env::remove_var("MEMHG_TEST_SMBUTIL");
-        std::env::remove_var("MEMHG_TEST_SMBCLIENT");
     }
 
     #[test]
     fn list_shares_macos_retries_then_falls_back() {
-        let dir = tempfile::tempdir().unwrap();
-        let smbutil = dir.path().join("smbutil.sh");
-        write_executable(
-            &smbutil,
-            "#!/bin/sh\ncat <<'EOF'\nAuthenticate successfully\nEOF\n",
+        let _hooks = HookReset::new();
+        test_hooks::set("security", Stub::Success);
+        test_hooks::set_queue("smbutil", vec![smbutil_authenticate(), smbutil_authenticate()]);
+        test_hooks::set(
+            "smbclient",
+            Stub::SmbclientList {
+                shares: vec![("archive".into(), "Backup".into())],
+            },
         );
-        let smbclient = dir.path().join("smbclient.sh");
-        write_executable(
-            &smbclient,
-            "#!/bin/sh\ncat <<'EOF'\nDisk|archive|Backup\nEOF\n",
-        );
-        std::env::set_var("MEMHG_TEST_SMBUTIL", smbutil.to_string_lossy().as_ref());
-        std::env::set_var("MEMHG_TEST_SMBCLIENT", smbclient.to_string_lossy().as_ref());
         let shares = list_shares(&SmbListRequest {
             host: "nas".into(),
             username: "user".into(),
@@ -317,22 +343,14 @@ IPC$                                            Pipe    IPC Service ()
         })
         .unwrap();
         assert_eq!(shares[0].name, "archive");
-        std::env::remove_var("MEMHG_TEST_SMBUTIL");
-        std::env::remove_var("MEMHG_TEST_SMBCLIENT");
     }
 
     #[test]
     fn list_shares_macos_errors_when_no_shares_found() {
-        let dir = tempfile::tempdir().unwrap();
-        let smbutil = dir.path().join("smbutil.sh");
-        write_executable(
-            &smbutil,
-            "#!/bin/sh\ncat <<'EOF'\nAuthenticate successfully\nEOF\n",
-        );
-        let smbclient = dir.path().join("smbclient.sh");
-        write_executable(&smbclient, "#!/bin/sh\nexit 0\n");
-        std::env::set_var("MEMHG_TEST_SMBUTIL", smbutil.to_string_lossy().as_ref());
-        std::env::set_var("MEMHG_TEST_SMBCLIENT", smbclient.to_string_lossy().as_ref());
+        let _hooks = HookReset::new();
+        test_hooks::set("security", Stub::Success);
+        test_hooks::set_queue("smbutil", vec![smbutil_authenticate(), smbutil_authenticate()]);
+        test_hooks::set("smbclient", Stub::Success);
         let err = list_shares(&SmbListRequest {
             host: "nas".into(),
             username: "user".into(),
@@ -340,35 +358,30 @@ IPC$                                            Pipe    IPC Service ()
         })
         .unwrap_err();
         assert!(err.to_string().contains("authenticated"));
-        std::env::remove_var("MEMHG_TEST_SMBUTIL");
-        std::env::remove_var("MEMHG_TEST_SMBCLIENT");
     }
 
     #[test]
     fn unmount_share_falls_back_to_diskutil_when_umount_fails() {
+        let _hooks = HookReset::new();
+        test_hooks::set("umount", Stub::Failure);
+        test_hooks::set("diskutil", Stub::Success);
         let dir = tempfile::tempdir().unwrap();
         let mount = dir.path().join("mnt");
         std::fs::create_dir_all(&mount).unwrap();
-        let umount = dir.path().join("umount.sh");
-        write_executable(&umount, "#!/bin/sh\nexit 1\n");
-        let diskutil = dir.path().join("diskutil.sh");
-        write_executable(&diskutil, "#!/bin/sh\nexit 0\n");
-        std::env::set_var("MEMHG_TEST_UMOUNT", umount.to_string_lossy().as_ref());
-        std::env::set_var("MEMHG_TEST_DISKUTIL", diskutil.to_string_lossy().as_ref());
         unmount(&mount).unwrap();
-        std::env::remove_var("MEMHG_TEST_UMOUNT");
-        std::env::remove_var("MEMHG_TEST_DISKUTIL");
     }
 
     #[test]
     fn list_shares_macos_reports_smbutil_failure() {
-        let dir = tempfile::tempdir().unwrap();
-        let smbutil = dir.path().join("smbutil.sh");
-        write_executable(&smbutil, "#!/bin/sh\necho denied >&2\nexit 1\n");
-        let smbclient = dir.path().join("smbclient.sh");
-        write_executable(&smbclient, "#!/bin/sh\necho denied >&2\nexit 1\n");
-        std::env::set_var("MEMHG_TEST_SMBUTIL", smbutil.to_string_lossy().as_ref());
-        std::env::set_var("MEMHG_TEST_SMBCLIENT", smbclient.to_string_lossy().as_ref());
+        let _hooks = HookReset::new();
+        test_hooks::set("security", Stub::Success);
+        let denied = Stub::Output {
+            code: 1,
+            stdout: String::new(),
+            stderr: "denied".into(),
+        };
+        test_hooks::set("smbutil", denied.clone());
+        test_hooks::set("smbclient", denied);
         let err = list_shares(&SmbListRequest {
             host: "nas".into(),
             username: "user".into(),
@@ -376,21 +389,16 @@ IPC$                                            Pipe    IPC Service ()
         })
         .unwrap_err();
         assert!(err.to_string().contains("denied"));
-        std::env::remove_var("MEMHG_TEST_SMBUTIL");
-        std::env::remove_var("MEMHG_TEST_SMBCLIENT");
     }
 
     #[test]
     fn list_shares_macos_succeeds_after_retry() {
-        let dir = tempfile::tempdir().unwrap();
-        let counter = dir.path().join("attempt.count");
-        let smbutil = dir.path().join("smbutil.sh");
-        let smbutil_body = format!(
-            "#!/bin/sh\ncount=0\nif [ -f \"{0}\" ]; then count=$(cat \"{0}\"); fi\ncount=$((count+1))\necho $count > \"{0}\"\nif [ \"$count\" -eq 1 ]; then cat <<'EOF'\nAuthenticate successfully\nEOF\nelse cat <<'EOF'\nphotos                                          Disk    Family\nEOF\nfi\n",
-            counter.display()
+        let _hooks = HookReset::new();
+        test_hooks::set("security", Stub::Success);
+        test_hooks::set_queue(
+            "smbutil",
+            vec![smbutil_authenticate(), smbutil_photos_table()],
         );
-        write_executable(&smbutil, &smbutil_body);
-        std::env::set_var("MEMHG_TEST_SMBUTIL", smbutil.to_string_lossy().as_ref());
         let shares = list_shares(&SmbListRequest {
             host: "nas".into(),
             username: "user".into(),
@@ -399,6 +407,5 @@ IPC$                                            Pipe    IPC Service ()
         .unwrap();
         assert_eq!(shares.len(), 1);
         assert_eq!(shares[0].name, "photos");
-        std::env::remove_var("MEMHG_TEST_SMBUTIL");
     }
 }

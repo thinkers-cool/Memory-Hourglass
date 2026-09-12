@@ -10,6 +10,7 @@ const {
   queryAssets,
   countAssets,
   onScanProgress,
+  onScanThumbs,
   onJobProgress,
   onMessageNotify,
   addRoot,
@@ -24,6 +25,7 @@ const {
   queryAssets: vi.fn(),
   countAssets: vi.fn(),
   onScanProgress: vi.fn(),
+  onScanThumbs: vi.fn(),
   onJobProgress: vi.fn(),
   onMessageNotify: vi.fn(),
   addRoot: vi.fn(),
@@ -40,6 +42,7 @@ vi.mock("../api/client", () => ({
   queryAssets,
   countAssets,
   onScanProgress,
+  onScanThumbs,
   onJobProgress,
   onMessageNotify,
   getAsset: vi.fn().mockResolvedValue({
@@ -82,6 +85,7 @@ const sampleCard: AssetCard = {
 describe("useLibrary", () => {
   beforeEach(() => {
     countAssets.mockResolvedValue(0);
+    onScanThumbs.mockResolvedValue(() => undefined);
   });
 
   it("loads library metadata and grid on mount", async () => {

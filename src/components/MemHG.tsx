@@ -22,7 +22,6 @@ export function MemHG({ className, size = 24, title = "MemHG" }: MemHGProps) {
       role="img"
       aria-label={title}
     >
-      <title>{title}</title>
       <mask
         id={maskId}
         style={{ maskType: "luminance" }}

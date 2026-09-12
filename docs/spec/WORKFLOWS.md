@@ -27,11 +27,11 @@ Triggered by `start_scan(root_id)` or background watcher.
 Discovery (WalkDir)
   → Inventory upsert (batch 250)
   → Mark missing paths
-  → Index queue (batch 32, rayon parallel)
+  → Index queue (batch 32; thumbs parallel capped, metadata via shared ExifTool)
   → Link pass (RAW↔JPEG, hashes, duplicates)
 ```
 
-Sync states: `new`, `modified`, `ok`. Indexing: thumbnail + metadata → `asset_meta`, `asset_raw_tag`, `thumb_key`. Progress: `scan://progress`. Controls: `cancel_scan`, `get_scan_status` (UI); `pause_scan`, `resume_scan` (backend IPC, no UI yet).
+Sync states: `new`, `modified`, `ok`. Indexing: thumbnails first (parallel, capped), then metadata (shared ExifTool per batch) → `asset_meta`, `asset_raw_tag`, `thumb_key`. Progress: `scan://progress`; per-batch thumb paths: `scan://thumbs`. Frontend patches grid thumbs incrementally and debounces grid refresh during indexing. Controls: `cancel_scan`, `get_scan_status` (UI); `pause_scan`, `resume_scan` (backend IPC, no UI yet).
 
 Files: `src-tauri/src/scan/`, `src-tauri/src/commands/scan.rs`.
 

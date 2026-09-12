@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+pub mod smb;
+pub mod subprocess;
 pub mod unix;
 
 use crate::state::AppState;

@@ -176,7 +176,7 @@ describe("LibraryFilterToolbar", () => {
       },
     });
     await user.click(screen.getByRole("button", { name: /from 2024-01-01/i }));
-    await user.type(screen.getByTitle("To"), "2024-12-31");
+    await user.type(screen.getByLabelText("To"), "2024-12-31");
     expect(setFilterBar).toHaveBeenCalled();
     const updater = setFilterBar.mock.calls.at(-1)?.[0] as (
       prev: typeof emptyFilterBar,

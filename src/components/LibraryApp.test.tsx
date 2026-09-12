@@ -211,7 +211,9 @@ describe("LibraryApp", () => {
   it("renders nav rail and grid area", () => {
     useLibraryMock.mockReturnValue(createMockLibrary());
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    expect(screen.getByTitle("Library")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Library" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Ready")).toBeInTheDocument();
   });
 
@@ -220,7 +222,7 @@ describe("LibraryApp", () => {
     useLibraryMock.mockReturnValue(createMockLibrary());
     const user = userEvent.setup();
     render(<LibraryApp onCloseWorkspace={onCloseWorkspace} />);
-    await user.click(screen.getByTitle("Close workspace"));
+    await user.click(screen.getByRole("button", { name: "Close workspace" }));
     expect(onCloseWorkspace).toHaveBeenCalledTimes(1);
   });
 
@@ -389,7 +391,7 @@ describe("LibraryApp", () => {
     useLibraryMock.mockReturnValue(library);
     const user = userEvent.setup();
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    await user.click(screen.getByTitle("Export"));
+    await user.click(screen.getByRole("button", { name: "Export" }));
     expect(library.actions.openExport).toHaveBeenCalledWith([1, 2]);
   });
 
@@ -401,7 +403,7 @@ describe("LibraryApp", () => {
     useLibraryMock.mockReturnValue(library);
     const user = userEvent.setup();
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    await user.click(screen.getByTitle("Export"));
+    await user.click(screen.getByRole("button", { name: "Export" }));
     expect(library.actions.openExport).toHaveBeenCalledWith([1]);
   });
 
@@ -594,7 +596,7 @@ describe("LibraryApp", () => {
     const library = createMockLibrary();
     useLibraryMock.mockReturnValue(library);
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    await user.click(screen.getByTitle("Slideshow (F12)"));
+    await user.click(screen.getByRole("button", { name: "Slideshow" }));
     expect(library.actions.openGallery).toHaveBeenCalled();
   });
 
@@ -606,7 +608,7 @@ describe("LibraryApp", () => {
     useLibraryMock.mockReturnValue(library);
     const user = userEvent.setup();
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    await user.click(screen.getByTitle("Export"));
+    await user.click(screen.getByRole("button", { name: "Export" }));
     expect(library.actions.openExport).toHaveBeenCalledWith([1]);
   });
 
@@ -816,8 +818,10 @@ describe("LibraryApp", () => {
     useLibraryMock.mockReturnValue(createMockLibrary());
     const user = userEvent.setup();
     render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    await user.click(screen.getByTitle("Collection"));
-    expect(screen.getByTitle("Collection")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Collection" }));
+    expect(
+      screen.getByRole("button", { name: "Collection" }),
+    ).toBeInTheDocument();
   });
 
   it("resizes leading panel width", () => {

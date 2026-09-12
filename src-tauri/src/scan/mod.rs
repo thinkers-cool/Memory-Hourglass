@@ -9,12 +9,11 @@ use crate::catalog::Catalog;
 use crate::error::{AppError, Result};
 use crate::metadata::metadata_context_for_asset;
 use crate::scan::extensions::{asset_kind, is_media_file, should_ignore};
-use crate::scan::index_asset::index_asset_on_disk;
+use crate::scan::index_asset::{index_batch_on_disk, BatchIndexItem};
 use crate::scan::index_integrity::is_index_complete;
 use crate::scan::index_pipeline::{apply_index_output, IndexApplyInput};
 use crate::workspace::WorkspaceMediaSettings;
 use extensions::MEDIA_EXTENSIONS;
-use rayon::prelude::*;
 use sqlx::SqlitePool;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -81,6 +80,12 @@ pub(crate) struct PostProcessItem {
     pub prior_thumb_key: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct IndexedThumbUpdate {
+    pub asset_id: i64,
+    pub thumb_path: String,
+}
+
 struct DiscoveredFile {
     rel_path: String,
     file_name: String,
@@ -131,7 +136,7 @@ impl ScanService {
 
     pub async fn scan_root(&self, root_id: i64, ctrl: &ScanControl) -> Result<ScanSummary> {
         let inventory = self.scan_inventory(root_id, ctrl, |_, _| {}).await?;
-        self.process_index_queue(ctrl, &inventory.index_queue, |_, _| {})
+        self.process_index_queue(ctrl, &inventory.index_queue, |_, _, _| {})
             .await?;
         self.finalize_scan_links(root_id, &inventory.root_path)
             .await?;
@@ -334,7 +339,7 @@ impl ScanService {
         mut on_progress: F,
     ) -> Result<()>
     where
-        F: FnMut(u64, u64),
+        F: FnMut(u64, u64, &[IndexedThumbUpdate]),
     {
         let total = index_queue.len() as u64;
         if total == 0 {
@@ -363,8 +368,8 @@ impl ScanService {
                     std::env::remove_var("MEMHG_TEST_INDEX_BATCH_PANIC");
                     panic!("index batch panic");
                 }
-                batch_items
-                    .par_iter()
+                let batch_index_items = batch_items
+                    .iter()
                     .map(|item| {
                         let metadata_ctx = metadata_context_for_asset(
                             media_settings.read_only,
@@ -373,17 +378,23 @@ impl ScanService {
                             &item.rel_path,
                             item.path.clone(),
                         );
-                        let indexed = index_asset_on_disk(
-                            item.asset_id,
-                            &item.path,
-                            &thumb_dir,
-                            &metadata_ctx,
-                        );
+                        BatchIndexItem {
+                            asset_id: item.asset_id,
+                            path: item.path.clone(),
+                            metadata_ctx,
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                let indexed_by_id = index_batch_on_disk(&batch_index_items, &thumb_dir);
+                batch_items
+                    .into_iter()
+                    .zip(indexed_by_id)
+                    .map(|(item, (asset_id, indexed))| {
                         (
-                            item.asset_id,
+                            asset_id,
                             item.mtime_ns,
-                            item.kind.clone(),
-                            item.prior_thumb_key.clone(),
+                            item.kind,
+                            item.prior_thumb_key,
                             indexed,
                         )
                     })
@@ -392,7 +403,14 @@ impl ScanService {
             .await
             .map_err(|error| AppError::Scan(format!("index batch failed: {}", error)))?;
 
+            let mut batch_thumbs = Vec::new();
             for (asset_id, mtime_ns, kind, prior_thumb_key, indexed) in indexed_batch {
+                if let Some(key) = indexed.thumb_key.as_ref() {
+                    batch_thumbs.push(IndexedThumbUpdate {
+                        asset_id,
+                        thumb_path: self.thumb_dir.join(key).to_string_lossy().to_string(),
+                    });
+                }
                 apply_index_output(
                     &self.pool,
                     &IndexApplyInput {
@@ -407,7 +425,7 @@ impl ScanService {
             }
 
             processed += batch.len() as u64;
-            on_progress(processed, total);
+            on_progress(processed, total, &batch_thumbs);
             tokio::task::yield_now().await;
         }
 
@@ -575,7 +593,11 @@ mod tests {
         }
     }
 
-    fn noop_scan_progress(_discovered: u64, _indexed: u64) {
+    fn noop_inventory_progress(_discovered: u64, _indexed: u64) {
+        std::hint::black_box(());
+    }
+
+    fn noop_index_progress(_processed: u64, _total: u64, _thumbs: &[IndexedThumbUpdate]) {
         std::hint::black_box(());
     }
 
@@ -774,7 +796,7 @@ mod tests {
         };
         std::env::set_var("MEMHG_TEST_INDEX_QUEUE_FAIL", "1");
         let err = scanner
-            .process_index_queue(&ScanControl::noop(), &[item], noop_scan_progress)
+            .process_index_queue(&ScanControl::noop(), &[item], noop_index_progress)
             .await
             .unwrap_err();
         assert!(err.to_string().contains("index queue failed"));
@@ -797,7 +819,7 @@ mod tests {
         };
         std::env::set_var("MEMHG_TEST_FORCE_INDEX_CANCEL", "1");
         scanner
-            .process_index_queue(&ScanControl::noop(), &[item], noop_scan_progress)
+            .process_index_queue(&ScanControl::noop(), &[item], noop_index_progress)
             .await
             .unwrap();
     }
@@ -921,7 +943,7 @@ mod tests {
         std::env::set_var("MEMHG_TEST_DISCOVERY_FAIL", "1");
         let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
         let result = scanner
-            .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
+            .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await;
         assert!(result.is_err(), "expected discovery failure");
         assert!(result
@@ -944,7 +966,7 @@ mod tests {
             .unwrap();
         let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
         let result = scanner
-            .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
+            .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await
             .unwrap();
         assert_eq!(result.summary.scanned, 0);
@@ -1077,7 +1099,7 @@ mod tests {
         };
         let handle = tokio::spawn(async move {
             scanner
-                .process_index_queue(&ctrl, &[item], noop_scan_progress)
+                .process_index_queue(&ctrl, &[item], noop_index_progress)
                 .await
         });
         cancelled.store(true, Ordering::SeqCst);
@@ -1139,7 +1161,7 @@ mod tests {
             .collect::<Vec<_>>();
         let handle = tokio::spawn(async move {
             scanner
-                .process_index_queue(&ctrl, &items, noop_scan_progress)
+                .process_index_queue(&ctrl, &items, noop_index_progress)
                 .await
         });
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1308,10 +1330,10 @@ mod tests {
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
         scanner
-            .process_index_queue(&ScanControl::noop(), &[], noop_scan_progress)
+            .process_index_queue(&ScanControl::noop(), &[], noop_index_progress)
             .await
             .unwrap();
-        noop_scan_progress(0, 0);
+        noop_index_progress(0, 0, &[]);
     }
 
     #[test]
@@ -1489,7 +1511,7 @@ mod tests {
     fn test_hooks_with_env_test_lock_runs_closure() {
         let value = test_hooks::with_env_test_lock(|| 42);
         assert_eq!(value, 42);
-        noop_scan_progress(0, 0);
+        noop_index_progress(0, 0, &[]);
     }
 
     #[test]
@@ -1549,7 +1571,7 @@ mod tests {
         std::env::set_var("MEMHG_TEST_DISCOVERY_PANIC", "1");
         let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
         let result = scanner
-            .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
+            .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await;
         assert!(result.is_err());
         assert!(result
@@ -1576,7 +1598,7 @@ mod tests {
         };
         std::env::set_var("MEMHG_TEST_INDEX_BATCH_PANIC", "1");
         let err = scanner
-            .process_index_queue(&ScanControl::noop(), &[item], noop_scan_progress)
+            .process_index_queue(&ScanControl::noop(), &[item], noop_index_progress)
             .await
             .unwrap_err();
         assert!(err.to_string().contains("index batch failed"));
@@ -1607,7 +1629,7 @@ mod tests {
         let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
         let handle = tokio::spawn(async move {
             scanner
-                .scan_inventory(root.id, &ctrl, noop_scan_progress)
+                .scan_inventory(root.id, &ctrl, noop_inventory_progress)
                 .await
         });
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -1636,7 +1658,7 @@ mod tests {
             .unwrap();
         let scanner = ScanService::new(pool.clone(), dir.path().join("thumbs"));
         scanner
-            .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
+            .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await
             .unwrap();
         pool.close().await;
@@ -1645,7 +1667,7 @@ mod tests {
             .await
             .is_err());
         assert!(scanner
-            .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
+            .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await
             .is_err());
         assert!(scanner.finalize_scan_links(root.id, &photos).await.is_err());
@@ -1659,7 +1681,7 @@ mod tests {
             prior_thumb_key: None,
         };
         assert!(scanner
-            .process_index_queue(&ScanControl::noop(), &[item], noop_scan_progress)
+            .process_index_queue(&ScanControl::noop(), &[item], noop_index_progress)
             .await
             .is_err());
     }
@@ -1726,7 +1748,7 @@ mod tests {
             .unwrap();
         let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
         scanner
-            .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
+            .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await
             .unwrap();
         scanner.finalize_scan_links(root.id, &photos).await.unwrap();
@@ -1747,7 +1769,7 @@ mod tests {
         pool.close().await;
         let scanner = ScanService::new(pool, dir.path().join("thumbs"));
         assert!(scanner
-            .scan_inventory(root.id, &ScanControl::noop(), noop_scan_progress)
+            .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await
             .is_err());
     }

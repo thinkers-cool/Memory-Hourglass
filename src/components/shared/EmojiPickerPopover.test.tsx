@@ -21,7 +21,7 @@ describe("EmojiPickerPopover", () => {
     render(
       <EmojiPickerPopover value="📷" onChange={vi.fn()} title="Album emoji" />,
     );
-    await user.click(screen.getByTitle("Album emoji"));
+    await user.click(screen.getByRole("button", { name: "Album emoji" }));
     expect((await screen.findAllByText("📷")).length).toBeGreaterThan(0);
     expect(loadEmojiCatalog).toHaveBeenCalledTimes(1);
   });
@@ -32,7 +32,7 @@ describe("EmojiPickerPopover", () => {
     render(
       <EmojiPickerPopover value="" onChange={onChange} title="Album emoji" />,
     );
-    await user.click(screen.getByTitle("Album emoji"));
+    await user.click(screen.getByRole("button", { name: "Album emoji" }));
     await user.click(await screen.findByText("🌅"));
     expect(onChange).toHaveBeenCalledWith("🌅");
     expect(screen.queryByText("🌅")).not.toBeInTheDocument();
@@ -48,7 +48,7 @@ describe("EmojiPickerPopover", () => {
         disabled
       />,
     );
-    await user.click(screen.getByTitle("Album emoji"));
+    await user.click(screen.getByRole("button", { name: "Album emoji" }));
     expect(loadEmojiCatalog).not.toHaveBeenCalled();
   });
 
@@ -60,7 +60,7 @@ describe("EmojiPickerPopover", () => {
         <button type="button">Outside</button>
       </>,
     );
-    await user.click(screen.getByTitle("Album emoji"));
+    await user.click(screen.getByRole("button", { name: "Album emoji" }));
     expect(await screen.findByText("🌅")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Outside" }));
     expect(screen.queryByText("🌅")).not.toBeInTheDocument();
@@ -70,6 +70,6 @@ describe("EmojiPickerPopover", () => {
     render(
       <EmojiPickerPopover value="" onChange={vi.fn()} title="Album emoji" />,
     );
-    expect(screen.getByTitle("Album emoji")).toHaveTextContent("😀");
+    expect(screen.getByRole("button", { name: "Album emoji" })).toHaveTextContent("😀");
   });
 });

@@ -15,8 +15,9 @@ export function panelRowButtonClass(active?: boolean, dimmed?: boolean) {
   }`;
 }
 export function rootDisplayName(path: string): string {
-  const segments = path.split("/");
-  return segments[segments.length - 1] || path;
+  const normalized = path.replace(/[/\\]+$/, "");
+  const segments = normalized.split(/[/\\]/).filter(Boolean);
+  return segments[segments.length - 1] ?? path;
 }
 export const inputClass = `${INPUT_CONTROL_CLASS} min-w-0 flex-1 px-2 text-xs`;
 export const panelShellClass = "flex h-full flex-col border-r surface-panel";

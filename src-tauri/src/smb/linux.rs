@@ -3,7 +3,8 @@ use std::path::Path;
 use crate::error::{AppError, Result};
 
 use super::{
-    list_shares_smbclient, subprocess_command, SmbConnectRequest, SmbListRequest, SmbShareEntry,
+    list_shares_smbclient, subprocess_command, subprocess_status, SmbConnectRequest, SmbListRequest,
+    SmbShareEntry,
 };
 
 pub fn list_shares(req: &SmbListRequest) -> Result<Vec<SmbShareEntry>> {
@@ -24,15 +25,15 @@ pub fn mount(mount_path: &Path, req: &SmbConnectRequest) -> Result<()> {
     if req.read_only {
         mount_options.push_str(",ro");
     }
-    let status = subprocess_command("mount")
+    let mut mount = subprocess_command("mount");
+    mount
         .arg("-t")
         .arg("cifs")
         .arg(&source)
         .arg(mount_path)
         .arg("-o")
-        .arg(mount_options)
-        .status()
-        .map_err(AppError::from)?;
+        .arg(mount_options);
+    let status = subprocess_status(&mut mount).map_err(AppError::from)?;
 
     if status.success() {
         return Ok(());
@@ -44,5 +45,7 @@ pub fn mount(mount_path: &Path, req: &SmbConnectRequest) -> Result<()> {
 }
 
 pub fn unmount(mount_path: &Path) {
-    let _ = subprocess_command("umount").arg(mount_path).status();
+    let mut umount = subprocess_command("umount");
+    umount.arg(mount_path);
+    let _ = subprocess_status(&mut umount);
 }

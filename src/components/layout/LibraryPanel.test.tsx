@@ -101,7 +101,7 @@ describe("LibraryPanel", () => {
       />,
     );
     expect(screen.getByText("No sources yet")).toBeInTheDocument();
-    await user.click(screen.getByTitle("Add folder"));
+    await user.click(screen.getByRole("button", { name: "Add folder" }));
     expect(actions.addLocalRoot).toHaveBeenCalledTimes(1);
   });
 
@@ -153,7 +153,7 @@ describe("LibraryPanel", () => {
       />,
     );
 
-    await user.click(screen.getAllByTitle("Remove")[0]);
+    await user.click(screen.getAllByRole("button", { name: "Remove" })[0]);
     expect(actions.deleteTag).toHaveBeenCalledWith(7);
   });
 
@@ -185,9 +185,9 @@ describe("LibraryPanel", () => {
       />,
     );
 
-    await user.click(screen.getByTitle("Add subtag"));
+    await user.click(screen.getByRole("button", { name: "Add subtag" }));
     await user.type(screen.getByPlaceholderText("New subtag"), "japan");
-    await user.click(screen.getByTitle("Save"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
     expect(actions.createTag).toHaveBeenCalledWith("japan", 7, "#6b7280");
   });
 
@@ -210,7 +210,7 @@ describe("LibraryPanel", () => {
         actions={actions}
       />,
     );
-    await user.click(screen.getByTitle("Connect SMB share"));
+    await user.click(screen.getByRole("button", { name: "Connect SMB share" }));
     expect(actions.openSmbConnect).toHaveBeenCalledTimes(1);
   });
 
@@ -244,7 +244,7 @@ describe("LibraryPanel", () => {
     );
     await user.click(screen.getByText("Summer"));
     expect(actions.selectAlbum).toHaveBeenCalledWith(3);
-    await user.click(screen.getAllByTitle("Remove")[0]);
+    await user.click(screen.getAllByRole("button", { name: "Remove" })[0]);
     expect(actions.deleteAlbum).toHaveBeenCalledWith(3);
   });
 
@@ -267,9 +267,9 @@ describe("LibraryPanel", () => {
         actions={actions}
       />,
     );
-    await user.click(screen.getByTitle("New album"));
+    await user.click(screen.getByRole("button", { name: "New album" }));
     await user.type(screen.getByPlaceholderText("New album"), "Trips");
-    await user.click(screen.getByTitle("Save"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
     expect(actions.createAlbum).toHaveBeenCalledWith(
       "Trips",
       DEFAULT_ALBUM_EMOJI,
@@ -347,18 +347,18 @@ describe("LibraryPanel", () => {
     );
     await user.click(screen.getByText("Favorites"));
     expect(actions.selectCollection).toHaveBeenCalled();
-    await user.click(screen.getByTitle("Remove"));
+    await user.click(screen.getByRole("button", { name: "Remove" }));
     expect(actions.deleteCollection).toHaveBeenCalledWith(9);
   });
 
   it("runs source row sync relink and remove actions", async () => {
     const user = userEvent.setup();
     const { actions } = renderPanel({ roots: [sampleRoot] });
-    await user.click(screen.getByTitle("Sync"));
+    await user.click(screen.getByRole("button", { name: "Sync" }));
     expect(actions.syncRoot).toHaveBeenCalledWith(5);
-    await user.click(screen.getByTitle("Relink"));
+    await user.click(screen.getByRole("button", { name: "Relink" }));
     expect(actions.relinkRoot).toHaveBeenCalledWith(5);
-    await user.click(screen.getAllByTitle("Remove")[0]);
+    await user.click(screen.getAllByRole("button", { name: "Remove" })[0]);
     expect(actions.removeRoot).toHaveBeenCalledWith(5);
     expect(actions.selectRoot).not.toHaveBeenCalled();
   });
@@ -384,8 +384,8 @@ describe("LibraryPanel", () => {
     });
     expect(screen.getByText("photos")).toBeInTheDocument();
     expect(screen.getByText("Offline")).toBeInTheDocument();
-    expect(screen.getByTitle("Network source")).toBeInTheDocument();
-    expect(screen.getByText("/mnt/nas/")).toBeInTheDocument();
+    expect(screen.getByLabelText("Network source")).toBeInTheDocument();
+    expect(screen.getByText("nas")).toBeInTheDocument();
   });
 
   it("edits albums on double click", async () => {
@@ -406,7 +406,7 @@ describe("LibraryPanel", () => {
     const input = screen.getByDisplayValue("Summer");
     await user.clear(input);
     await user.type(input, "Winter");
-    await user.click(screen.getByTitle("Save"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
     expect(actions.updateAlbum).toHaveBeenCalledWith(3, "Winter", "☀️");
   });
 
@@ -433,14 +433,14 @@ describe("LibraryPanel", () => {
   it("submits album add with enter and cancels with escape", async () => {
     const user = userEvent.setup();
     const { actions } = renderPanel();
-    await user.click(screen.getByTitle("New album"));
+    await user.click(screen.getByRole("button", { name: "New album" }));
     const input = screen.getByPlaceholderText("New album");
     await user.type(input, "Trips{Enter}");
     expect(actions.createAlbum).toHaveBeenCalledWith(
       "Trips",
       DEFAULT_ALBUM_EMOJI,
     );
-    await user.click(screen.getByTitle("New album"));
+    await user.click(screen.getByRole("button", { name: "New album" }));
     await user.type(screen.getByPlaceholderText("New album"), "Draft");
     await user.keyboard("{Escape}");
     expect(actions.createAlbum).toHaveBeenCalledTimes(1);
@@ -461,7 +461,7 @@ describe("LibraryPanel", () => {
     });
     await user.click(screen.getByText("travel"));
     expect(actions.filterByTag).toHaveBeenCalledWith(7);
-    await user.click(screen.getByTitle("New tag"));
+    await user.click(screen.getByRole("button", { name: "New tag" }));
     await user.type(screen.getByPlaceholderText("New tag"), "nature{Enter}");
     expect(actions.createTag).toHaveBeenCalledWith(
       "nature",
@@ -487,7 +487,7 @@ describe("LibraryPanel", () => {
     const input = screen.getByDisplayValue("travel");
     await user.clear(input);
     await user.type(input, "vacation");
-    await user.click(screen.getByTitle("Save"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
     expect(actions.updateTag).toHaveBeenCalledWith(7, "vacation", "#ff0000");
   });
 
@@ -511,10 +511,10 @@ describe("LibraryPanel", () => {
         },
       ],
     });
-    expect(screen.getByTitle("Subtag")).toBeInTheDocument();
-    await user.click(screen.getAllByTitle("Add subtag")[0]);
+    expect(screen.getByLabelText("Subtag")).toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: "Add subtag" })[0]);
     expect(screen.getByPlaceholderText("New subtag")).toBeInTheDocument();
-    await user.click(screen.getByTitle("New tag"));
+    await user.click(screen.getByRole("button", { name: "New tag" }));
     expect(screen.queryByPlaceholderText("New subtag")).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText("New tag")).toBeInTheDocument();
     await user.keyboard("{Escape}");
@@ -549,10 +549,10 @@ describe("LibraryPanel", () => {
         },
       ],
     });
-    await user.click(screen.getByTitle("New album"));
+    await user.click(screen.getByRole("button", { name: "New album" }));
     await user.type(screen.getByPlaceholderText("New album"), "   {Enter}");
     expect(actions.createAlbum).not.toHaveBeenCalled();
-    await user.click(screen.getByTitle("New tag"));
+    await user.click(screen.getByRole("button", { name: "New tag" }));
     await user.type(screen.getByPlaceholderText("New tag"), "   {Enter}");
     expect(actions.createTag).not.toHaveBeenCalled();
     await user.dblClick(screen.getByText("Summer"));

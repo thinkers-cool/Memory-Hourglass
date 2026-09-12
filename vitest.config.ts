@@ -8,11 +8,6 @@ export default defineConfig({
     environment: "happy-dom",
     setupFiles: ["src/test/setup.ts"],
     pool: "forks",
-    poolOptions: {
-      forks: {
-        execArgv: ["--no-webstorage"],
-      },
-    },
     maxWorkers: 2,
     coverage: {
       provider: "v8",

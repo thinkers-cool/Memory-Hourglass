@@ -1,13 +1,36 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { sampleCard, sampleVideoCard } from "../test/fixtures";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetThumbLoadQueueForTests } from "../lib/thumbLoad";
 import { resetGridCardClickState } from "../lib/gridCardClick";
+import { sampleCard, sampleVideoCard } from "../test/fixtures";
 import { AssetGridCard } from "./AssetGridCard";
 
 describe("AssetGridCard", () => {
+  beforeEach(() => {
+    class MockIntersectionObserver {
+      private readonly callback: IntersectionObserverCallback;
+
+      constructor(callback: IntersectionObserverCallback) {
+        this.callback = callback;
+      }
+
+      observe() {
+        this.callback(
+          [{ isIntersecting: true } as IntersectionObserverEntry],
+          this as unknown as IntersectionObserver,
+        );
+      }
+
+      disconnect() {}
+    }
+    vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+  });
+
   afterEach(() => {
     resetGridCardClickState();
+    resetThumbLoadQueueForTests();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it("opens full view on double click", () => {
@@ -79,7 +102,7 @@ describe("AssetGridCard", () => {
     expect(document.querySelector(".lucide-stamp")).toBeInTheDocument();
   });
 
-  it("shows selection chrome when selected", () => {
+  it("shows selection chrome when selected", async () => {
     render(
       <AssetGridCard
         card={sampleCard}
@@ -88,7 +111,9 @@ describe("AssetGridCard", () => {
         onOpenFullView={vi.fn()}
       />,
     );
-    expect(screen.getByAltText("photo.jpg")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByAltText("photo.jpg")).toBeInTheDocument(),
+    );
   });
 
   it("renders video poster when thumbnail is missing", () => {

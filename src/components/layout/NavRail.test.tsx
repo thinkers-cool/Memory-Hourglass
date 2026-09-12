@@ -9,7 +9,7 @@ describe("NavRail", () => {
     const onChange = vi.fn();
     render(<NavRail active="library" onChange={onChange} onExit={vi.fn()} />);
 
-    await user.click(screen.getByTitle("Collection"));
+    await user.click(screen.getByRole("button", { name: "Collection" }));
     expect(onChange).toHaveBeenCalledWith("collections");
   });
 
@@ -18,13 +18,15 @@ describe("NavRail", () => {
     const onExit = vi.fn();
     render(<NavRail active="library" onChange={vi.fn()} onExit={onExit} />);
 
-    await user.click(screen.getByTitle("Close workspace"));
+    await user.click(screen.getByRole("button", { name: "Close workspace" }));
     expect(onExit).toHaveBeenCalled();
   });
 
   it("shows theme control above close workspace", () => {
     render(<NavRail active="library" onChange={vi.fn()} onExit={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Theme" })).toBeInTheDocument();
-    expect(screen.getByTitle("Close workspace")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Close workspace" }),
+    ).toBeInTheDocument();
   });
 });

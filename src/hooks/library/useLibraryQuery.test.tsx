@@ -10,6 +10,7 @@ const {
   countAssets,
   queryAssets,
   onScanProgress,
+  onScanThumbs,
   getAsset,
 } = vi.hoisted(() => ({
   listRootStats: vi.fn(),
@@ -19,6 +20,7 @@ const {
   countAssets: vi.fn(),
   queryAssets: vi.fn(),
   onScanProgress: vi.fn(),
+  onScanThumbs: vi.fn(),
   getAsset: vi.fn(),
 }));
 
@@ -30,6 +32,7 @@ vi.mock("../../api/client", () => ({
   countAssets,
   queryAssets,
   onScanProgress,
+  onScanThumbs,
   getAsset,
 }));
 
@@ -81,6 +84,7 @@ describe("useLibraryQuery", () => {
     queryAssets.mockResolvedValue({ total: 1, items: [sampleCard] });
     getAsset.mockResolvedValue(sampleDetail);
     onScanProgress.mockResolvedValue(() => undefined);
+    onScanThumbs.mockResolvedValue(() => undefined);
   });
 
   it("loads metadata and grid on mount", async () => {
@@ -200,6 +204,78 @@ describe("useLibraryQuery", () => {
 
     expect(result.current.items).toHaveLength(2);
     expect(setNotification).not.toHaveBeenCalled();
+  });
+
+  it("refreshes grid during indexing progress", async () => {
+    let scanHandler:
+      | ((progress: {
+          root_id: number;
+          stage: string;
+          scanned: number;
+          indexed: number;
+        }) => void)
+      | undefined;
+
+    onScanProgress.mockImplementation(async (handler) => {
+      scanHandler = handler;
+      return () => undefined;
+    });
+
+    const selectedIdRef = { current: null as number | null };
+    const setDetail = vi.fn();
+    const setNotification = vi.fn();
+
+    renderHook(() =>
+      useLibraryQuery(selectedIdRef, setDetail, setNotification),
+    );
+    await waitFor(() => expect(onScanProgress).toHaveBeenCalled());
+
+    queryAssets.mockClear();
+    vi.useFakeTimers();
+    await act(async () => {
+      scanHandler?.({
+        root_id: 1,
+        stage: "indexing",
+        scanned: 10,
+        indexed: 4,
+      });
+      vi.advanceTimersByTime(8000);
+    });
+    vi.useRealTimers();
+
+    await waitFor(() => expect(queryAssets).toHaveBeenCalled());
+  });
+
+  it("patches thumbs from scan thumb events", async () => {
+    let thumbHandler:
+      | ((event: {
+          root_id: number;
+          thumbs: { asset_id: number; thumb_path: string }[];
+        }) => void)
+      | undefined;
+
+    onScanThumbs.mockImplementation(async (handler) => {
+      thumbHandler = handler;
+      return () => undefined;
+    });
+
+    const selectedIdRef = { current: null as number | null };
+    const setDetail = vi.fn();
+    const setNotification = vi.fn();
+
+    const { result } = renderHook(() =>
+      useLibraryQuery(selectedIdRef, setDetail, setNotification),
+    );
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+
+    await act(async () => {
+      thumbHandler?.({
+        root_id: 1,
+        thumbs: [{ asset_id: 1, thumb_path: "/tmp/1.webp" }],
+      });
+    });
+
+    expect(result.current.items[0]?.thumb_path).toBe("/tmp/1.webp");
   });
 
   it("refreshes grid during cataloging progress", async () => {

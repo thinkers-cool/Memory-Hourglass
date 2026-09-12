@@ -1,6 +1,7 @@
 use super::{
     combine_command_output, run_with_timeout, should_skip_share_name, subprocess_command,
-    SmbConnectRequest, SmbListRequest, SmbShareEntry, SMB_LIST_TIMEOUT,
+    subprocess_output, subprocess_status, SmbConnectRequest, SmbListRequest, SmbShareEntry,
+    SMB_LIST_TIMEOUT,
 };
 use crate::error::{AppError, Result};
 use std::path::{Path, PathBuf};
@@ -26,11 +27,11 @@ fn net_user(req: &SmbConnectRequest) -> String {
 }
 
 fn store_windows_credential(target: &str, user: &str, password: &str) -> Result<()> {
-    let status = subprocess_command("cmdkey")
+    let mut cmdkey = subprocess_command("cmdkey");
+    cmdkey
         .args(["/generic:", target, "/user:", user, "/pass:", password])
-        .stdin(Stdio::null())
-        .status()
-        .map_err(AppError::from)?;
+        .stdin(Stdio::null());
+    let status = subprocess_status(&mut cmdkey).map_err(AppError::from)?;
     if status.success() {
         return Ok(());
     }
@@ -101,10 +102,9 @@ pub fn unmount_windows(path: &Path) -> Result<()> {
         return Ok(());
     }
     let unc = path.to_string_lossy();
-    let status = subprocess_command("net")
-        .args(["use", unc.as_ref(), "/delete", "/y"])
-        .status()
-        .map_err(AppError::from)?;
+    let mut net = subprocess_command("net");
+    net.args(["use", unc.as_ref(), "/delete", "/y"]);
+    let status = subprocess_status(&mut net).map_err(AppError::from)?;
     if status.success() {
         return Ok(());
     }
@@ -116,7 +116,9 @@ pub fn is_mounted_windows(path: &Path) -> bool {
         return false;
     }
     let unc = path.to_string_lossy();
-    let Ok(output) = subprocess_command("net").arg("use").output() else {
+    let mut net = subprocess_command("net");
+    net.arg("use");
+    let Ok(output) = subprocess_output(&mut net) else {
         return path.is_dir();
     };
     let text = String::from_utf8_lossy(&output.stdout);

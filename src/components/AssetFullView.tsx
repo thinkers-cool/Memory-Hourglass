@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useZoomableMedia } from "../hooks/useZoomableMedia";
 import { handleImageViewerZoomKey } from "../lib/imageViewerZoom";
 import { ImageViewerZoomControls } from "./shared/ImageViewerZoomControls";
+import { IconTooltip } from "./shared/Tooltip";
 import { ZoomableMedia } from "./shared/ZoomableMedia";
 import type { AssetCard } from "../types";
 
@@ -17,14 +18,19 @@ function NavZone({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className="btn btn-ghost pointer-events-auto h-full w-1/4 min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none transition-colors hover:bg-base-content/5 disabled:pointer-events-none disabled:bg-transparent"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      title={label}
-    />
+    <IconTooltip
+      tip={label}
+      placement="top"
+      className="flex h-full w-1/4 min-h-0 shrink-0"
+    >
+      <button
+        type="button"
+        className="btn btn-ghost pointer-events-auto h-full w-full min-h-0 rounded-none border-0 bg-transparent p-0 shadow-none transition-colors hover:bg-base-content/5 disabled:pointer-events-none disabled:bg-transparent"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+      />
+    </IconTooltip>
   );
 }
 

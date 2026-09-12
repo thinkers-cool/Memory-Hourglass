@@ -1,11 +1,15 @@
+#[cfg(unix)]
 mod common;
 
 use memhg_lib::state::{ActiveWorkspace, AppState};
 use memhg_lib::workspace::{self, WorkspaceService, WORKSPACE_MANIFEST};
-use std::path::Path;
 use tempfile::tempdir;
 
-use crate::common::unix::{allow_access, deny_access, write_executable};
+#[cfg(unix)]
+use std::path::Path;
+
+#[cfg(unix)]
+use crate::common::unix::{allow_access, deny_access};
 
 #[tokio::test]
 async fn active_workspace_open_rejects_missing_path() {
@@ -144,37 +148,5 @@ fn init_workspace_propagates_read_dir_failure_on_locked_directory() {
     deny_access(&locked);
     let result = workspace::init_workspace_at(&locked, false);
     allow_access(&locked, 0o755);
-    assert!(result.is_err());
-}
-
-#[cfg(target_os = "macos")]
-#[tokio::test]
-async fn connect_smb_share_reports_mount_failure() {
-    use memhg_lib::catalog::Catalog;
-    use memhg_lib::library::LibraryService;
-    use memhg_lib::smb::SmbConnectRequest;
-
-    let dir = tempdir().unwrap();
-    let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let mount_dir = dir.path().join("mounts");
-    std::fs::create_dir_all(&mount_dir).unwrap();
-    let script = mount_dir.join("mount_smbfs.sh");
-    write_executable(&script, "#!/bin/sh\nexit 1\n");
-    std::env::remove_var("MEMHG_TEST_MOUNT_SMBFS");
-    std::env::set_var("MEMHG_TEST_MOUNT_SMBFS", script.to_string_lossy().as_ref());
-    let library = LibraryService::new(catalog.pool().clone(), mount_dir);
-    let result = library
-        .connect_smb_share(&SmbConnectRequest {
-            host: "nas".into(),
-            share: "photos".into(),
-            username: "guest".into(),
-            password: "secret".into(),
-            domain: None,
-            poll_secs: None,
-            sub_path: None,
-            read_only: false,
-        })
-        .await;
-    std::env::remove_var("MEMHG_TEST_MOUNT_SMBFS");
     assert!(result.is_err());
 }

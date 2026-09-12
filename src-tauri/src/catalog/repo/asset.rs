@@ -768,7 +768,7 @@ mod tests {
 
     #[tokio::test]
     async fn asset_repo_errors_after_pool_close() {
-        let (catalog, dir) = test_catalog().await;
+        let (catalog, _dir) = test_catalog().await;
         let pool = catalog.pool().clone();
         let roots = SourceRootRepo::new(pool.clone());
         let assets = AssetRepo::new(pool.clone());

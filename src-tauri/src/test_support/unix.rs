@@ -1,3 +1,4 @@
+#[cfg(unix)]
 use std::path::Path;
 
 #[cfg(unix)]
@@ -6,11 +7,6 @@ pub fn write_executable(path: &Path, body: &str) {
 
     std::fs::write(path, body).unwrap();
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
-}
-
-#[cfg(not(unix))]
-pub fn write_executable(path: &Path, body: &str) {
-    std::fs::write(path, body).unwrap();
 }
 
 #[cfg(unix)]

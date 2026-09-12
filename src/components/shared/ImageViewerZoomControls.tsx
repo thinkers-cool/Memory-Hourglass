@@ -2,6 +2,7 @@ import { ZoomIn, ZoomOut } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { formatImageViewerZoom } from "../../lib/imageViewerZoom";
 import { ghostBtnClass } from "../../lib/buttonClass";
+import { IconTooltip } from "./Tooltip";
 
 const ICON_CLASS = "h-3.5 w-3.5";
 
@@ -22,33 +23,34 @@ export function ImageViewerZoomControls({
 
   return (
     <div className="flex shrink-0 items-center gap-0.5">
-      <button
-        type="button"
-        className={BTN_CLASS}
-        onClick={onZoomOut}
-        aria-label={t("aria.zoomOut")}
-        title={t("aria.zoomOut")}
-      >
-        <ZoomOut className={ICON_CLASS} />
-      </button>
+      <IconTooltip tip={t("aria.zoomOut")} placement="top">
+        <button
+          type="button"
+          className={BTN_CLASS}
+          onClick={onZoomOut}
+          aria-label={t("aria.zoomOut")}
+        >
+          <ZoomOut className={ICON_CLASS} />
+        </button>
+      </IconTooltip>
       <button
         type="button"
         className="btn btn-ghost btn-xs h-7 min-h-0 px-2 text-xs tabular-nums text-content-muted hover:text-base-content"
         onClick={onReset}
         aria-label={t("aria.fitToView")}
-        title={t("aria.fitToView")}
       >
         {formatImageViewerZoom(zoom)}
       </button>
-      <button
-        type="button"
-        className={BTN_CLASS}
-        onClick={onZoomIn}
-        aria-label={t("aria.zoomIn")}
-        title={t("aria.zoomIn")}
-      >
-        <ZoomIn className={ICON_CLASS} />
-      </button>
+      <IconTooltip tip={t("aria.zoomIn")} placement="top">
+        <button
+          type="button"
+          className={BTN_CLASS}
+          onClick={onZoomIn}
+          aria-label={t("aria.zoomIn")}
+        >
+          <ZoomIn className={ICON_CLASS} />
+        </button>
+      </IconTooltip>
     </div>
   );
 }

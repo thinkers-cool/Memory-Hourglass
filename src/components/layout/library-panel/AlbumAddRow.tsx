@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check } from "lucide-react";
 import { DEFAULT_ALBUM_EMOJI } from "../../../lib/libraryIndicators";
 import { EmojiPickerPopover } from "../../shared/EmojiPickerPopover";
+import { IconTooltip } from "../../shared/Tooltip";
 import { iconClass, inputClass } from "./panelStyles";
 
 export function AlbumAddRow({
@@ -44,15 +45,17 @@ export function AlbumAddRow({
           if (e.key === "Escape") onCancel();
         }}
       />
-      <button
-        type="button"
-        className="btn btn-primary btn-sm btn-square h-8 min-h-0 w-8"
-        title={t("action.save")}
-        disabled={busy || !value.trim()}
-        onClick={commit}
-      >
-        <Check className={iconClass} />
-      </button>
+      <IconTooltip tip={t("action.save")} placement="bottom">
+        <button
+          type="button"
+          className="btn btn-primary btn-sm btn-square h-8 min-h-0 w-8"
+          aria-label={t("action.save")}
+          disabled={busy || !value.trim()}
+          onClick={commit}
+        >
+          <Check className={iconClass} />
+        </button>
+      </IconTooltip>
     </div>
   );
 }

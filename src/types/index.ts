@@ -235,6 +235,16 @@ export interface ScanProgress {
   indexed: number;
 }
 
+export interface ScanThumbUpdate {
+  asset_id: number;
+  thumb_path: string;
+}
+
+export interface ScanThumbsEvent {
+  root_id: number;
+  thumbs: ScanThumbUpdate[];
+}
+
 export interface WorkspaceInfo {
   path: string;
   name: string;

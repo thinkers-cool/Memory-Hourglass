@@ -30,7 +30,7 @@ describe("ColorPickerPopover", () => {
         title="Tag color"
       />,
     );
-    await user.click(screen.getByTitle("Tag color"));
+    await user.click(screen.getByRole("button", { name: "Tag color" }));
     expect(document.querySelector(".mock-color-picker")).toBeInTheDocument();
   });
 
@@ -44,7 +44,7 @@ describe("ColorPickerPopover", () => {
         title="Tag color"
       />,
     );
-    await user.click(screen.getByTitle("Tag color"));
+    await user.click(screen.getByRole("button", { name: "Tag color" }));
     await user.click(screen.getByRole("button", { name: "Pick" }));
     expect(onChange).toHaveBeenCalledWith("#00ff00");
   });
@@ -59,7 +59,7 @@ describe("ColorPickerPopover", () => {
         disabled
       />,
     );
-    await user.click(screen.getByTitle("Tag color"));
+    await user.click(screen.getByRole("button", { name: "Tag color" }));
     expect(
       document.querySelector(".mock-color-picker"),
     ).not.toBeInTheDocument();
@@ -77,7 +77,7 @@ describe("ColorPickerPopover", () => {
         <button type="button">Outside</button>
       </>,
     );
-    await user.click(screen.getByTitle("Tag color"));
+    await user.click(screen.getByRole("button", { name: "Tag color" }));
     expect(document.querySelector(".mock-color-picker")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Outside" }));
     expect(
@@ -94,9 +94,9 @@ describe("ColorPickerPopover", () => {
         title="Tag color"
       />,
     );
-    await user.click(screen.getByTitle("Tag color"));
+    await user.click(screen.getByRole("button", { name: "Tag color" }));
     expect(document.querySelector(".mock-color-picker")).toBeInTheDocument();
-    await user.click(screen.getByTitle("Tag color"));
+    await user.click(screen.getByRole("button", { name: "Tag color" }));
     expect(
       document.querySelector(".mock-color-picker"),
     ).not.toBeInTheDocument();

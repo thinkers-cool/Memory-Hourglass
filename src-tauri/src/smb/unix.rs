@@ -1,9 +1,9 @@
 use std::path::Path;
 
-use super::subprocess_command;
+use super::{subprocess_command, subprocess_output};
 
 pub fn is_mounted_in_system_table(path: &Path) -> bool {
-    let Ok(out) = subprocess_command("mount").output() else {
+    let Ok(out) = subprocess_output(&mut subprocess_command("mount")) else {
         return false;
     };
     let text = String::from_utf8_lossy(&out.stdout);

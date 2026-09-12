@@ -60,7 +60,7 @@ describe("StartPage", () => {
     );
 
     expect(screen.getByText("Workspaces")).toBeInTheDocument();
-    expect(screen.getByText("/tmp/demo")).toBeInTheDocument();
+    expect(screen.getByText("demo")).toBeInTheDocument();
     expect(
       screen.getByText("2 Libraries · 1 Album · 5 Tags"),
     ).toBeInTheDocument();
@@ -86,7 +86,7 @@ describe("StartPage", () => {
       />,
     );
 
-    expect(screen.getByText("/missing/workspace")).toBeInTheDocument();
+    expect(screen.getByText("workspace")).toBeInTheDocument();
     expect(screen.getByText("Path not found")).toBeInTheDocument();
   });
 
@@ -145,7 +145,7 @@ describe("StartPage", () => {
       />,
     );
 
-    const row = screen.getByText("/tmp/readonly").closest("button");
+    const row = screen.getByRole("button", { name: /readonly/i });
     expect(row).not.toBeNull();
     expect(
       within(row as HTMLElement).getByText("Read Only"),
@@ -183,7 +183,7 @@ describe("StartPage", () => {
       />,
     );
 
-    await user.click(screen.getByText("/tmp/demo"));
+    await user.click(screen.getByText("demo"));
     expect(onOpenRecent).toHaveBeenCalledWith("/tmp/demo");
   });
 
@@ -207,7 +207,7 @@ describe("StartPage", () => {
       />,
     );
 
-    await user.click(screen.getByTitle("Remove workspace"));
+    await user.click(screen.getByRole("button", { name: "Remove workspace" }));
     expect(onRemoveRecent).toHaveBeenCalledWith("/tmp/demo");
   });
 

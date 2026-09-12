@@ -16,6 +16,7 @@ import {
 } from "../../lib/formControlClass";
 import { DEFAULT_SORT_DIR } from "../../lib/sortSettings";
 import type { SortDir, SortMode } from "../../types";
+import { IconTooltip } from "./Tooltip";
 
 const SORT_OPTIONS: {
   labelKey: string;
@@ -51,6 +52,7 @@ export function SortDropdown({
   const DirIcon = sortDir === "desc" ? ArrowDown : ArrowUp;
   const sortDirLabel =
     sortDir === "desc" ? t("sort.descending") : t("sort.ascending");
+  const sortByLabel = t("sort.sortBy", { field: currentLabel });
 
   usePopoverDismiss({
     open,
@@ -62,36 +64,42 @@ export function SortDropdown({
     onSortDirChange(sortDir === "desc" ? "asc" : "desc");
   };
 
+  const sortFieldButton = (
+    <button
+      type="button"
+      className={`${ghostBtnClass("btn-sm join-item h-8 min-h-0 border border-control-border bg-control/65")} ${
+        compact ? "btn-square w-8 px-0" : "gap-1.5 px-2.5 text-xs font-normal"
+      }`}
+      aria-label={sortByLabel}
+      onClick={() => setOpen((prev) => !prev)}
+    >
+      <CurrentIcon className="h-3.5 w-3.5 text-content-faint" />
+      {!compact ? (
+        <span className="font-medium text-content-muted">{currentLabel}</span>
+      ) : null}
+    </button>
+  );
+
   return (
     <div ref={rootRef} className="relative shrink-0">
       <div className="join">
-        <button
-          type="button"
-          className={`${ghostBtnClass("btn-sm join-item h-8 min-h-0 border border-control-border bg-control/65")} ${
-            compact
-              ? "btn-square w-8 px-0"
-              : "gap-1.5 px-2.5 text-xs font-normal"
-          }`}
-          title={t("sort.sortBy", { field: currentLabel })}
-          aria-label={t("sort.sortBy", { field: currentLabel })}
-          onClick={() => setOpen((prev) => !prev)}
-        >
-          <CurrentIcon className="h-3.5 w-3.5 text-content-faint" />
-          {!compact ? (
-            <span className="font-medium text-content-muted">
-              {currentLabel}
-            </span>
-          ) : null}
-        </button>
-        <button
-          type="button"
-          className={`${ghostBtnClass("btn-sm join-item h-8 min-h-0 w-7 border border-control-border border-l-divider-subtle bg-control/65 px-0 text-content-muted")}`}
-          title={sortDirLabel}
-          aria-label={sortDirLabel}
-          onClick={toggleDir}
-        >
-          <DirIcon className="h-3.5 w-3.5" />
-        </button>
+        {compact ? (
+          <IconTooltip tip={sortByLabel} placement="bottom">
+            {sortFieldButton}
+          </IconTooltip>
+        ) : (
+          sortFieldButton
+        )}
+        <IconTooltip tip={sortDirLabel} placement="bottom">
+          <button
+            type="button"
+            className={`${ghostBtnClass("btn-sm join-item h-8 min-h-0 w-7 border border-control-border border-l-divider-subtle bg-control/65 px-0 text-content-muted")}`}
+            aria-label={sortDirLabel}
+            onClick={toggleDir}
+          >
+            <DirIcon className="h-3.5 w-3.5" />
+          </button>
+        </IconTooltip>
       </div>
 
       {open && (
@@ -100,12 +108,11 @@ export function SortDropdown({
             {SORT_OPTIONS.map((opt) => {
               const Icon = opt.icon;
               const selected = opt.value === sort;
-              const label = t(opt.labelKey);
               return (
                 <li key={opt.value}>
                   <button
-                    type="button"
                     className={`${MENU_ITEM_BUTTON_CLASS} ${selected ? "active" : ""}`}
+                    type="button"
                     onClick={() => {
                       onSortChange(opt.value);
                       onSortDirChange(DEFAULT_SORT_DIR[opt.value]);
@@ -113,7 +120,7 @@ export function SortDropdown({
                     }}
                   >
                     <Icon className="h-3.5 w-3.5 text-content-faint" />
-                    {label}
+                    {t(opt.labelKey)}
                   </button>
                 </li>
               );

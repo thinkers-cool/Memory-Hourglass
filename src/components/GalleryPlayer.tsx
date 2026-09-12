@@ -32,6 +32,7 @@ import type {
   SlideshowTheme,
 } from "../lib/slideshow/types";
 import type { AssetCard } from "../types";
+import { IconTooltip } from "./shared/Tooltip";
 
 const ICON_CLASS = "h-4 w-4";
 
@@ -63,18 +64,19 @@ function IconButton({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      className={`btn btn-circle btn-sm h-8 min-h-0 w-8 border-0 bg-white/10 text-white hover:bg-white/20 ${
-        active ? "bg-white/25" : ""
-      }`}
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      disabled={disabled}
-    >
-      {children}
-    </button>
+    <IconTooltip tip={label} placement="top">
+      <button
+        type="button"
+        className={`btn btn-circle btn-sm h-8 min-h-0 w-8 border-0 bg-white/10 text-white hover:bg-white/20 ${
+          active ? "bg-white/25" : ""
+        }`}
+        aria-label={label}
+        onClick={onClick}
+        disabled={disabled}
+      >
+        {children}
+      </button>
+    </IconTooltip>
   );
 }
 

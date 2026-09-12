@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MemHG } from "../MemHG";
 import { AppearanceControls } from "../shared/AppearanceControls";
+import { IconTooltip } from "../shared/Tooltip";
 
 const TABS: {
   id: "library" | "collections";
@@ -14,6 +15,9 @@ const TABS: {
 ];
 
 export type LeftTab = (typeof TABS)[number]["id"];
+
+const NAV_BTN_CLASS =
+  "btn btn-ghost btn-interactive btn-square h-11 min-h-0 w-11 shrink-0";
 
 export function NavRail({
   active,
@@ -31,38 +35,38 @@ export function NavRail({
       <div className="mb-4 px-1">
         <MemHG size={34} title="Memory Hourglass" />
       </div>
-      <ul className="menu menu-sm menu-vertical w-full flex-1 items-center gap-1.5 p-0">
+      <div className="flex flex-1 flex-col items-center gap-1.5">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const label = t(tab.labelKey);
           return (
-            <li key={tab.id}>
+            <IconTooltip key={tab.id} tip={label} placement="right">
               <button
                 type="button"
-                title={label}
-                className={`btn btn-ghost btn-interactive btn-square h-11 min-h-0 w-11 ${
-                  active === tab.id
-                    ? "menu-active bg-interactive-selected-strong"
-                    : ""
+                aria-label={label}
+                className={`${NAV_BTN_CLASS} ${
+                  active === tab.id ? "bg-interactive-selected-strong" : ""
                 }`}
                 onClick={() => onChange(tab.id)}
               >
                 <Icon className="h-5 w-5" />
               </button>
-            </li>
+            </IconTooltip>
           );
         })}
-      </ul>
+      </div>
       <div className="flex flex-col items-center gap-1.5">
         <AppearanceControls menuPlacement="float-top-end" size="nav" />
-        <button
-          type="button"
-          title={t("nav.closeWorkspace")}
-          className="btn btn-ghost btn-interactive btn-square h-11 min-h-0 w-11 shrink-0"
-          onClick={onExit}
-        >
-          <LogOut className="h-5 w-5" />
-        </button>
+        <IconTooltip tip={t("nav.closeWorkspace")} placement="right">
+          <button
+            type="button"
+            aria-label={t("nav.closeWorkspace")}
+            className={NAV_BTN_CLASS}
+            onClick={onExit}
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
+        </IconTooltip>
       </div>
     </nav>
   );

@@ -388,6 +388,7 @@ mod tests {
     use super::*;
     use crate::catalog::Catalog;
     use crate::scan::{ScanControl, ScanService};
+    use crate::test_support::smb::LocalMounts;
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -498,6 +499,7 @@ mod tests {
 
     #[tokio::test]
     async fn connect_smb_share_registers_root_when_share_is_mounted() {
+        let _local = LocalMounts::enable();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let mount_dir = dir.path().join("mounts");
@@ -525,6 +527,7 @@ mod tests {
 
     #[tokio::test]
     async fn ensure_smb_mounts_ready_remounts_with_stored_credentials() {
+        let _local = LocalMounts::enable();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = SourceRootRepo::new(catalog.pool().clone());
@@ -552,6 +555,7 @@ mod tests {
 
     #[tokio::test]
     async fn remove_root_unmounts_smb_when_last_share_user() {
+        let _local = LocalMounts::enable();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let mount_dir = dir.path().join("mounts");
@@ -603,6 +607,7 @@ mod tests {
 
     #[tokio::test]
     async fn add_smb_source_connect_registers_root() {
+        let _local = LocalMounts::enable();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let mount_dir = dir.path().join("mounts");
@@ -630,6 +635,7 @@ mod tests {
 
     #[tokio::test]
     async fn remove_root_keeps_shared_smb_mount() {
+        let _local = LocalMounts::enable();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let mount_dir = dir.path().join("mounts");
@@ -704,6 +710,7 @@ mod tests {
 
     #[tokio::test]
     async fn ensure_smb_mounts_ready_relinks_when_stored_path_differs() {
+        let _local = LocalMounts::enable();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = SourceRootRepo::new(catalog.pool().clone());
@@ -759,29 +766,17 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[tokio::test]
     async fn read_only_workspace_mounts_smb_with_ro_option() {
+        let _hooks = crate::smb::test_hooks::HookReset::new();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let mount_dir = dir.path().join("mounts");
         std::fs::create_dir_all(&mount_dir).unwrap();
         let args_log = mount_dir.join("mount-args.txt");
-        let security = mount_dir.join("security.sh");
-        crate::test_support::unix::write_executable(&security, "#!/bin/sh\nexit 0\n");
-        std::env::set_var("MEMHG_TEST_SECURITY", security.to_string_lossy().as_ref());
-        let script = mount_dir.join("mount_smbfs.sh");
-        std::fs::write(
-            &script,
-            format!(
-                "#!/bin/sh\necho \"$@\" > \"{}\"\nfor last in \"$@\"; do mount_point=\"$last\"; done\nmkdir -p \"$mount_point\"\necho 1 > \"$mount_point/.memhg_test_mounted\"\n",
-                args_log.display()
-            ),
-        )
-        .unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
-        std::env::set_var("MEMHG_TEST_MOUNT_SMBFS", script.to_string_lossy().as_ref());
+        crate::smb::test_hooks::set("security", crate::smb::test_hooks::Stub::Success);
+        crate::smb::test_hooks::set(
+            "mount_smbfs",
+            crate::smb::test_hooks::Stub::MountSmbfsLogArgs(args_log.clone()),
+        );
         let library = LibraryService::with_mount_mode(catalog.pool().clone(), mount_dir, true);
         library
             .mount_smb_for_browse(&SmbConnectRequest {
@@ -799,28 +794,44 @@ mod tests {
         let args = std::fs::read_to_string(args_log).unwrap();
         assert!(args.contains("-o"));
         assert!(args.contains("ro"));
-        std::env::remove_var("MEMHG_TEST_MOUNT_SMBFS");
-        std::env::remove_var("MEMHG_TEST_SECURITY");
     }
 
+    #[cfg(target_os = "macos")]
     #[tokio::test]
-    async fn mount_smb_for_browse_returns_mount_path() {
+    async fn connect_smb_share_reports_mount_failure() {
+        let _hooks = crate::smb::test_hooks::HookReset::new();
+        crate::smb::test_hooks::set("security", crate::smb::test_hooks::Stub::Success);
+        crate::smb::test_hooks::set("mount_smbfs", crate::smb::test_hooks::Stub::MountSmbfsFail);
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let mount_dir = dir.path().join("mounts");
-        let script = mount_dir.join("mount_smbfs.sh");
         std::fs::create_dir_all(&mount_dir).unwrap();
-        std::fs::write(
-            &script,
-            "#!/bin/sh\nmkdir -p \"$2\"\necho 1 > \"$2/.memhg_test_mounted\"\n",
-        )
-        .unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
-        std::env::set_var("MEMHG_TEST_MOUNT_SMBFS", script.to_string_lossy().as_ref());
+        let library = LibraryService::new(catalog.pool().clone(), mount_dir);
+        let result = library
+            .connect_smb_share(&SmbConnectRequest {
+                host: "nas".into(),
+                share: "photos".into(),
+                username: "guest".into(),
+                password: "secret".into(),
+                domain: None,
+                poll_secs: None,
+                sub_path: None,
+                read_only: false,
+            })
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn mount_smb_for_browse_returns_mount_path() {
+        let _hooks = crate::smb::test_hooks::HookReset::new();
+        let dir = tempdir().unwrap();
+        let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
+        let mount_dir = dir.path().join("mounts");
+        std::fs::create_dir_all(&mount_dir).unwrap();
+        crate::smb::test_hooks::set("security", crate::smb::test_hooks::Stub::Success);
+        crate::smb::test_hooks::set("mount_smbfs", crate::smb::test_hooks::Stub::MountSmbfs);
         let library = LibraryService::new(catalog.pool().clone(), mount_dir);
         let path = library
             .mount_smb_for_browse(&SmbConnectRequest {
@@ -836,7 +847,6 @@ mod tests {
             .await
             .unwrap();
         assert!(path.contains("_browse"));
-        std::env::remove_var("MEMHG_TEST_MOUNT_SMBFS");
     }
 
     #[tokio::test]
@@ -859,6 +869,7 @@ mod tests {
 
     #[tokio::test]
     async fn ensure_smb_mounts_ready_handles_spawn_and_mount_errors() {
+        let _local = LocalMounts::enable();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = SourceRootRepo::new(catalog.pool().clone());
@@ -897,6 +908,7 @@ mod tests {
 
     #[tokio::test]
     async fn remove_root_unmounts_when_share_mount_exists() {
+        let _local = LocalMounts::enable();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let mount_dir = dir.path().join("mounts");
@@ -970,25 +982,18 @@ mod tests {
         library.ensure_smb_mounts_ready().await.unwrap();
     }
 
+    #[cfg(target_os = "macos")]
     #[tokio::test]
     async fn ensure_smb_mounts_ready_mounts_uncached_share() {
+        let _hooks = crate::smb::test_hooks::HookReset::new();
+        let _local = LocalMounts::enable();
+        crate::smb::test_hooks::set("security", crate::smb::test_hooks::Stub::Success);
+        crate::smb::test_hooks::set("mount_smbfs", crate::smb::test_hooks::Stub::MountSmbfs);
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = SourceRootRepo::new(catalog.pool().clone());
         let mount_dir = dir.path().join("mounts");
         std::fs::create_dir_all(&mount_dir).unwrap();
-        let script = mount_dir.join("mount_smbfs.sh");
-        std::fs::write(
-            &script,
-            "#!/bin/sh\nmkdir -p \"$2\"\necho 1 > \"$2/.memhg_test_mounted\"\n",
-        )
-        .unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
-        std::env::set_var("MEMHG_TEST_MOUNT_SMBFS", script.to_string_lossy().as_ref());
         let host = format!("fresh-mount-{}", std::process::id());
         crate::smb::store_credentials(&host, "photos", "user", "secret").unwrap();
         let share_mount = share_mount_point(&mount_dir, &host, "photos", "user");
@@ -1009,11 +1014,11 @@ mod tests {
         let updated = repo.get_root(root.id).await.unwrap();
         assert_eq!(updated.status, "idle");
         assert!(share_mount.join(crate::smb::TEST_MOUNT_MARKER).is_file());
-        std::env::remove_var("MEMHG_TEST_MOUNT_SMBFS");
     }
 
     #[tokio::test]
     async fn relink_smb_root_if_needed_updates_divergent_path() {
+        let _local = LocalMounts::enable();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = SourceRootRepo::new(catalog.pool().clone());
@@ -1049,6 +1054,7 @@ mod tests {
 
     #[tokio::test]
     async fn relink_smb_root_if_needed_noops_when_subfolder_invalid() {
+        let _local = LocalMounts::enable();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = SourceRootRepo::new(catalog.pool().clone());
@@ -1080,6 +1086,7 @@ mod tests {
 
     #[tokio::test]
     async fn relink_smb_root_if_needed_skips_matching_path() {
+        let _local = LocalMounts::enable();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let repo = SourceRootRepo::new(catalog.pool().clone());
@@ -1103,6 +1110,7 @@ mod tests {
         assert_eq!(updated.path, library_path);
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn ensure_smb_mounts_ready_relinks_stale_library_path() {
         let dir = tempdir().unwrap();
@@ -1175,6 +1183,7 @@ mod tests {
 
     #[tokio::test]
     async fn connect_smb_share_rejects_missing_subfolder() {
+        let _local = LocalMounts::enable();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let mount_dir = dir.path().join("mounts");
@@ -1333,6 +1342,7 @@ mod tests {
 
     #[tokio::test]
     async fn remove_root_unmounts_existing_share_mount() {
+        let _local = LocalMounts::enable();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let mount_dir = dir.path().join("mounts");

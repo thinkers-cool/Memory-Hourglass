@@ -29,8 +29,12 @@ impl MetadataService {
             std::env::remove_var("MEMHG_TEST_READ_META_PANIC");
             panic!("read meta panic");
         }
-        let path = &ctx.media_path;
         let et = ExifTool::new();
+        Self::read_meta_with(&et, ctx)
+    }
+
+    pub fn read_meta_with(et: &ExifTool, ctx: &MetadataContext) -> Result<(AssetMeta, Vec<RawTag>)> {
+        let path = &ctx.media_path;
         let embedded = et.extract_info(path.to_string_lossy().as_ref()).ok();
 
         let mut merged: Option<Vec<Tag>> = embedded;

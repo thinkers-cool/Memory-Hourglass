@@ -9,6 +9,7 @@ vi.mock("../../api/client", () => ({
   countAssets: vi.fn(),
   queryAssets: vi.fn(),
   onScanProgress: vi.fn(() => Promise.resolve(() => undefined)),
+  onScanThumbs: vi.fn(() => Promise.resolve(() => undefined)),
   getAsset: vi.fn(),
 }));
 

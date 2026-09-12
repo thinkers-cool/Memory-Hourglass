@@ -4,6 +4,7 @@ import { HexColorPicker } from "react-colorful";
 import { normalizeTagColor } from "../../lib/libraryIndicators";
 import { usePopoverDismiss } from "../../hooks/usePopoverDismiss";
 import { useAnchoredPopoverPlacement } from "./useAnchoredPopover";
+import { IconTooltip } from "./Tooltip";
 
 export function ColorPickerPopover({
   value,
@@ -36,19 +37,21 @@ export function ColorPickerPopover({
 
   return (
     <>
-      <button
-        ref={anchorRef}
-        type="button"
-        className="btn btn-ghost btn-interactive btn-xs btn-square h-8 min-h-0 w-8 shrink-0"
-        title={title}
-        disabled={disabled}
-        onClick={() => setOpen((prev) => !prev)}
-      >
+      <IconTooltip tip={title} placement="bottom">
+        <button
+          ref={anchorRef}
+          type="button"
+          className="btn btn-ghost btn-interactive btn-xs btn-square h-8 min-h-0 w-8 shrink-0"
+          aria-label={title}
+          disabled={disabled}
+          onClick={() => setOpen((prev) => !prev)}
+        >
         <span
           className="inline-block h-3.5 w-3.5 rounded-full border border-interactive-border"
           style={{ backgroundColor: color }}
         />
       </button>
+      </IconTooltip>
       {open &&
         placement &&
         createPortal(

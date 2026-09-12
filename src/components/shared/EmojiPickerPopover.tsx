@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { loadEmojiCatalog } from "../../lib/emojiCatalog";
 import { usePopoverDismiss } from "../../hooks/usePopoverDismiss";
 import { useAnchoredPopoverPlacement } from "./useAnchoredPopover";
+import { IconTooltip } from "./Tooltip";
 
 export function EmojiPickerPopover({
   value,
@@ -49,16 +50,18 @@ export function EmojiPickerPopover({
 
   return (
     <>
-      <button
-        ref={anchorRef}
-        type="button"
-        className="btn btn-ghost btn-interactive btn-xs btn-square h-8 min-h-0 w-8 shrink-0 text-base"
-        title={title}
-        disabled={disabled}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        {value || "😀"}
-      </button>
+      <IconTooltip tip={title} placement="bottom">
+        <button
+          ref={anchorRef}
+          type="button"
+          className="btn btn-ghost btn-interactive btn-xs btn-square h-8 min-h-0 w-8 shrink-0 text-base"
+          aria-label={title}
+          disabled={disabled}
+          onClick={() => setOpen((prev) => !prev)}
+        >
+          {value || "😀"}
+        </button>
+      </IconTooltip>
       {open &&
         placement &&
         createPortal(

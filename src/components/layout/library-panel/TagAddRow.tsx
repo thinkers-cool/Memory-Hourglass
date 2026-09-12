@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check } from "lucide-react";
 import { DEFAULT_TAG_COLOR } from "../../../lib/libraryIndicators";
 import { ColorPickerPopover } from "../../shared/ColorPickerPopover";
+import { IconTooltip } from "../../shared/Tooltip";
 import { iconClass, inputClass } from "./panelStyles";
 
 export function TagAddRow({
@@ -48,15 +49,17 @@ export function TagAddRow({
           if (e.key === "Escape") onCancel();
         }}
       />
-      <button
-        type="button"
-        className="btn btn-primary btn-sm btn-square h-8 min-h-0 w-8"
-        title={t("action.save")}
-        disabled={busy || !value.trim()}
-        onClick={commit}
-      >
-        <Check className={iconClass} />
-      </button>
+      <IconTooltip tip={t("action.save")} placement="bottom">
+        <button
+          type="button"
+          className="btn btn-primary btn-sm btn-square h-8 min-h-0 w-8"
+          aria-label={t("action.save")}
+          disabled={busy || !value.trim()}
+          onClick={commit}
+        >
+          <Check className={iconClass} />
+        </button>
+      </IconTooltip>
     </div>
   );
 }

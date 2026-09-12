@@ -3,8 +3,7 @@ use crate::activity::ActivityRecorder;
 use crate::commands::context::trace_command;
 use crate::error::Result;
 use crate::jobs::JobQueue;
-use crate::scan::ScanControl;
-use crate::scan::ScanService;
+use crate::scan::{IndexedThumbUpdate, ScanControl, ScanService};
 use crate::state::AppState;
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,6 +17,18 @@ pub struct ScanProgressEvent {
     pub stage: String,
     pub scanned: u64,
     pub indexed: u64,
+}
+
+#[derive(Clone, Serialize)]
+pub struct ScanThumbItem {
+    pub asset_id: i64,
+    pub thumb_path: String,
+}
+
+#[derive(Clone, Serialize)]
+pub struct ScanThumbsEvent {
+    pub root_id: i64,
+    pub thumbs: Vec<ScanThumbItem>,
 }
 
 pub(crate) struct ScanJobParams<R: Runtime> {
@@ -62,6 +73,25 @@ pub(crate) async fn run_scan_job<R: Runtime>(params: ScanJobParams<R>) {
             update_scan_status_unless_settled(&settled, &status, stage_label, scanned, indexed)
                 .await;
         });
+    };
+
+    let emit_thumbs = |thumbs: &[IndexedThumbUpdate]| {
+        if thumbs.is_empty() {
+            return;
+        }
+        let _ = app.emit(
+            "scan://thumbs",
+            ScanThumbsEvent {
+                root_id,
+                thumbs: thumbs
+                    .iter()
+                    .map(|thumb| ScanThumbItem {
+                        asset_id: thumb.asset_id,
+                        thumb_path: thumb.thumb_path.clone(),
+                    })
+                    .collect(),
+            },
+        );
     };
 
     let inventory = match scanner
@@ -127,8 +157,9 @@ pub(crate) async fn run_scan_job<R: Runtime>(params: ScanJobParams<R>) {
     emit_progress("cataloging", summary.scanned, summary.indexed);
 
     if scanner
-        .process_index_queue(&ctrl, &index_queue, |indexed, total| {
-            emit_progress("indexing", total, indexed)
+        .process_index_queue(&ctrl, &index_queue, |indexed, total, thumbs| {
+            emit_progress("indexing", total, indexed);
+            emit_thumbs(thumbs);
         })
         .await
         .is_err()

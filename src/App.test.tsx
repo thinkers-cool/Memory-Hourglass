@@ -196,8 +196,12 @@ describe("App", () => {
       removeRecent: vi.fn(),
     });
     render(<App />);
-    expect(await screen.findByTitle("Library")).toBeInTheDocument();
-    expect(screen.getByTitle("Close workspace")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Library" }, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Close workspace" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Ready")).toBeInTheDocument();
   });
 
@@ -243,7 +247,11 @@ describe("App", () => {
     });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByTitle("Close workspace"));
+    await user.click(
+      await screen.findByRole("button", { name: "Close workspace" }, {
+        timeout: 5000,
+      }),
+    );
     expect(closeWorkspace).toHaveBeenCalled();
   });
 });

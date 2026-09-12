@@ -7,6 +7,7 @@ import { GridSizeControl } from "../shared/GridSizeControl";
 import { isStampConfigValid } from "../../lib/stamp";
 import type { StampConfig } from "../../lib/stamp";
 import { SortDropdown } from "../shared/SortDropdown";
+import { Tooltip, TOOLTIP_DELAY_MS } from "../shared/Tooltip";
 import { ghostBtnClass } from "../../lib/buttonClass";
 import { useToolbarCompact } from "../../hooks/useToolbarCompact";
 import {
@@ -155,16 +156,24 @@ export function LibraryFilterToolbar({
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {showSaveCollection ? (
-            <button
-              type="button"
-              className={toolbarActionButtonClass(compact)}
-              title={t("library:toolbar.saveAsCollection")}
-              aria-label={t("common:aria.saveAsCollection")}
-              onClick={onSaveCollection}
+            <Tooltip
+              tip={
+                compact ? t("library:toolbar.saveAsCollection") : undefined
+              }
+              delayMs={TOOLTIP_DELAY_MS}
+              placement="bottom"
+              className="inline-flex"
             >
-              <BookmarkPlus className="h-3.5 w-3.5" />
-              {!compact ? t("library:toolbar.saveAsCollection") : null}
-            </button>
+              <button
+                type="button"
+                className={toolbarActionButtonClass(compact)}
+                aria-label={t("common:aria.saveAsCollection")}
+                onClick={onSaveCollection}
+              >
+                <BookmarkPlus className="h-3.5 w-3.5" />
+                {!compact ? t("library:toolbar.saveAsCollection") : null}
+              </button>
+            </Tooltip>
           ) : null}
 
           {showSaveCollection ? (
@@ -193,28 +202,40 @@ export function LibraryFilterToolbar({
 
           <div className="mx-1 h-5 w-px bg-divider" />
 
-          <button
-            type="button"
-            className={toolbarActionButtonClass(compact)}
-            title={t("library:toolbar.slideshowTitle")}
-            aria-label={t("common:aria.slideshow")}
-            disabled={slideshowDisabled}
-            onClick={onOpenSlideshow}
+          <Tooltip
+            tip={compact ? t("library:toolbar.slideshowTitle") : undefined}
+            delayMs={TOOLTIP_DELAY_MS}
+            placement="bottom"
+            className="inline-flex"
           >
-            <Presentation className="h-3.5 w-3.5" />
-            {!compact ? t("library:toolbar.slideshow") : null}
-          </button>
+            <button
+              type="button"
+              className={toolbarActionButtonClass(compact)}
+              aria-label={t("common:aria.slideshow")}
+              disabled={slideshowDisabled}
+              onClick={onOpenSlideshow}
+            >
+              <Presentation className="h-3.5 w-3.5" />
+              {!compact ? t("library:toolbar.slideshow") : null}
+            </button>
+          </Tooltip>
 
-          <button
-            type="button"
-            className={toolbarActionButtonClass(compact)}
-            title={t("library:toolbar.export")}
-            aria-label={t("common:action.export")}
-            onClick={onOpenExport}
+          <Tooltip
+            tip={compact ? t("library:toolbar.export") : undefined}
+            delayMs={TOOLTIP_DELAY_MS}
+            placement="bottom"
+            className="inline-flex"
           >
-            <Upload className="h-3.5 w-3.5" />
-            {!compact ? t("library:toolbar.export") : null}
-          </button>
+            <button
+              type="button"
+              className={toolbarActionButtonClass(compact)}
+              aria-label={t("common:action.export")}
+              onClick={onOpenExport}
+            >
+              <Upload className="h-3.5 w-3.5" />
+              {!compact ? t("library:toolbar.export") : null}
+            </button>
+          </Tooltip>
         </div>
       </div>
     </header>

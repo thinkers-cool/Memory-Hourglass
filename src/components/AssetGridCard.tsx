@@ -1,4 +1,3 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, FileImage, Film, Image, Stamp } from "lucide-react";
@@ -7,6 +6,7 @@ import type { AssetCard } from "../types";
 import { RatingStarsBadge } from "./shared/RatingStarsBadge";
 import { VideoPoster } from "./shared/VideoPoster";
 import { handleGridCardClick } from "../lib/gridCardClick";
+import { GridThumb } from "./shared/GridThumb";
 
 const SYNC_BADGE: Record<string, string> = {
   missing: "badge-error",
@@ -108,11 +108,10 @@ function AssetGridCardInner({
       )}
       <figure className="relative m-0 h-full w-full">
         {card.thumb_path ? (
-          <img
-            src={convertFileSrc(card.thumb_path)}
+          <GridThumb
+            thumbPath={card.thumb_path}
             alt={card.file_name}
             className="w-full h-full object-cover"
-            loading="lazy"
           />
         ) : card.kind === "video" ? (
           <VideoPoster

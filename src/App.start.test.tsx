@@ -45,7 +45,7 @@ describe("App start page", () => {
     expect(
       screen.getByRole("button", { name: "Open Workspace" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("/tmp/old")).toBeInTheDocument();
+    expect(screen.getByText("old")).toBeInTheDocument();
   });
 
   it("starts workspace actions from start page", async () => {
@@ -92,10 +92,10 @@ describe("App start page", () => {
     );
     expect(pickAndCreateWorkspace).toHaveBeenCalledWith(false);
 
-    await user.click(screen.getByText("/tmp/old"));
+    await user.click(screen.getByText("old"));
     expect(openWorkspacePath).toHaveBeenCalledWith("/tmp/old");
 
-    await user.click(screen.getByTitle("Remove workspace"));
+    await user.click(screen.getByRole("button", { name: "Remove workspace" }));
     expect(removeRecent).toHaveBeenCalledWith("/tmp/old");
   });
 

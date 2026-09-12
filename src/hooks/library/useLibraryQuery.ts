@@ -3,6 +3,7 @@ import * as api from "../../api/client";
 import { mergeLibraryFilter } from "../../lib/libraryFilters";
 import type { FilterBarState } from "../../lib/libraryActions";
 import { errorNotification } from "../../lib/notification";
+import { patchAssetThumbs } from "../../lib/patchAssetThumbs";
 import { DEFAULT_SORT_DIR, encodeSortParam } from "../../lib/sortSettings";
 import type {
   Album,
@@ -12,9 +13,19 @@ import type {
   Notification,
   RootStats,
   SmartCollection,
+  ScanThumbUpdate,
   TagDto,
 } from "../../types";
 import { PAGE } from "./constants";
+
+const GRID_REFRESH_MS = 8000;
+const META_REFRESH_MS = 5000;
+
+function shouldScheduleGridRefresh(stage: string, indexed: number): boolean {
+  return (
+    indexed > 0 && (stage === "cataloging" || stage === "indexing")
+  );
+}
 
 export function useLibraryQuery(
   selectedIdRef: React.MutableRefObject<number | null>,
@@ -108,6 +119,13 @@ export function useLibraryQuery(
     await refreshGrid();
   }, [refreshMeta, refreshGrid]);
 
+  const applyThumbUpdates = useCallback((thumbs: ScanThumbUpdate[]) => {
+    if (thumbs.length === 0) {
+      return;
+    }
+    setItems((prev) => patchAssetThumbs(prev, thumbs));
+  }, []);
+
   useEffect(() => {
     void refreshMeta();
   }, [refreshMeta]);
@@ -117,7 +135,8 @@ export function useLibraryQuery(
   }, [filter, sortParam, refreshGrid]);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let unlistenProgress: (() => void) | undefined;
+    let unlistenThumbs: (() => void) | undefined;
     let metaRefreshTimer: number | undefined;
     let gridRefreshTimer: number | undefined;
     let lastStatusUpdate = 0;
@@ -150,31 +169,48 @@ export function useLibraryQuery(
           return;
         }
 
-        if (progress.stage === "cataloging" && progress.indexed > 0) {
+        if (shouldScheduleGridRefresh(progress.stage, progress.indexed)) {
           window.clearTimeout(gridRefreshTimer);
           gridRefreshTimer = window.setTimeout(() => {
             void refreshGrid();
-          }, 8000);
+          }, GRID_REFRESH_MS);
         }
 
         if (progress.stage === "cataloging" || progress.stage === "indexing") {
           window.clearTimeout(metaRefreshTimer);
           metaRefreshTimer = window.setTimeout(() => {
             void refreshMeta();
-          }, 5000);
+          }, META_REFRESH_MS);
         }
       })
       .then((fn) => {
-        unlisten = fn;
+        unlistenProgress = fn;
+      })
+      .catch(console.error);
+
+    void api
+      .onScanThumbs((event) => {
+        applyThumbUpdates(event.thumbs);
+      })
+      .then((fn) => {
+        unlistenThumbs = fn;
       })
       .catch(console.error);
 
     return () => {
-      unlisten?.();
+      unlistenProgress?.();
+      unlistenThumbs?.();
       window.clearTimeout(metaRefreshTimer);
       window.clearTimeout(gridRefreshTimer);
     };
-  }, [refreshAll, refreshGrid, refreshMeta, selectedIdRef, setDetail]);
+  }, [
+    applyThumbUpdates,
+    refreshAll,
+    refreshGrid,
+    refreshMeta,
+    selectedIdRef,
+    setDetail,
+  ]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;

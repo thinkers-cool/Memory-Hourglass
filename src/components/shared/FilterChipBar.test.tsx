@@ -75,7 +75,9 @@ describe("FilterChipBar", () => {
     );
     expect(screen.queryByText("Camera")).not.toBeInTheDocument();
     expect(screen.getByText("Sony")).toBeInTheDocument();
-    expect(screen.getByTitle("Camera: Sony")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Camera: Sony" }),
+    ).toBeInTheDocument();
   });
 
   it("collapses chip labels when content overflows", () => {
@@ -466,7 +468,7 @@ describe("FilterChipBar", () => {
       />,
     );
     await user.click(screen.getByText(/from 2024-01-01/).closest("button")!);
-    fireEvent.change(screen.getByTitle("To"), {
+    fireEvent.change(screen.getByLabelText("To"), {
       target: { value: "2024-12-31" },
     });
     expect(onDateChange).toHaveBeenCalledWith("2024-01-01", "2024-12-31");

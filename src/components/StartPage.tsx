@@ -13,6 +13,8 @@ import {
 import { listRowClass, listRowTitleClass } from "../lib/interactionClass";
 import { workspaceContextLabel } from "../lib/workspaceContext";
 import { usePopoverDismiss } from "../hooks/usePopoverDismiss";
+import { rootDisplayName } from "./layout/library-panel/panelStyles";
+import { IconTooltip, Tooltip, TOOLTIP_DELAY_MS } from "./shared/Tooltip";
 
 function StartLeftPanel({
   busy,
@@ -131,17 +133,24 @@ function RegisteredWorkspaces({
               disabled={busy}
               onClick={() => onOpenRecent(entry.path)}
             >
-              <span
-                className={`flex w-full min-w-0 items-center gap-2 text-xs leading-snug ${listRowTitleClass(entry.valid)}`}
-                title={entry.path}
+              <Tooltip
+                tip={entry.path}
+                placement="bottom"
+                delayMs={TOOLTIP_DELAY_MS}
+                multiline
+                className="flex w-full min-w-0 items-center gap-2 text-xs leading-snug"
               >
-                <span className="min-w-0 truncate">{entry.path}</span>
+                <span
+                  className={`min-w-0 truncate ${listRowTitleClass(entry.valid)}`}
+                >
+                  {rootDisplayName(entry.path)}
+                </span>
                 {entry.read_only ? (
                   <span className="badge badge-outline badge-xs shrink-0 font-normal normal-case">
                     {t("start.readOnlyBadge")}
                   </span>
                 ) : null}
-              </span>
+              </Tooltip>
               {entry.valid ? (
                 <span className="block w-full truncate text-[10px] leading-snug text-content-tertiary">
                   {workspaceContextLabel(entry)}
@@ -153,15 +162,21 @@ function RegisteredWorkspaces({
                 </span>
               )}
             </button>
-            <button
-              type="button"
-              className="btn btn-ghost btn-interactive btn-square btn-xs absolute right-1 top-1/2 h-7 min-h-0 w-7 shrink-0 -translate-y-1/2 opacity-60 group-hover:opacity-100"
-              title={t("start.removeWorkspace")}
-              disabled={busy}
-              onClick={() => onRemoveRecent(entry.path)}
+            <IconTooltip
+              tip={t("start.removeWorkspace")}
+              placement="left"
+              className="absolute right-1 top-1/2 -translate-y-1/2"
             >
-              <X className="h-3.5 w-3.5" />
-            </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-interactive btn-square btn-xs h-7 min-h-0 w-7 shrink-0 opacity-60 group-hover:opacity-100"
+                aria-label={t("start.removeWorkspace")}
+                disabled={busy}
+                onClick={() => onRemoveRecent(entry.path)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </IconTooltip>
           </li>
         ))}
       </ul>

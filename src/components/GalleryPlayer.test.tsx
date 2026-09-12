@@ -211,7 +211,7 @@ describe("GalleryPlayer", () => {
       />,
     );
     expect(screen.getByLabelText("Mute videos")).toBeInTheDocument();
-    expect(document.querySelector(".lucide-volume2")).toBeInTheDocument();
+    expect(document.querySelector(".lucide-volume-2")).toBeInTheDocument();
   });
 
   it("disables theme cycling when reduced motion is enabled", async () => {

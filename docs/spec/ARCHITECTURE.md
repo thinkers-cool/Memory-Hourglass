@@ -62,6 +62,7 @@ No global store. `useWorkspace` (phase, workspace), `useLibrary` (facade), `crea
 | Channel            | Payload           | Source             |
 | ------------------ | ----------------- | ------------------ |
 | `scan://progress`  | `ScanProgress`    | Scan pipeline      |
+| `scan://thumbs`    | `ScanThumbsEvent` | Index batch thumbs |
 | `job://progress`   | `JobProgress`     | Export jobs        |
 | `message://notify` | `MessageEnvelope` | User-facing toasts |
 

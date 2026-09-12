@@ -2,20 +2,37 @@ import {
   listRowBadgeClass,
   listRowTitleClass,
 } from "../../../lib/interactionClass";
+import { Tooltip, TOOLTIP_DELAY_MS } from "../../shared/Tooltip";
 import { panelRowActionButtonClass, panelRowButtonClass } from "./panelStyles";
+
+function PanelRowTitle({
+  title,
+  active,
+}: {
+  title: string;
+  active?: boolean;
+}) {
+  return (
+    <span
+      className={`block truncate text-xs leading-tight ${listRowTitleClass(active)}`}
+    >
+      {title}
+    </span>
+  );
+}
 
 function PanelRowBadge({
   active,
-  title,
+  badgeLabel,
   children,
 }: {
   active?: boolean;
-  title?: string;
+  badgeLabel?: string;
   children: React.ReactNode;
 }) {
   return (
     <span
-      title={title}
+      aria-label={badgeLabel}
       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${listRowBadgeClass(active)}`}
     >
       {children}
@@ -33,17 +50,24 @@ export function PanelRowActionButton({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      className={panelRowActionButtonClass}
-      title={title}
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick();
-      }}
+    <Tooltip
+      tip={title}
+      placement="left"
+      delayMs={TOOLTIP_DELAY_MS}
+      className="inline-flex"
     >
-      {children}
-    </button>
+      <button
+        type="button"
+        className={panelRowActionButtonClass}
+        aria-label={title}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClick();
+        }}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -80,29 +104,43 @@ export function PanelListRow({
   onDoubleClick?: () => void;
   actions?: React.ReactNode;
 }) {
+  const pathTip =
+    titleTooltip && titleTooltip !== title ? titleTooltip : undefined;
+
+  const rowButton = (
+    <button
+      type="button"
+      className={panelRowButtonClass(active, dimmed)}
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+    >
+      <PanelRowBadge active={active} badgeLabel={badgeTitle}>
+        {badge}
+      </PanelRowBadge>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden pr-1">
+        <PanelRowTitle title={title} active={active} />
+        <span className="flex items-center gap-1.5 text-[10px] leading-none text-content-tertiary">
+          {subtitle}
+        </span>
+      </span>
+    </button>
+  );
+
   return (
     <div className={`group relative mb-1 last:mb-0 ${indented ? "ml-3" : ""}`}>
-      <button
-        type="button"
-        className={panelRowButtonClass(active, dimmed)}
-        onClick={onClick}
-        onDoubleClick={onDoubleClick}
-      >
-        <PanelRowBadge active={active} title={badgeTitle}>
-          {badge}
-        </PanelRowBadge>
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden pr-1">
-          <span
-            className={`truncate text-xs leading-tight ${listRowTitleClass(active)}`}
-            title={titleTooltip ?? title}
-          >
-            {title}
-          </span>
-          <span className="flex items-center gap-1.5 text-[10px] leading-none text-content-tertiary">
-            {subtitle}
-          </span>
-        </span>
-      </button>
+      {pathTip ? (
+        <Tooltip
+          tip={pathTip}
+          placement="bottom"
+          delayMs={TOOLTIP_DELAY_MS}
+          multiline
+          className="block w-full min-w-0"
+        >
+          {rowButton}
+        </Tooltip>
+      ) : (
+        rowButton
+      )}
       {actions ? <PanelRowActions>{actions}</PanelRowActions> : null}
     </div>
   );

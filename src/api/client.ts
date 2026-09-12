@@ -14,6 +14,7 @@ import type {
   RelinkPreview,
   RootStats,
   ScanProgress,
+  ScanThumbsEvent,
   SmartCollection,
   FolderEntry,
   SmbConnectRequest,
@@ -333,6 +334,12 @@ export function onScanProgress(
   handler: (event: ScanProgress) => void,
 ): Promise<UnlistenFn> {
   return listen<ScanProgress>("scan://progress", (e) => handler(e.payload));
+}
+
+export function onScanThumbs(
+  handler: (event: ScanThumbsEvent) => void,
+): Promise<UnlistenFn> {
+  return listen<ScanThumbsEvent>("scan://thumbs", (e) => handler(e.payload));
 }
 
 export function onJobProgress(

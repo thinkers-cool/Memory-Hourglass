@@ -22,6 +22,7 @@ import { SourceRow } from "./SourceRow";
 import { TagAddRow } from "./TagAddRow";
 import { TagTreeList } from "./TagTreeList";
 import { tagRoots } from "../../../lib/tagHierarchy";
+import { IconTooltip } from "../../shared/Tooltip";
 import { iconButtonClass, iconClass, panelShellClass } from "./panelStyles";
 
 export function SourcesPanel({
@@ -61,24 +62,28 @@ export function SourcesPanel({
         title={t("panel.library")}
         action={
           <div className="flex shrink-0 items-center">
-            <button
-              type="button"
-              className={iconButtonClass}
-              title={t("panel.addFolder")}
-              disabled={busy}
-              onClick={actions.addLocalRoot}
-            >
-              <FolderPlus className={iconClass} />
-            </button>
-            <button
-              type="button"
-              className={iconButtonClass}
-              title={t("panel.connectSmb")}
-              disabled={busy}
-              onClick={actions.openSmbConnect}
-            >
-              <Network className={iconClass} />
-            </button>
+            <IconTooltip tip={t("panel.addFolder")} placement="bottom">
+              <button
+                type="button"
+                className={iconButtonClass}
+                aria-label={t("panel.addFolder")}
+                disabled={busy}
+                onClick={actions.addLocalRoot}
+              >
+                <FolderPlus className={iconClass} />
+              </button>
+            </IconTooltip>
+            <IconTooltip tip={t("panel.connectSmb")} placement="bottom">
+              <button
+                type="button"
+                className={iconButtonClass}
+                aria-label={t("panel.connectSmb")}
+                disabled={busy}
+                onClick={actions.openSmbConnect}
+              >
+                <Network className={iconClass} />
+              </button>
+            </IconTooltip>
           </div>
         }
       >
