@@ -48,6 +48,7 @@ EXIF-derived metadata. 1:1 with asset.
 | `rating`                | INTEGER 0–5       |
 | `latitude`, `longitude` | REAL              |
 | `keywords_json`         | JSON array string |
+| `rotation`              | INTEGER degrees 0/90/180/270 |
 
 ### tag / asset_tag
 

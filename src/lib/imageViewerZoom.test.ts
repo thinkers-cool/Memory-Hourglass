@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { formatImageViewerZoom, handleImageViewerZoomKey } from "./imageViewerZoom";
+import {
+  formatImageViewerZoom,
+  handleImageViewerRotateKey,
+  handleImageViewerZoomKey,
+} from "./imageViewerZoom";
 
 describe("imageViewerZoom", () => {
   it("formats zoom percentage", () => {
@@ -42,6 +46,30 @@ describe("imageViewerZoom", () => {
     expect(
       handleImageViewerZoomKey(
         { key: "x", preventDefault: vi.fn() },
+        actions,
+      ),
+    ).toBe(false);
+  });
+
+  it("handles rotate keyboard shortcuts", () => {
+    const rotateClockwise = vi.fn();
+    const rotateCounterClockwise = vi.fn();
+    const actions = { rotateClockwise, rotateCounterClockwise };
+
+    handleImageViewerRotateKey(
+      { key: "r", shiftKey: false, preventDefault: vi.fn() },
+      actions,
+    );
+    handleImageViewerRotateKey(
+      { key: "R", shiftKey: true, preventDefault: vi.fn() },
+      actions,
+    );
+
+    expect(rotateClockwise).toHaveBeenCalledTimes(1);
+    expect(rotateCounterClockwise).toHaveBeenCalledTimes(1);
+    expect(
+      handleImageViewerRotateKey(
+        { key: "x", shiftKey: false, preventDefault: vi.fn() },
         actions,
       ),
     ).toBe(false);

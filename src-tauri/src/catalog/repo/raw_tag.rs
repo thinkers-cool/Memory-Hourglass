@@ -1,13 +1,13 @@
+use crate::catalog::pools::CatalogPools;
 use crate::error::Result;
-use sqlx::SqlitePool;
 
 pub struct RawTagRepo {
-    pool: SqlitePool,
+    pools: CatalogPools,
 }
 
 impl RawTagRepo {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(pools: CatalogPools) -> Self {
+        Self { pools }
     }
 
     pub async fn list_for_asset(
@@ -18,7 +18,7 @@ impl RawTagRepo {
             "SELECT name, value FROM asset_raw_tag WHERE asset_id = ? ORDER BY name, value",
         )
         .bind(asset_id)
-        .fetch_all(&self.pool)
+        .fetch_all(self.pools.read())
         .await?)
     }
 
@@ -26,7 +26,7 @@ impl RawTagRepo {
         Ok(
             sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM asset_raw_tag WHERE asset_id = ?")
                 .bind(asset_id)
-                .fetch_one(&self.pool)
+                .fetch_one(self.pools.read())
                 .await?,
         )
     }
@@ -38,14 +38,14 @@ impl RawTagRepo {
     ) -> Result<()> {
         sqlx::query("DELETE FROM asset_raw_tag WHERE asset_id = ?")
             .bind(asset_id)
-            .execute(&self.pool)
+            .execute(self.pools.write())
             .await?;
         for tag in tags {
             sqlx::query("INSERT INTO asset_raw_tag (asset_id, name, value) VALUES (?, ?, ?)")
                 .bind(asset_id)
                 .bind(&tag.name)
                 .bind(&tag.value)
-                .execute(&self.pool)
+                .execute(self.pools.write())
                 .await?;
         }
         Ok(())
@@ -61,9 +61,9 @@ mod tests {
     #[tokio::test]
     async fn raw_tag_count_and_replace() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
-        let raw_tag_repo = RawTagRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
+        let raw_tag_repo = RawTagRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -98,9 +98,9 @@ mod tests {
     #[tokio::test]
     async fn raw_tag_replace_clears_tags() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
-        let raw_tag_repo = RawTagRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
+        let raw_tag_repo = RawTagRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -135,9 +135,9 @@ mod tests {
     #[tokio::test]
     async fn raw_tag_list_for_asset_returns_replaced_tags() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
-        let raw_tag_repo = RawTagRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
+        let raw_tag_repo = RawTagRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -173,9 +173,9 @@ mod tests {
     #[tokio::test]
     async fn replace_raw_tags_inserts_multiple_values() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
-        let raw_tag_repo = RawTagRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
+        let raw_tag_repo = RawTagRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -221,10 +221,10 @@ mod tests {
     #[tokio::test]
     async fn raw_tag_repo_errors_after_pool_close() {
         let (catalog, _dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
-        let raw_tag_repo = RawTagRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
+        let raw_tag_repo = RawTagRepo::new(pools.clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -242,7 +242,7 @@ mod tests {
             })
             .await
             .unwrap();
-        pool.close().await;
+        pools.close().await;
         assert!(raw_tag_repo.list_for_asset(asset.id).await.is_err());
         assert!(raw_tag_repo.count_for_asset(asset.id).await.is_err());
         assert!(raw_tag_repo
@@ -260,9 +260,9 @@ mod tests {
     #[tokio::test]
     async fn list_scan_state_for_root_includes_raw_tag_count() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
-        let raw_tag_repo = RawTagRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
+        let raw_tag_repo = RawTagRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -304,10 +304,10 @@ mod tests {
     #[tokio::test]
     async fn raw_tag_replace_errors_under_exclusive_lock() {
         let (catalog, _dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
-        let raw_tag_repo = RawTagRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
+        let raw_tag_repo = RawTagRepo::new(pools.clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -325,7 +325,7 @@ mod tests {
             })
             .await
             .unwrap();
-        let mut locker = pool.acquire().await.unwrap();
+        let mut locker = pools.write().acquire().await.unwrap();
         sqlx::query("BEGIN EXCLUSIVE")
             .execute(&mut *locker)
             .await

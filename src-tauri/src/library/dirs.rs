@@ -1,6 +1,9 @@
 use crate::error::{AppError, Result};
+use crate::path_util::{canonicalize, os_file_name, path_to_string};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+
+pub use crate::path_util::validate_rel_path;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FolderEntry {
@@ -27,17 +30,13 @@ pub fn list_child_directories(path: &Path) -> Result<Vec<FolderEntry>> {
         if !entry_path.is_dir() {
             continue;
         }
-        let name = entry_path
-            .file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or_default()
-            .to_string();
+        let name = os_file_name(&entry_path);
         if name.is_empty() || name.starts_with('.') {
             continue;
         }
         entries.push(FolderEntry {
             name,
-            path: entry_path.to_string_lossy().to_string(),
+            path: path_to_string(&entry_path),
         });
     }
 
@@ -46,17 +45,15 @@ pub fn list_child_directories(path: &Path) -> Result<Vec<FolderEntry>> {
 }
 
 pub fn resolve_share_subfolder(mount_path: &Path, sub_path: Option<&str>) -> Result<PathBuf> {
-    let mount_path = mount_path
-        .canonicalize()
-        .map_err(|_| AppError::Library("SMB mount is not available".into()))?;
+    let mount_path =
+        canonicalize(mount_path).map_err(|_| AppError::Library("SMB mount is not available".into()))?;
 
     let library_path = match sub_path {
         None | Some("") => mount_path.clone(),
         Some(sub_path) => {
             validate_sub_path(sub_path)?;
-            let joined = mount_path.join(sub_path);
-            let canonical = joined
-                .canonicalize()
+            let joined = crate::path_util::join_path_rel(&mount_path, sub_path);
+            let canonical = canonicalize(&joined)
                 .map_err(|_| AppError::Library(format!("folder not found: {}", sub_path)))?;
             if !canonical.starts_with(&mount_path) {
                 return Err(AppError::InvalidInput("invalid folder path".into()));
@@ -78,20 +75,6 @@ fn validate_sub_path(sub_path: &str) -> Result<()> {
     validate_rel_path(sub_path)
 }
 
-pub fn validate_rel_path(rel_path: &str) -> Result<()> {
-    if rel_path.is_empty() {
-        return Err(AppError::InvalidInput("invalid path".into()));
-    }
-    if rel_path.contains("..")
-        || rel_path.starts_with('/')
-        || rel_path.starts_with('\\')
-        || rel_path.contains('\\')
-    {
-        return Err(AppError::InvalidInput("invalid path".into()));
-    }
-    Ok(())
-}
-
 pub fn validate_file_name(file_name: &str) -> Result<()> {
     if file_name.is_empty()
         || file_name.contains('/')
@@ -105,8 +88,7 @@ pub fn validate_file_name(file_name: &str) -> Result<()> {
 
 pub fn resolve_path_under_root(root: &Path, rel_path: &str) -> Result<PathBuf> {
     validate_rel_path(rel_path)?;
-    let root_canonical = root
-        .canonicalize()
+    let root_canonical = canonicalize(root)
         .map_err(|_| AppError::Library(format!("root path not available: {}", root.display())))?;
 
     let mut resolved = root_canonical.clone();
@@ -123,7 +105,7 @@ pub fn resolve_path_under_root(root: &Path, rel_path: &str) -> Result<PathBuf> {
     }
 
     if resolved.exists() {
-        let canonical = resolved.canonicalize().map_err(AppError::from)?;
+        let canonical = canonicalize(&resolved).map_err(AppError::from)?;
         if !canonical.starts_with(&root_canonical) {
             return Err(AppError::InvalidInput("invalid path".into()));
         }
@@ -132,7 +114,7 @@ pub fn resolve_path_under_root(root: &Path, rel_path: &str) -> Result<PathBuf> {
 
     if let Some(parent) = resolved.parent() {
         if parent.exists() {
-            let canonical_parent = parent.canonicalize().map_err(AppError::from)?;
+            let canonical_parent = canonicalize(parent).map_err(AppError::from)?;
             if !canonical_parent.starts_with(&root_canonical) {
                 return Err(AppError::InvalidInput("invalid path".into()));
             }
@@ -178,9 +160,11 @@ mod tests {
 
     #[test]
     fn validate_rel_path_rejects_traversal_and_absolute() {
-        for rel in ["../secret", "/abs", "\\win", "a\\b", ""] {
+        for rel in ["../secret", "/abs", "\\win", ""] {
             assert!(validate_rel_path(rel).is_err());
         }
+        assert!(validate_rel_path("photos/vacation").is_ok());
+        assert!(validate_rel_path("photos\\vacation").is_ok());
     }
 
     #[test]
@@ -249,9 +233,9 @@ mod tests {
     fn resolve_share_subfolder_returns_mount_root_without_subpath() {
         let dir = tempdir().unwrap();
         let resolved = resolve_share_subfolder(dir.path(), None).unwrap();
-        assert_eq!(resolved, dir.path().canonicalize().unwrap());
+        assert_eq!(resolved, canonicalize(dir.path()).unwrap());
         let empty = resolve_share_subfolder(dir.path(), Some("")).unwrap();
-        assert_eq!(empty, dir.path().canonicalize().unwrap());
+        assert_eq!(empty, canonicalize(dir.path()).unwrap());
     }
 
     #[test]
@@ -270,9 +254,9 @@ mod tests {
     }
 
     #[test]
-    fn validate_sub_path_rejects_absolute_and_backslash_paths() {
+    fn validate_sub_path_rejects_absolute_paths() {
         let dir = tempdir().unwrap();
-        for sub in ["/abs", "\\win", "a\\b"] {
+        for sub in ["/abs", "\\win"] {
             assert!(resolve_share_subfolder(dir.path(), Some(sub)).is_err());
         }
     }

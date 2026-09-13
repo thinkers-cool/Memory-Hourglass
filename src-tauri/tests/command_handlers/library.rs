@@ -66,14 +66,11 @@ async fn library_relink_and_smb_commands() {
     .await;
     assert!(browse_mount.is_err());
 
-    let shares = list_smb_shares(
-        SmbListRequest {
-            host: "127.0.0.1".into(),
-            username: "guest".into(),
-            password: "".into(),
-        },
-        state.clone(),
-    )
+    let shares = list_smb_shares(SmbListRequest {
+        host: "127.0.0.1".into(),
+        username: "guest".into(),
+        password: "".into(),
+    })
     .await;
     assert!(shares.is_err());
 
@@ -85,10 +82,10 @@ async fn library_relink_and_smb_commands() {
 async fn library_remove_root_cleans_smb_mount_metadata() {
     let dir = tempdir().unwrap();
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let pool = catalog.pool().clone();
+    let pools = catalog.pools().clone();
     let smb_dir = dir.path().join("smb-local");
     std::fs::create_dir_all(&smb_dir).unwrap();
-    let library = LibraryService::new(pool.clone(), dir.path().join("mounts"));
+    let library = LibraryService::new(pools, dir.path().join("mounts"));
     let root = library
         .add_smb_root(smb_dir.to_str().unwrap(), Some(60))
         .await
@@ -110,8 +107,8 @@ async fn rescan_empty_root_completes_without_index_queue() {
     start_scan(root.id, handle, state.clone())
         .await
         .expect("scan");
-    let status = wait_for_scan(state.clone(), std::time::Duration::from_secs(10)).await;
+    let status = wait_for_scan(state.clone(), root.id, std::time::Duration::from_secs(10)).await;
     assert_eq!(status.stage, "done");
-    let scan_status = get_scan_status(state.clone()).await.expect("status");
+    let scan_status = get_scan_status(Some(root.id), state.clone()).await.expect("status");
     assert_eq!(scan_status.stage, "done");
 }

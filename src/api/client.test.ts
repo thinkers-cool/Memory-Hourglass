@@ -134,14 +134,18 @@ describe("api client", () => {
     await client.pauseScan();
     await client.resumeScan();
     await client.rebuildCatalog();
-    await client.getScanStatus();
+    await client.getScanStatus(3);
+    await client.listScanStatuses();
+    await client.resumePendingScans();
 
     expect(invoke).toHaveBeenCalledWith("start_scan", { rootId: 3 });
-    expect(invoke).toHaveBeenCalledWith("cancel_scan");
+    expect(invoke).toHaveBeenCalledWith("cancel_scan", { rootId: null });
     expect(invoke).toHaveBeenCalledWith("pause_scan");
     expect(invoke).toHaveBeenCalledWith("resume_scan");
     expect(invoke).toHaveBeenCalledWith("rebuild_catalog");
-    expect(invoke).toHaveBeenCalledWith("get_scan_status");
+    expect(invoke).toHaveBeenCalledWith("get_scan_status", { rootId: 3 });
+    expect(invoke).toHaveBeenCalledWith("list_scan_statuses");
+    expect(invoke).toHaveBeenCalledWith("resume_pending_scans");
   });
 
   it("invokes query commands", async () => {
@@ -295,6 +299,33 @@ describe("api client", () => {
       limit: 25,
     });
     expect(invoke).toHaveBeenCalledWith("undo_activity", { activityId: 7 });
+  });
+
+  it("invokes scan status with optional root id", async () => {
+    await client.getScanStatus();
+    await client.getScanStatus(4);
+    expect(invoke).toHaveBeenCalledWith("get_scan_status", { rootId: null });
+    expect(invoke).toHaveBeenCalledWith("get_scan_status", { rootId: 4 });
+  });
+
+  it("registers scan thumb listener", async () => {
+    const handler = vi.fn();
+    await client.onScanThumbs(handler);
+    expect(listen).toHaveBeenCalledWith("scan://thumbs", expect.any(Function));
+
+    const thumbCallback = listen.mock.calls.find(
+      ([channel]) => channel === "scan://thumbs",
+    )?.[1];
+    thumbCallback?.({
+      payload: {
+        root_id: 1,
+        thumbs: [{ asset_id: 2, thumb_path: "/tmp/2.webp" }],
+      },
+    });
+    expect(handler).toHaveBeenCalledWith({
+      root_id: 1,
+      thumbs: [{ asset_id: 2, thumb_path: "/tmp/2.webp" }],
+    });
   });
 
   it("registers progress listeners", async () => {

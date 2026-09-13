@@ -4,6 +4,7 @@ use crate::error::Result;
 #[derive(sqlx::FromRow)]
 struct PurgeRow {
     id: i64,
+    root_id: i64,
     rel_path: String,
     root_path: String,
 }
@@ -24,7 +25,7 @@ impl AssetRepo {
     pub async fn purge_assets(
         &self,
         ids: &[i64],
-        _workspace_paths: &crate::workspace::WorkspacePaths,
+        workspace_paths: &crate::workspace::WorkspacePaths,
         read_only: bool,
     ) -> Result<Vec<i64>> {
         if read_only {
@@ -36,14 +37,14 @@ impl AssetRepo {
         for id in ids {
             let row = sqlx::query_as::<_, PurgeRow>(
                 r#"
-                SELECT a.id, a.rel_path, r.path as root_path
+                SELECT a.id, a.root_id, a.rel_path, r.path as root_path
                 FROM asset a
                 JOIN source_root r ON r.id = a.root_id
                 WHERE a.id = ?
                 "#,
             )
             .bind(id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(self.pools.read())
             .await?;
             if let Some(row) = row {
                 targets.push(row);
@@ -54,7 +55,7 @@ impl AssetRepo {
             return Ok(Vec::new());
         }
 
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.pools.write().begin().await?;
         for row in &targets {
             sqlx::query("DELETE FROM asset WHERE id = ?")
                 .bind(row.id)
@@ -66,6 +67,14 @@ impl AssetRepo {
         let mut purged_ids = Vec::with_capacity(targets.len());
         for row in targets {
             remove_purged_asset_files(&row.root_path, &row.rel_path)?;
+            let workspace_sidecar = crate::metadata::workspace_sidecar_path(
+                &workspace_paths.xmp_dir(),
+                row.root_id,
+                &row.rel_path,
+            );
+            if workspace_sidecar.exists() {
+                std::fs::remove_file(&workspace_sidecar)?;
+            }
             purged_ids.push(row.id);
         }
         Ok(purged_ids)
@@ -132,7 +141,7 @@ mod tests {
     #[tokio::test]
     async fn purge_assets_rejects_read_only_workspace() {
         let (catalog, dir) = test_catalog().await;
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let paths = crate::workspace::WorkspacePaths::new(dir.path().to_path_buf());
         let err = assets.purge_assets(&[1], &paths, true).await.unwrap_err();
         assert!(err.to_string().contains("read-only"));
@@ -141,8 +150,8 @@ mod tests {
     #[tokio::test]
     async fn purge_assets_removes_file_and_sidecar() {
         let (catalog, dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let photos = std::fs::canonicalize({
             let photos = dir.path().join("photos");
             std::fs::create_dir_all(&photos).unwrap();
@@ -192,8 +201,8 @@ mod tests {
     #[tokio::test]
     async fn purge_assets_rejects_traversal_rel_path() {
         let (catalog, dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let paths = crate::workspace::WorkspacePaths::new(dir.path().to_path_buf());
         let photos = std::fs::canonicalize({
             let photos = dir.path().join("purge-traversal");
@@ -231,7 +240,7 @@ mod tests {
     #[tokio::test]
     async fn purge_assets_noops_missing_files_for_unknown_id() {
         let (catalog, dir) = test_catalog().await;
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let paths = crate::workspace::WorkspacePaths::new(dir.path().to_path_buf());
         let deleted = assets
             .purge_assets(&[999_999], &paths, false)
@@ -243,8 +252,8 @@ mod tests {
     #[tokio::test]
     async fn purge_assets_removes_file_without_sidecar() {
         let (catalog, dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let photos = std::fs::canonicalize({
             let photos = dir.path().join("purge-no-xmp");
             std::fs::create_dir_all(&photos).unwrap();
@@ -285,8 +294,8 @@ mod tests {
     #[tokio::test]
     async fn soft_delete_restore_and_purge_empty_helpers() {
         let (catalog, dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -319,9 +328,9 @@ mod tests {
     #[tokio::test]
     async fn purge_assets_errors_under_exclusive_lock_after_file_removed() {
         let (catalog, dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
         let photos = std::fs::canonicalize({
             let photos = dir.path().join("purge-lock");
             std::fs::create_dir_all(&photos).unwrap();
@@ -352,7 +361,7 @@ mod tests {
             .await
             .unwrap();
         let paths = crate::workspace::WorkspacePaths::new(dir.path().to_path_buf());
-        let mut locker = pool.acquire().await.unwrap();
+        let mut locker = pools.write().acquire().await.unwrap();
         sqlx::query("BEGIN EXCLUSIVE")
             .execute(&mut *locker)
             .await
@@ -368,8 +377,8 @@ mod tests {
     #[tokio::test]
     async fn purge_assets_propagates_filesystem_errors() {
         let (catalog, dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let photos = std::fs::canonicalize({
             let photos = dir.path().join("purge-fs");
             std::fs::create_dir_all(&photos).unwrap();
@@ -404,9 +413,9 @@ mod tests {
     #[tokio::test]
     async fn asset_repo_purge_errors_after_pool_close() {
         let (catalog, dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -425,7 +434,7 @@ mod tests {
             .await
             .unwrap();
         let paths = crate::workspace::WorkspacePaths::new(dir.path().to_path_buf());
-        pool.close().await;
+        pools.close().await;
         assert!(assets
             .purge_assets(&[asset.id], &paths, false)
             .await

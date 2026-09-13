@@ -1,27 +1,11 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect } from "react";
 import type { AssetCard } from "../../types";
+import { decodeImage, mediaSrc } from "./imageDecode";
 import { isPlayable } from "./navigation";
 import { indicesInWindow } from "./preloadWindow";
 
-const PRELOAD_WINDOW = 1;
+const PRELOAD_WINDOW = 2;
 const PRELOAD_TIMEOUT_MS = 3000;
-
-function mediaSrc(card: AssetCard): string {
-  return convertFileSrc(card.abs_path);
-}
-
-function thumbSrc(card: AssetCard): string | null {
-  return card.thumb_path ? convertFileSrc(card.thumb_path) : null;
-}
-
-function preloadImage(src: string): void {
-  const img = new Image();
-  img.src = src;
-  if (img.decode) {
-    void img.decode().catch(() => undefined);
-  }
-}
 
 function preloadVideoMeta(src: string): void {
   const video = document.createElement("video");
@@ -40,12 +24,10 @@ export function useSlideshowPreload(items: AssetCard[], index: number): void {
     for (const i of indicesInWindow(index, items.length, PRELOAD_WINDOW)) {
       const card = items[i];
       if (!card || !isPlayable(card)) continue;
-      const thumb = thumbSrc(card);
-      if (thumb) preloadImage(thumb);
       if (card.kind === "video") {
         preloadVideoMeta(mediaSrc(card));
       } else {
-        preloadImage(mediaSrc(card));
+        void decodeImage(mediaSrc(card)).catch(() => undefined);
       }
     }
   }, [items, index]);

@@ -36,11 +36,7 @@ impl ScanControl {
 }
 
 pub(crate) fn take_env_cancel_flag(name: &str) -> bool {
-    if std::env::var_os(name).is_some() {
-        std::env::remove_var(name);
-        return true;
-    }
-    false
+    crate::scan::test_hooks::take_flag(name)
 }
 
 pub(crate) fn should_stop_inventory_batch(ctrl: &ScanControl) -> bool {
@@ -87,7 +83,7 @@ mod tests {
             crate::scan::test_hooks::reset_unlocked();
             let ctrl = ScanControl::noop();
             assert!(!should_stop_inventory_batch(&ctrl));
-            std::env::set_var("MEMHG_TEST_CANCEL_AFTER_PAUSE", "1");
+            crate::scan::test_hooks::set_flag("MEMHG_TEST_CANCEL_AFTER_PAUSE");
             assert!(should_stop_inventory_batch(&ctrl));
             assert!(!should_stop_inventory_batch(&ctrl));
             let cancelled = Arc::new(AtomicBool::new(true));
@@ -102,9 +98,9 @@ mod tests {
             crate::scan::test_hooks::reset_unlocked();
             let ctrl = ScanControl::noop();
             assert!(!should_stop_index_batch(&ctrl));
-            std::env::set_var("MEMHG_TEST_FORCE_INDEX_CANCEL", "1");
+            crate::scan::test_hooks::set_flag("MEMHG_TEST_FORCE_INDEX_CANCEL");
             assert!(should_stop_index_batch(&ctrl));
-            std::env::set_var("MEMHG_TEST_CANCEL_AFTER_PAUSE", "1");
+            crate::scan::test_hooks::set_flag("MEMHG_TEST_CANCEL_AFTER_PAUSE");
             assert!(should_stop_index_batch(&ctrl));
         });
     }

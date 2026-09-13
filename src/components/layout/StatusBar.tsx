@@ -1,4 +1,3 @@
-import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   resolveStatusDisplay,
@@ -11,27 +10,34 @@ export function StatusBar({
   total,
   selectedCount,
   scanStatus,
+  scanStatusByRoot,
+  focusScanRootId,
+  activeRootId,
   roots,
   exportActive,
   exportProgress,
   notification,
   busy,
-  onDismissAlert,
 }: {
   total: number;
   selectedCount: number;
   scanStatus: string;
+  scanStatusByRoot?: Record<number, string>;
+  focusScanRootId?: number | null;
+  activeRootId?: number;
   roots: RootStats[];
   exportActive: boolean;
   exportProgress: ExportProgress;
   notification: Notification | null;
   busy: boolean;
-  onDismissAlert?: () => void;
 }) {
   const { t } = useTranslation(["library", "common"]);
   const display = resolveStatusDisplay({
     selectedCount,
     scanStatus,
+    scanStatusByRoot,
+    focusScanRootId,
+    activeRootId,
     roots,
     exportActive,
     exportProgress,
@@ -64,16 +70,6 @@ export function StatusBar({
               <span className="loading loading-spinner loading-xs shrink-0 opacity-70" />
             )}
             <span className="truncate">{lineText}</span>
-            {display.alert && onDismissAlert && (
-              <button
-                type="button"
-                className="btn btn-ghost btn-xs btn-square h-6 min-h-0 w-6 shrink-0"
-                onClick={onDismissAlert}
-                aria-label={t("common:aria.close")}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
           </div>
         </div>
       </div>

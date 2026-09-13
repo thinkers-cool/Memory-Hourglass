@@ -1,9 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   buildShuffleOrder,
   resolveNextIndex,
   resolveShuffleIndex,
 } from "../lib/slideshow/navigation";
+import {
+  decodeImage,
+  isImageDecoded,
+  mediaSrc,
+  useSlideImageReady,
+} from "../lib/slideshow/imageDecode";
 import { useSlideshowPreload } from "../lib/slideshow/preload";
 import {
   loadSlideshowSettings,
@@ -16,6 +22,7 @@ import {
   VIDEO_END_PADDING_MS,
 } from "../lib/slideshow/timing";
 import type { SlideshowSettings, SlideshowTheme } from "../lib/slideshow/types";
+import { useSlideElapsed } from "../lib/slideshow/useSlideElapsed";
 import type { AssetCard } from "../types";
 import { useRafTransition } from "./useReducedMotion";
 
@@ -36,19 +43,32 @@ export function useSlideshow({
   const [transition, setTransition] = useState<{
     from: number;
     to: number;
+    outgoingElapsedMs: number;
   } | null>(null);
   const lastIndexRef = useRef(index);
+  const elapsedRef = useRef(0);
   const dwellTimerRef = useRef<number | null>(null);
   const videoTimerRef = useRef<number | null>(null);
 
   const theme: SlideshowTheme = reducedMotion ? "dissolve" : settings.theme;
   const transitionMs = reducedMotion ? 0 : THEME_CONFIG[theme].transitionMs;
-  const kenBurns = !reducedMotion && THEME_CONFIG[theme].kenBurns;
+  const incomingElapsedMs = useSlideElapsed(index, playing, elapsedRef);
+  const incomingReady = useSlideImageReady(items[index]);
   const isAnimating = transition !== null && transition.from !== transition.to;
+  const canAnimate = incomingReady;
 
-  const progress = useRafTransition(isAnimating, transitionMs, () => {
-    setTransition(null);
-  });
+  const rafProgress = useRafTransition(
+    isAnimating && canAnimate,
+    transitionMs,
+    () => {
+      setTransition(null);
+    },
+  );
+  const crossfadeProgress = isAnimating
+    ? canAnimate
+      ? rafProgress
+      : 0
+    : 1;
 
   useSlideshowPreload(items, index);
 
@@ -56,9 +76,13 @@ export function useSlideshow({
     saveSlideshowSettings(settings);
   }, [settings]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (index === lastIndexRef.current) return;
-    setTransition({ from: lastIndexRef.current, to: index });
+    setTransition({
+      from: lastIndexRef.current,
+      to: index,
+      outgoingElapsedMs: elapsedRef.current,
+    });
     lastIndexRef.current = index;
   }, [index]);
 
@@ -118,9 +142,36 @@ export function useSlideshow({
     if (!playing || items.length <= 1) return;
     const card = items[index];
     if (!card || card.kind === "video") return;
-    dwellTimerRef.current = window.setTimeout(goNext, settings.intervalMs);
+
+    const scheduleAdvance = () => {
+      dwellTimerRef.current = window.setTimeout(goNext, settings.intervalMs);
+    };
+
+    const next = settings.shuffle
+      ? resolveShuffleIndex(shuffleOrder, index, 1, settings.loop)
+      : resolveNextIndex(items, index, 1, settings.loop);
+    const nextCard = next !== null ? items[next] : undefined;
+    const nextSrc =
+      nextCard && nextCard.kind !== "video" ? mediaSrc(nextCard) : null;
+
+    if (nextSrc && !isImageDecoded(nextSrc)) {
+      void decodeImage(nextSrc).finally(scheduleAdvance);
+      return clearTimers;
+    }
+
+    scheduleAdvance();
     return clearTimers;
-  }, [playing, index, settings.intervalMs, items, goNext, clearTimers]);
+  }, [
+    playing,
+    index,
+    settings.intervalMs,
+    settings.shuffle,
+    settings.loop,
+    items,
+    shuffleOrder,
+    goNext,
+    clearTimers,
+  ]);
 
   useEffect(() => {
     if (!playing) return;
@@ -163,11 +214,12 @@ export function useSlideshow({
     playing,
     setPlaying,
     theme,
-    kenBurns,
     transitionMs,
     fromIndex: isAnimating ? transition!.from : null,
     toIndex: index,
-    progress: isAnimating ? progress : 1,
+    progress: crossfadeProgress,
+    incomingElapsedMs,
+    outgoingElapsedMs: isAnimating ? transition!.outgoingElapsedMs : 0,
     goNext,
     goPrev,
     onVideoEnded,

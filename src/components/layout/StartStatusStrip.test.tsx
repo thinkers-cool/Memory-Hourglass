@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { errorNotification } from "../../lib/notification";
 import { StartStatusStrip } from "./StartStatusStrip";
 
@@ -32,20 +31,5 @@ describe("StartStatusStrip", () => {
       <StartStatusStrip busy={false} busyMessage="" notification={null} />,
     );
     expect(container).toBeEmptyDOMElement();
-  });
-
-  it("calls onDismissAlert when error dismiss is clicked", async () => {
-    const user = userEvent.setup();
-    const onDismissAlert = vi.fn();
-    render(
-      <StartStatusStrip
-        busy={false}
-        busyMessage=""
-        notification={errorNotification("disk full")}
-        onDismissAlert={onDismissAlert}
-      />,
-    );
-    await user.click(screen.getByRole("button", { name: "Close" }));
-    expect(onDismissAlert).toHaveBeenCalledOnce();
   });
 });

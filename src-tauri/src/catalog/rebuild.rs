@@ -1,21 +1,21 @@
+use crate::catalog::pools::CatalogPools;
 use crate::catalog::tables::CATALOG_DATA_TABLES;
 use crate::error::Result;
 use crate::scan::{ScanControl, ScanService};
-use sqlx::SqlitePool;
 use std::path::PathBuf;
 
-pub async fn rebuild_and_rescan(pool: SqlitePool, thumb_dir: PathBuf) -> Result<()> {
+pub async fn rebuild_and_rescan(pools: CatalogPools, thumb_dir: PathBuf) -> Result<()> {
     for table in CATALOG_DATA_TABLES {
         sqlx::query(&format!("DELETE FROM {}", table))
-            .execute(&pool)
+            .execute(pools.write())
             .await?;
     }
 
     let roots = sqlx::query_as::<_, (i64,)>("SELECT id FROM source_root ORDER BY id")
-        .fetch_all(&pool)
+        .fetch_all(pools.read())
         .await?;
 
-    let scanner = ScanService::new(pool, thumb_dir);
+    let scanner = ScanService::new(pools, thumb_dir);
     let ctrl = ScanControl::noop();
     for (root_id,) in roots {
         scanner.scan_root(root_id, &ctrl).await?;
@@ -28,6 +28,7 @@ mod tests {
     use super::*;
     use crate::catalog::repo::{AssetRepo, SourceRootRepo};
     use crate::catalog::Catalog;
+    use crate::scan::{ScanControl, ScanService};
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -43,40 +44,40 @@ mod tests {
 
         let db = dir.path().join("catalog.db");
         let catalog = Catalog::open(&db).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let root = SourceRootRepo::new(pool.clone())
+        let root = SourceRootRepo::new(pools.clone())
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
 
-        ScanService::new(pool.clone(), thumb_dir.clone())
+        ScanService::new(pools.clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
-        let before = AssetRepo::new(pool.clone())
+        let before = AssetRepo::new(pools.clone())
             .find_by_path(root.id, "one.jpg")
             .await
             .unwrap();
         assert!(before.is_some());
 
         sqlx::query("INSERT INTO tag (name, parent_id, color) VALUES ('travel', NULL, '#fff')")
-            .execute(&pool)
+            .execute(catalog.write_pool())
             .await
             .unwrap();
 
-        rebuild_and_rescan(pool.clone(), thumb_dir.clone())
+        rebuild_and_rescan(pools.clone(), thumb_dir.clone())
             .await
             .unwrap();
 
         let tag_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tag")
-            .fetch_one(&pool)
+            .fetch_one(catalog.pool())
             .await
             .unwrap();
         assert_eq!(tag_count.0, 0);
 
-        let after = AssetRepo::new(pool.clone())
+        let after = AssetRepo::new(pools.clone())
             .find_by_path(root.id, "one.jpg")
             .await
             .unwrap();
@@ -87,7 +88,7 @@ mod tests {
     async fn rebuild_and_rescan_tolerates_empty_roots() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        rebuild_and_rescan(catalog.pool().clone(), dir.path().join("thumbs"))
+        rebuild_and_rescan(catalog.pools().clone(), dir.path().join("thumbs"))
             .await
             .unwrap();
     }
@@ -111,9 +112,9 @@ mod tests {
         .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(pool.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let first_root = roots
             .insert_root(first.to_str().unwrap(), "local", "watch", None)
             .await
@@ -123,9 +124,9 @@ mod tests {
             .await
             .unwrap();
 
-        rebuild_and_rescan(pool.clone(), thumb_dir).await.unwrap();
+        rebuild_and_rescan(pools.clone(), thumb_dir).await.unwrap();
 
-        let assets = AssetRepo::new(pool);
+        let assets = AssetRepo::new(pools);
         assert!(assets
             .find_by_path(first_root.id, "one.jpg")
             .await

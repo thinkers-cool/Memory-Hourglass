@@ -7,7 +7,7 @@ use tempfile::tempdir;
 async fn smart_collection_roundtrip() {
     let dir = tempdir().unwrap();
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let collection = CollectionRepo::new(catalog.pool().clone());
+    let collection = CollectionRepo::new(catalog.pools().clone());
 
     let filter = AssetFilter {
         rating_min: Some(4),

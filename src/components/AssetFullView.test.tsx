@@ -83,6 +83,26 @@ describe("AssetFullView", () => {
     expect(screen.getByLabelText("Next")).toBeDisabled();
   });
 
+  it("rotates with keyboard shortcuts when handlers are provided", () => {
+    const onRotateClockwise = vi.fn();
+    const onRotateCounterClockwise = vi.fn();
+    render(
+      <AssetFullView
+        card={sampleCard}
+        index={0}
+        total={1}
+        onClose={vi.fn()}
+        onNavigateRelative={vi.fn()}
+        onRotateClockwise={onRotateClockwise}
+        onRotateCounterClockwise={onRotateCounterClockwise}
+      />,
+    );
+    fireEvent.keyDown(window, { key: "r" });
+    fireEvent.keyDown(window, { key: "R", shiftKey: true });
+    expect(onRotateClockwise).toHaveBeenCalledTimes(1);
+    expect(onRotateCounterClockwise).toHaveBeenCalledTimes(1);
+  });
+
   it("resets zoom when pressing 0", () => {
     const resetTransform = vi.fn();
     vi.spyOn(useZoomableMediaModule, "useZoomableMedia").mockReturnValue({

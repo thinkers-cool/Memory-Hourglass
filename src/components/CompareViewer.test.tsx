@@ -58,6 +58,7 @@ function renderViewer(
     onCreateAlbum: vi.fn(),
     onExport: vi.fn(),
     onDelete: vi.fn(),
+    onRotate: vi.fn(),
     ...overrides,
   };
   render(<CompareViewer {...props} />);
@@ -83,6 +84,7 @@ describe("CompareViewer", () => {
         onCreateAlbum={vi.fn()}
         onExport={vi.fn()}
         onDelete={vi.fn()}
+        onRotate={vi.fn()}
       />,
     );
     expect(container.firstChild).toBeNull();
@@ -146,6 +148,15 @@ describe("CompareViewer", () => {
     expect(document.querySelector("img")).toBeInTheDocument();
     expect(screen.getAllByLabelText("Zoom in").length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText("Zoom out").length).toBeGreaterThan(0);
+  });
+
+  it("rotates image panes from the toolbar", async () => {
+    const user = userEvent.setup();
+    const props = renderViewer();
+    await user.click(screen.getAllByLabelText("Rotate clockwise")[0]);
+    await user.click(screen.getAllByLabelText("Rotate counter-clockwise")[0]);
+    expect(props.onRotate).toHaveBeenCalledWith(1, "cw");
+    expect(props.onRotate).toHaveBeenCalledWith(1, "ccw");
   });
 
   it("ignores space when stamp is not armed", () => {

@@ -15,6 +15,11 @@ describe("patchAssetThumbs", () => {
     expect(next[0]).toBe(items[0]);
   });
 
+  it("returns the same array when thumb updates are empty", () => {
+    const items = [sampleCard];
+    expect(patchAssetThumbs(items, [])).toBe(items);
+  });
+
   it("returns the same array when nothing changes", () => {
     const items = [sampleCard];
     const next = patchAssetThumbs(items, [

@@ -1,18 +1,16 @@
+use crate::path_util::{os_extension, os_file_name};
+
 pub const MEDIA_EXTENSIONS: &[&str] = &[
     "jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "tif", "tiff", "arw", "cr2", "cr3", "nef",
     "dng", "orf", "raf", "rw2", "pef", "srw", "mp4", "mov", "m4v", "avi", "mkv",
 ];
 
 pub fn is_media_file(path: &std::path::Path) -> bool {
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let name = os_file_name(path);
     if name.starts_with('.') {
         return false;
     }
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase())
-        .unwrap_or_default();
+    let ext = os_extension(path).to_lowercase();
     MEDIA_EXTENSIONS.contains(&ext.as_str())
 }
 
@@ -26,7 +24,7 @@ pub fn asset_kind(ext: &str) -> &'static str {
 }
 
 pub fn should_ignore(path: &std::path::Path) -> bool {
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let name = os_file_name(path);
     if name.starts_with('.') {
         return true;
     }

@@ -15,8 +15,9 @@ const {
   onMessageNotify,
   addRoot,
   startScan,
-  pickFolder,
+  pickFolders,
   undoActivity,
+  resumePendingScans,
 } = vi.hoisted(() => ({
   listRootStats: vi.fn(),
   listAlbums: vi.fn(),
@@ -30,8 +31,9 @@ const {
   onMessageNotify: vi.fn(),
   addRoot: vi.fn(),
   startScan: vi.fn(),
-  pickFolder: vi.fn(),
+  pickFolders: vi.fn(),
   undoActivity: vi.fn(),
+  resumePendingScans: vi.fn(),
 }));
 
 vi.mock("../api/client", () => ({
@@ -59,10 +61,11 @@ vi.mock("../api/client", () => ({
   startScan,
   startExport: vi.fn(),
   undoActivity,
+  resumePendingScans,
 }));
 
 vi.mock("../lib/pickFolder", () => ({
-  pickFolder,
+  pickFolders,
   formatError: (error: unknown) =>
     error instanceof Error ? error.message : String(error),
 }));
@@ -86,6 +89,7 @@ describe("useLibrary", () => {
   beforeEach(() => {
     countAssets.mockResolvedValue(0);
     onScanThumbs.mockResolvedValue(() => undefined);
+    resumePendingScans.mockResolvedValue(undefined);
   });
 
   it("loads library metadata and grid on mount", async () => {
@@ -315,7 +319,7 @@ describe("useLibrary", () => {
     onScanProgress.mockResolvedValue(() => undefined);
     onJobProgress.mockResolvedValue(() => undefined);
     onMessageNotify.mockResolvedValue(() => undefined);
-    pickFolder.mockRejectedValue(new Error("picker denied"));
+    pickFolders.mockRejectedValue(new Error("picker denied"));
 
     const { result } = renderHook(() => useLibrary());
     await waitFor(() => expect(queryAssets).toHaveBeenCalled());
@@ -337,7 +341,7 @@ describe("useLibrary", () => {
     onScanProgress.mockResolvedValue(() => undefined);
     onJobProgress.mockResolvedValue(() => undefined);
     onMessageNotify.mockResolvedValue(() => undefined);
-    pickFolder.mockResolvedValue("/tmp/photos");
+    pickFolders.mockResolvedValue(["/tmp/photos"]);
     addRoot.mockResolvedValue({ id: 9, path: "/tmp/photos" });
     startScan.mockRejectedValue(new Error("scan failed"));
 
@@ -400,7 +404,7 @@ describe("useLibrary", () => {
   });
 
   it("ignores cancelled folder pick", async () => {
-    pickFolder.mockReset();
+    pickFolders.mockReset();
     addRoot.mockReset();
     startScan.mockReset();
     listRootStats.mockResolvedValue([]);
@@ -411,7 +415,7 @@ describe("useLibrary", () => {
     onScanProgress.mockResolvedValue(() => undefined);
     onJobProgress.mockResolvedValue(() => undefined);
     onMessageNotify.mockResolvedValue(() => undefined);
-    pickFolder.mockResolvedValue(null);
+    pickFolders.mockResolvedValue([]);
 
     const { result } = renderHook(() => useLibrary());
     await waitFor(() => expect(queryAssets).toHaveBeenCalled());
@@ -424,6 +428,33 @@ describe("useLibrary", () => {
     expect(startScan).not.toHaveBeenCalled();
   });
 
+  it("adds multiple local roots after multi-folder pick", async () => {
+    listRootStats.mockResolvedValue([]);
+    listAlbums.mockResolvedValue([]);
+    listSmartCollections.mockResolvedValue([]);
+    listTags.mockResolvedValue([]);
+    queryAssets.mockResolvedValue({ total: 0, items: [] });
+    onScanProgress.mockResolvedValue(() => undefined);
+    onJobProgress.mockResolvedValue(() => undefined);
+    onMessageNotify.mockResolvedValue(() => undefined);
+    pickFolders.mockResolvedValue(["/tmp/one", "/tmp/two"]);
+    addRoot
+      .mockResolvedValueOnce({ id: 9, path: "/tmp/one" })
+      .mockResolvedValueOnce({ id: 10, path: "/tmp/two" });
+    startScan.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useLibrary());
+    await waitFor(() => expect(queryAssets).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.actions.addLocalRoot();
+    });
+
+    expect(addRoot).toHaveBeenCalledTimes(2);
+    expect(startScan).toHaveBeenCalledTimes(2);
+    expect(result.current.notification?.text).toContain("2");
+  });
+
   it("adds local root after folder pick", async () => {
     listRootStats.mockResolvedValue([]);
     listAlbums.mockResolvedValue([]);
@@ -433,7 +464,7 @@ describe("useLibrary", () => {
     onScanProgress.mockResolvedValue(() => undefined);
     onJobProgress.mockResolvedValue(() => undefined);
     onMessageNotify.mockResolvedValue(() => undefined);
-    pickFolder.mockResolvedValue("/tmp/photos");
+    pickFolders.mockResolvedValue(["/tmp/photos"]);
     addRoot.mockResolvedValue({ id: 9, path: "/tmp/photos" });
     startScan.mockResolvedValue(undefined);
 
@@ -444,7 +475,7 @@ describe("useLibrary", () => {
       await result.current.actions.addLocalRoot();
     });
 
-    expect(pickFolder).toHaveBeenCalled();
+    expect(pickFolders).toHaveBeenCalled();
     expect(addRoot).toHaveBeenCalledWith("/tmp/photos");
     expect(startScan).toHaveBeenCalledWith(9);
   });

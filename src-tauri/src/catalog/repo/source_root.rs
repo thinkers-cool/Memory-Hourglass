@@ -1,9 +1,9 @@
 use crate::catalog::models::SourceRoot;
+use crate::catalog::pools::CatalogPools;
 use crate::error::{AppError, Result};
-use sqlx::SqlitePool;
 
 pub struct SourceRootRepo {
-    pool: SqlitePool,
+    pools: CatalogPools,
 }
 
 struct InsertRootRequest<'a> {
@@ -18,8 +18,8 @@ struct InsertRootRequest<'a> {
 }
 
 impl SourceRootRepo {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(pools: CatalogPools) -> Self {
+        Self { pools }
     }
 
     pub async fn insert_root(
@@ -89,7 +89,7 @@ impl SourceRootRepo {
         .bind(smb_share)
         .bind(smb_username)
         .bind(if smb_mounted { 1 } else { 0 })
-        .fetch_one(&self.pool)
+        .fetch_one(self.pools.write())
         .await?;
 
         self.get_root(id).await
@@ -98,7 +98,7 @@ impl SourceRootRepo {
     pub async fn get_root(&self, id: i64) -> Result<SourceRoot> {
         sqlx::query_as::<_, SourceRoot>("SELECT * FROM source_root WHERE id = ?")
             .bind(id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(self.pools.read())
             .await?
             .ok_or_else(|| AppError::NotFound(format!("root {}", id)))
     }
@@ -106,7 +106,7 @@ impl SourceRootRepo {
     pub async fn list_roots(&self) -> Result<Vec<SourceRoot>> {
         Ok(
             sqlx::query_as::<_, SourceRoot>("SELECT * FROM source_root ORDER BY id")
-                .fetch_all(&self.pool)
+                .fetch_all(self.pools.read())
                 .await?,
         )
     }
@@ -114,7 +114,7 @@ impl SourceRootRepo {
     pub async fn remove_root(&self, id: i64) -> Result<()> {
         let result = sqlx::query("DELETE FROM source_root WHERE id = ?")
             .bind(id)
-            .execute(&self.pool)
+            .execute(self.pools.write())
             .await?;
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound(format!("root {}", id)));
@@ -126,7 +126,7 @@ impl SourceRootRepo {
         sqlx::query("UPDATE source_root SET status = ? WHERE id = ?")
             .bind(status)
             .bind(id)
-            .execute(&self.pool)
+            .execute(self.pools.write())
             .await?;
         Ok(())
     }
@@ -135,7 +135,7 @@ impl SourceRootRepo {
         sqlx::query("UPDATE source_root SET last_scan_at = ?, status = 'idle' WHERE id = ?")
             .bind(at)
             .bind(id)
-            .execute(&self.pool)
+            .execute(self.pools.write())
             .await?;
         Ok(())
     }
@@ -144,7 +144,7 @@ impl SourceRootRepo {
         let r = sqlx::query("UPDATE source_root SET path = ? WHERE id = ?")
             .bind(path)
             .bind(id)
-            .execute(&self.pool)
+            .execute(self.pools.write())
             .await?;
         if r.rows_affected() == 0 {
             return Err(AppError::NotFound(format!("root {}", id)));
@@ -161,7 +161,7 @@ mod tests {
     #[tokio::test]
     async fn source_root_not_found_errors() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let err = roots.get_root(999).await.unwrap_err();
         assert!(err.to_string().contains("not found"));
         let err = roots.remove_root(999).await.unwrap_err();
@@ -173,7 +173,7 @@ mod tests {
     #[tokio::test]
     async fn insert_smb_mount_root_persists_smb_fields() {
         let (catalog, dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let smb_path = dir.path().join("smb-share");
         std::fs::create_dir_all(&smb_path).unwrap();
         let root = roots
@@ -196,7 +196,7 @@ mod tests {
     #[tokio::test]
     async fn relink_path_updates_root_path() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/old", "local", "watch", None)
             .await
@@ -208,7 +208,7 @@ mod tests {
     #[tokio::test]
     async fn remove_root_deletes_existing_root() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/remove", "local", "watch", None)
             .await
@@ -220,7 +220,7 @@ mod tests {
     #[tokio::test]
     async fn set_status_and_touch_scan_update_root_fields() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/status", "local", "watch", None)
             .await
@@ -235,7 +235,7 @@ mod tests {
     #[tokio::test]
     async fn list_roots_returns_inserted_roots() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/list", "local", "watch", None)
             .await
@@ -248,13 +248,13 @@ mod tests {
     #[tokio::test]
     async fn source_root_repo_errors_after_pool_close() {
         let (catalog, _dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
             .unwrap();
-        pool.close().await;
+        pools.close().await;
         assert!(roots.get_root(root.id).await.is_err());
         assert!(roots.list_roots().await.is_err());
         assert!(roots.remove_root(root.id).await.is_err());

@@ -14,7 +14,7 @@ pub async fn query_assets(
     limit: Option<i64>,
     state: State<'_, AppState>,
 ) -> Result<QueryResult> {
-    trace_command("query_assets", |_correlation_id| async move {
+    trace_command("query_assets", || async move {
         state
             .with_active(|ws| async move {
                 ws.query_service()
@@ -34,7 +34,7 @@ pub async fn query_assets(
 
 #[tauri::command]
 pub async fn count_assets(filter: AssetFilter, state: State<'_, AppState>) -> Result<i64> {
-    trace_command("count_assets", |_correlation_id| async move {
+    trace_command("count_assets", || async move {
         state
             .with_active(|ws| async move { ws.query_service().count(&filter).await })
             .await

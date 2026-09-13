@@ -27,18 +27,18 @@ async fn full_library_workflow() {
     let thumb_dir = dir.path().join("thumbs");
     let catalog = Catalog::open(&db_path).await.unwrap();
 
-    let library = LibraryService::new(catalog.pool().clone(), dir.path().to_path_buf());
+    let library = LibraryService::new(catalog.pools().clone(), dir.path().to_path_buf());
     let root = library
         .add_local_root(photos.to_str().unwrap())
         .await
         .unwrap();
 
-    let scanner = ScanService::new(catalog.pool().clone(), thumb_dir.clone());
+    let scanner = ScanService::new(catalog.pools().clone(), thumb_dir.clone());
     let ctrl = ScanControl::noop();
     let summary = scanner.scan_root(root.id, &ctrl).await.unwrap();
     assert_eq!(summary.indexed, 1);
 
-    let query = QueryService::new(catalog.pool().clone(), thumb_dir.clone());
+    let query = QueryService::new(catalog.pools().clone(), thumb_dir.clone());
     let listed = query
         .query(&AssetFilter::default(), "date:desc", 0, 50)
         .await
@@ -47,12 +47,12 @@ async fn full_library_workflow() {
     let asset_id = listed.items[0].id;
 
     let mut detail = query
-        .apply_meta_patch(asset_id, AssetMetaPatch { rating: Some(5) })
+        .apply_meta_patch(asset_id, AssetMetaPatch { rating: Some(5), ..Default::default() })
         .await
         .unwrap();
     assert_eq!(detail.meta.as_ref().and_then(|m| m.rating), Some(5));
 
-    let tag_repo = TagRepo::new(catalog.pool().clone());
+    let tag_repo = TagRepo::new(catalog.pools().clone());
     let sony_id = tag_repo.create_tag("sony", None, None).await.unwrap();
     query.batch_append_tags(&[asset_id], sony_id).await.unwrap();
 
@@ -80,7 +80,7 @@ async fn full_library_workflow() {
     assert_eq!(filtered.total, 1);
 
     let export_dest = dir.path().join("export");
-    let manifest = ExportService::new(catalog.pool().clone())
+    let manifest = ExportService::new(catalog.pools().clone())
         .export_assets(
             &[asset_id],
             &export_dest,
@@ -96,7 +96,7 @@ async fn full_library_workflow() {
     assert_eq!(manifest.copied.len(), 1);
     assert!(export_dest.join("a7c.jpg").exists());
 
-    let assets = AssetRepo::new(catalog.pool().clone());
+    let assets = AssetRepo::new(catalog.pools().clone());
     assets.soft_delete(&[asset_id], 1).await.unwrap();
     let after_delete = query
         .query(&AssetFilter::default(), "date:desc", 0, 50)
@@ -104,7 +104,7 @@ async fn full_library_workflow() {
         .unwrap();
     assert_eq!(after_delete.total, 0);
 
-    let meta_repo = AssetMetaRepo::new(catalog.pool().clone());
+    let meta_repo = AssetMetaRepo::new(catalog.pools().clone());
     assert!(meta_repo.get(asset_id).await.unwrap().is_some());
 }
 
@@ -118,13 +118,13 @@ async fn scan_detects_modified_and_missing() {
 
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
     let thumb_dir = dir.path().join("thumbs");
-    let roots = SourceRootRepo::new(catalog.pool().clone());
+    let roots = SourceRootRepo::new(catalog.pools().clone());
     let root = roots
         .insert_root(photos.to_str().unwrap(), "local", "watch", None)
         .await
         .unwrap();
 
-    let scanner = ScanService::new(catalog.pool().clone(), thumb_dir);
+    let scanner = ScanService::new(catalog.pools().clone(), thumb_dir);
     let ctrl = ScanControl::noop();
     scanner.scan_root(root.id, &ctrl).await.unwrap();
 
@@ -147,21 +147,21 @@ async fn soft_delete_restore_and_deleted_only_filter() {
     std::fs::write(photos.join("drop.jpg"), jpeg).unwrap();
 
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let pool = catalog.pool().clone();
+    let pools = catalog.pools().clone();
     let thumb_dir = dir.path().join("thumbs");
 
-    let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
+    let library = LibraryService::new(pools.clone(), dir.path().to_path_buf());
     let root = library
         .add_local_root(photos.to_str().unwrap())
         .await
         .unwrap();
     let ctrl = ScanControl::noop();
-    ScanService::new(pool.clone(), thumb_dir.clone())
+    ScanService::new(pools.clone(), thumb_dir.clone())
         .scan_root(root.id, &ctrl)
         .await
         .unwrap();
 
-    let query = QueryService::new(pool.clone(), thumb_dir.clone());
+    let query = QueryService::new(pools.clone(), thumb_dir.clone());
     let listed = query
         .query(&AssetFilter::default(), "date:desc", 0, 50)
         .await
@@ -174,7 +174,7 @@ async fn soft_delete_restore_and_deleted_only_filter() {
         .map(|item| item.id)
         .expect("drop asset");
 
-    let assets = AssetRepo::new(pool.clone());
+    let assets = AssetRepo::new(pools.clone());
     assets.soft_delete(&[drop_id], 1).await.unwrap();
 
     let active = query
@@ -214,20 +214,20 @@ async fn multi_asset_batch_meta_and_rating_filter() {
     std::fs::write(photos.join("high.jpg"), jpeg).unwrap();
 
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let pool = catalog.pool().clone();
+    let pools = catalog.pools().clone();
     let thumb_dir = dir.path().join("thumbs");
 
-    let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
+    let library = LibraryService::new(pools.clone(), dir.path().to_path_buf());
     let root = library
         .add_local_root(photos.to_str().unwrap())
         .await
         .unwrap();
-    ScanService::new(pool.clone(), thumb_dir.clone())
+    ScanService::new(pools.clone(), thumb_dir.clone())
         .scan_root(root.id, &ScanControl::noop())
         .await
         .unwrap();
 
-    let query = QueryService::new(pool.clone(), thumb_dir.clone());
+    let query = QueryService::new(pools.clone(), thumb_dir.clone());
     let listed = query
         .query(&AssetFilter::default(), "date:desc", 0, 50)
         .await
@@ -247,18 +247,18 @@ async fn multi_asset_batch_meta_and_rating_filter() {
     let high_id = by_name("high.jpg");
 
     query
-        .apply_meta_patch(low_id, AssetMetaPatch { rating: Some(1) })
+        .apply_meta_patch(low_id, AssetMetaPatch { rating: Some(1), ..Default::default() })
         .await
         .unwrap();
     query
         .batch_apply_meta(
             &[mid_id, high_id],
-            AssetMetaPatch { rating: Some(4) },
+            AssetMetaPatch { rating: Some(4), ..Default::default() },
         )
         .await
         .unwrap();
     query
-        .apply_meta_patch(high_id, AssetMetaPatch { rating: Some(5) })
+        .apply_meta_patch(high_id, AssetMetaPatch { rating: Some(5), ..Default::default() })
         .await
         .unwrap();
 
@@ -292,20 +292,20 @@ async fn export_nested_preserves_relative_paths() {
     .unwrap();
 
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let pool = catalog.pool().clone();
+    let pools = catalog.pools().clone();
     let thumb_dir = dir.path().join("thumbs");
 
-    let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
+    let library = LibraryService::new(pools.clone(), dir.path().to_path_buf());
     let root = library
         .add_local_root(photos.to_str().unwrap())
         .await
         .unwrap();
-    ScanService::new(pool.clone(), thumb_dir.clone())
+    ScanService::new(pools.clone(), thumb_dir.clone())
         .scan_root(root.id, &ScanControl::noop())
         .await
         .unwrap();
 
-    let query = QueryService::new(pool.clone(), thumb_dir.clone());
+    let query = QueryService::new(pools.clone(), thumb_dir.clone());
     let listed = query
         .query(&AssetFilter::default(), "date:desc", 0, 50)
         .await
@@ -313,7 +313,7 @@ async fn export_nested_preserves_relative_paths() {
     let asset_id = listed.items[0].id;
 
     let export_dest = dir.path().join("nested-export");
-    let manifest = ExportService::new(pool.clone())
+    let manifest = ExportService::new(pools.clone())
         .export_assets(
             &[asset_id],
             &export_dest,
@@ -340,20 +340,20 @@ async fn album_membership_filters_query() {
     std::fs::write(photos.join("outside.jpg"), jpeg).unwrap();
 
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let pool = catalog.pool().clone();
+    let pools = catalog.pools().clone();
     let thumb_dir = dir.path().join("thumbs");
 
-    let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
+    let library = LibraryService::new(pools.clone(), dir.path().to_path_buf());
     let root = library
         .add_local_root(photos.to_str().unwrap())
         .await
         .unwrap();
-    ScanService::new(pool.clone(), thumb_dir.clone())
+    ScanService::new(pools.clone(), thumb_dir.clone())
         .scan_root(root.id, &ScanControl::noop())
         .await
         .unwrap();
 
-    let query = QueryService::new(pool.clone(), thumb_dir.clone());
+    let query = QueryService::new(pools.clone(), thumb_dir.clone());
     let listed = query
         .query(&AssetFilter::default(), "date:desc", 0, 50)
         .await
@@ -365,7 +365,7 @@ async fn album_membership_filters_query() {
         .map(|item| item.id)
         .expect("album asset");
 
-    let collection = CollectionRepo::new(pool.clone());
+    let collection = CollectionRepo::new(pools.clone());
     let album = collection
         .create_album("showcase", "date:desc", None)
         .await
@@ -403,17 +403,17 @@ async fn root_id_filter_scopes_query_to_single_source() {
     std::fs::write(second.join("b.jpg"), jpeg).unwrap();
 
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let pool = catalog.pool().clone();
+    let pools = catalog.pools().clone();
     let thumb_dir = dir.path().join("thumbs");
-    let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
+    let library = LibraryService::new(pools.clone(), dir.path().to_path_buf());
     let root_a = library.add_local_root(first.to_str().unwrap()).await.unwrap();
     let root_b = library.add_local_root(second.to_str().unwrap()).await.unwrap();
     let ctrl = ScanControl::noop();
-    let scanner = ScanService::new(pool.clone(), thumb_dir.clone());
+    let scanner = ScanService::new(pools.clone(), thumb_dir.clone());
     scanner.scan_root(root_a.id, &ctrl).await.unwrap();
     scanner.scan_root(root_b.id, &ctrl).await.unwrap();
 
-    let query = QueryService::new(pool.clone(), thumb_dir.clone());
+    let query = QueryService::new(pools.clone(), thumb_dir.clone());
     let scoped = query
         .query(
             &AssetFilter {
@@ -455,16 +455,18 @@ async fn duplicate_filter_after_scan_marks_collisions() {
     std::fs::write(photos.join("dup-b.jpg"), jpeg).unwrap();
 
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let pool = catalog.pool().clone();
+    let pools = catalog.pools().clone();
     let thumb_dir = dir.path().join("thumbs");
-    let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
+    let library = LibraryService::new(pools.clone(), dir.path().to_path_buf());
     let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
-    ScanService::new(pool.clone(), thumb_dir.clone())
+    let scanner = ScanService::new(pools.clone(), thumb_dir.clone());
+    scanner
         .scan_root(root.id, &ScanControl::noop())
         .await
         .unwrap();
+    scanner.run_duplicate_index(root.id).await.unwrap();
 
-    let query = QueryService::new(pool.clone(), thumb_dir.clone());
+    let query = QueryService::new(pools.clone(), thumb_dir.clone());
     let all = query
         .query(&AssetFilter::default(), "date:desc", 0, 50)
         .await
@@ -495,16 +497,16 @@ async fn purge_after_soft_delete_removes_catalog_row() {
     std::fs::write(&file, include_bytes!("../tests/fixtures/minimal.jpg")).unwrap();
 
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let pool = catalog.pool().clone();
+    let pools = catalog.pools().clone();
     let thumb_dir = dir.path().join("thumbs");
-    let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
+    let library = LibraryService::new(pools.clone(), dir.path().to_path_buf());
     let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
-    ScanService::new(pool.clone(), thumb_dir.clone())
+    ScanService::new(pools.clone(), thumb_dir.clone())
         .scan_root(root.id, &ScanControl::noop())
         .await
         .unwrap();
 
-    let query = QueryService::new(pool.clone(), thumb_dir.clone());
+    let query = QueryService::new(pools.clone(), thumb_dir.clone());
     let asset_id = query
         .query(&AssetFilter::default(), "date:desc", 0, 50)
         .await
@@ -512,7 +514,7 @@ async fn purge_after_soft_delete_removes_catalog_row() {
         .items[0]
         .id;
 
-    let assets = AssetRepo::new(pool.clone());
+    let assets = AssetRepo::new(pools.clone());
     assets.soft_delete(&[asset_id], 1).await.unwrap();
     let paths = WorkspacePaths::new(dir.path().to_path_buf());
     assets.purge_assets(&[asset_id], &paths, false).await.unwrap();
@@ -524,7 +526,7 @@ async fn purge_after_soft_delete_removes_catalog_row() {
         .unwrap();
     assert_eq!(remaining.total, 0);
     assert!(
-        AssetMetaRepo::new(pool.clone())
+        AssetMetaRepo::new(pools.clone())
             .get(asset_id)
             .await
             .unwrap()
@@ -544,24 +546,24 @@ async fn rebuild_catalog_rescans_without_dropping_roots() {
     .unwrap();
 
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let pool = catalog.pool().clone();
+    let pools = catalog.pools().clone();
     let thumb_dir = dir.path().join("thumbs");
-    let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
+    let library = LibraryService::new(pools.clone(), dir.path().to_path_buf());
     let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
-    ScanService::new(pool.clone(), thumb_dir.clone())
+    ScanService::new(pools.clone(), thumb_dir.clone())
         .scan_root(root.id, &ScanControl::noop())
         .await
         .unwrap();
 
-    let tag_repo = TagRepo::new(pool.clone());
+    let tag_repo = TagRepo::new(pools.clone());
     tag_repo.create_tag("cleared", None, None).await.unwrap();
 
-    rebuild_and_rescan(pool.clone(), thumb_dir.clone()).await.unwrap();
+    rebuild_and_rescan(pools.clone(), thumb_dir.clone()).await.unwrap();
 
     assert_eq!(library.list_roots().await.unwrap().len(), 1);
     assert!(tag_repo.list_tag_rows().await.unwrap().is_empty());
 
-    let query = QueryService::new(pool.clone(), thumb_dir.clone());
+    let query = QueryService::new(pools.clone(), thumb_dir.clone());
     let listed = query
         .query(&AssetFilter::default(), "date:desc", 0, 50)
         .await
@@ -580,16 +582,16 @@ async fn tag_filter_narrows_grid_results() {
     std::fs::write(photos.join("plain.jpg"), jpeg).unwrap();
 
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let pool = catalog.pool().clone();
+    let pools = catalog.pools().clone();
     let thumb_dir = dir.path().join("thumbs");
-    let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
+    let library = LibraryService::new(pools.clone(), dir.path().to_path_buf());
     let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
-    ScanService::new(pool.clone(), thumb_dir.clone())
+    ScanService::new(pools.clone(), thumb_dir.clone())
         .scan_root(root.id, &ScanControl::noop())
         .await
         .unwrap();
 
-    let query = QueryService::new(pool.clone(), thumb_dir.clone());
+    let query = QueryService::new(pools.clone(), thumb_dir.clone());
     let listed = query
         .query(&AssetFilter::default(), "date:desc", 0, 50)
         .await
@@ -601,7 +603,7 @@ async fn tag_filter_narrows_grid_results() {
         .map(|item| item.id)
         .expect("tagged asset");
 
-    let tag_repo = TagRepo::new(pool.clone());
+    let tag_repo = TagRepo::new(pools.clone());
     let tag_id = tag_repo.create_tag("showcase", None, None).await.unwrap();
     query.batch_append_tags(&[tagged_id], tag_id).await.unwrap();
 
@@ -631,22 +633,22 @@ async fn raw_jpeg_pair_stays_queryable_after_link() {
     std::fs::write(photos.join("DSC200.arw"), jpeg).unwrap();
 
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let pool = catalog.pool().clone();
+    let pools = catalog.pools().clone();
     let thumb_dir = dir.path().join("thumbs");
-    let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
+    let library = LibraryService::new(pools.clone(), dir.path().to_path_buf());
     let root = library.add_local_root(photos.to_str().unwrap()).await.unwrap();
-    ScanService::new(pool.clone(), thumb_dir.clone())
+    ScanService::new(pools.clone(), thumb_dir.clone())
         .scan_root(root.id, &ScanControl::noop())
         .await
         .unwrap();
 
-    let linked = LinkService::new(pool.clone())
+    let linked = LinkService::new(pools.clone())
         .link_raw_jpeg_in_root(root.id)
         .await
         .unwrap();
     assert_eq!(linked, 1);
 
-    let query = QueryService::new(pool.clone(), thumb_dir.clone());
+    let query = QueryService::new(pools.clone(), thumb_dir.clone());
     let all = query
         .query(&AssetFilter::default(), "date:desc", 0, 50)
         .await

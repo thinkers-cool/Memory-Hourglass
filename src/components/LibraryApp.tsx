@@ -41,9 +41,11 @@ import {
 } from "../lib/panelLayout";
 
 export function LibraryApp({
+  workspaceId,
   onCloseWorkspace,
   readOnly = false,
 }: {
+  workspaceId: string;
   onCloseWorkspace: () => void;
   readOnly?: boolean;
 }) {
@@ -78,6 +80,8 @@ export function LibraryApp({
     busy,
     notification,
     scanStatus,
+    scanStatusByRoot,
+    focusScanRootId,
     galleryIndex,
     setGalleryIndex,
     fullView,
@@ -233,6 +237,7 @@ export function LibraryApp({
         onToggleStamp={() => void actions.toggleStampOnTargets()}
         onClose={actions.closeCompare}
         onRate={(id, rating) => void actions.rateAsset(id, rating)}
+        onRotate={(id, direction) => void actions.rotateAsset(id, direction)}
         onToggleTag={(id, tagId, add) =>
           void actions.toggleTagOnAsset(id, tagId, add)
         }
@@ -251,8 +256,11 @@ export function LibraryApp({
             card={fullViewCard}
             index={fullViewIndex}
             total={items.length}
+            rotation={detail?.meta?.rotation}
             onClose={actions.closeFullView}
             onNavigateRelative={actions.navigateRelative}
+            onRotateClockwise={() => void actions.rotate("cw")}
+            onRotateCounterClockwise={() => void actions.rotate("ccw")}
           />
         }
         side={inspector}
@@ -309,6 +317,7 @@ export function LibraryApp({
         leading={
           <LibraryPanel
             tab={leftTab}
+            workspaceId={workspaceId}
             roots={roots}
             albums={albums}
             collections={collections}
@@ -319,6 +328,7 @@ export function LibraryApp({
             selectedCollectionId={selectedCollectionId}
             deleteStatus={filterBar.deleteStatus}
             busy={busy}
+            scanStatusByRoot={scanStatusByRoot}
             actions={actions}
           />
         }
@@ -389,12 +399,14 @@ export function LibraryApp({
               total={total}
               selectedCount={selectedIds.size}
               scanStatus={scanStatus}
+              scanStatusByRoot={scanStatusByRoot}
+              focusScanRootId={focusScanRootId}
+              activeRootId={extraFilter.root_id}
               roots={roots}
               exportActive={exportDialog.jobId !== null}
               exportProgress={exportDialog.progress}
               notification={notification}
               busy={busy}
-              onDismissAlert={dismissToast}
             />
           </main>
         }

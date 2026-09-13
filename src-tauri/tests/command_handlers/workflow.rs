@@ -29,7 +29,7 @@ async fn library_scan_query_asset_tag_collection_export_commands() {
     let state = fixture.state();
     let handle = fixture.handle();
     let photos = fixture.hold.path().join("workspace-photos");
-    let (_root_id, asset_id) = seed_scanned_asset(&fixture, &photos, "cmd.jpg").await;
+    let (root_id, asset_id) = seed_scanned_asset(&fixture, &photos, "cmd.jpg").await;
 
     let roots = list_roots(state.clone()).await.unwrap();
     assert_eq!(roots.len(), 1);
@@ -44,19 +44,19 @@ async fn library_scan_query_asset_tag_collection_export_commands() {
     let stats = list_root_stats(state.clone()).await.unwrap();
     assert_eq!(stats[0].asset_count, 1);
 
-    let status = get_scan_status(state.clone()).await.unwrap();
+    let status = get_scan_status(Some(root_id), state.clone()).await.unwrap();
     assert_eq!(status.stage, "done");
 
     pause_scan(state.clone()).await.unwrap();
     resume_scan(state.clone()).await.unwrap();
-    cancel_scan(state.clone()).await.unwrap();
+    cancel_scan(None, state.clone()).await.unwrap();
 
     let detail = get_asset(asset_id, state.clone()).await.unwrap();
     assert_eq!(detail.asset.id, asset_id);
 
     let rated = update_asset_meta(
         asset_id,
-        AssetMetaPatch { rating: Some(5) },
+        AssetMetaPatch { rating: Some(5), ..Default::default() },
         handle.clone(),
         state.clone(),
     )
@@ -66,7 +66,7 @@ async fn library_scan_query_asset_tag_collection_export_commands() {
 
     let batch_count = batch_update_asset_meta(
         vec![asset_id],
-        AssetMetaPatch { rating: Some(4) },
+        AssetMetaPatch { rating: Some(4), ..Default::default() },
         handle.clone(),
         state.clone(),
     )

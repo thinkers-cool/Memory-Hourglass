@@ -1,10 +1,10 @@
-use crate::catalog::repo::{AssetMetaRepo, AssetRepo, RawTagRepo};
+use crate::catalog::models::RawTag;
+use crate::catalog::pools::CatalogPools;
 use crate::error::{AppError, Result};
 use crate::metadata::MetadataContext;
 use crate::scan::index_asset::{index_asset_on_disk, resolved_thumb_key, IndexOutput};
 use crate::scan::index_integrity::is_index_complete;
-use sqlx::SqlitePool;
-use std::path::Path;
+use sqlx::Transaction;
 
 pub struct IndexApplyInput {
     pub asset_id: i64,
@@ -14,34 +14,120 @@ pub struct IndexApplyInput {
     pub indexed: IndexOutput,
 }
 
-pub async fn apply_index_output(pool: &SqlitePool, input: &IndexApplyInput) -> Result<()> {
-    let raw_tag_repo = RawTagRepo::new(pool.clone());
-    let meta_repo = AssetMetaRepo::new(pool.clone());
-    let assets = AssetRepo::new(pool.clone());
+pub async fn apply_index_output(pools: &CatalogPools, input: &IndexApplyInput) -> Result<()> {
+    let mut tx = pools.write().begin().await?;
+    apply_index_output_in_tx(&mut tx, input).await?;
+    tx.commit().await?;
+    Ok(())
+}
 
-    raw_tag_repo
-        .replace_for_asset(input.asset_id, &input.indexed.raw_tags)
-        .await?;
-    meta_repo.upsert(&input.indexed.meta).await?;
+pub async fn apply_index_outputs_batch(
+    pools: &CatalogPools,
+    inputs: &[IndexApplyInput],
+) -> Result<()> {
+    if inputs.is_empty() {
+        return Ok(());
+    }
+    let mut tx = pools.write().begin().await?;
+    for input in inputs {
+        apply_index_output_in_tx(&mut tx, input).await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn apply_index_output_in_tx(
+    tx: &mut Transaction<'_, sqlx::Sqlite>,
+    input: &IndexApplyInput,
+) -> Result<()> {
+    replace_raw_tags_in_tx(tx, input.asset_id, &input.indexed.raw_tags).await?;
+    upsert_meta_in_tx(tx, &input.indexed.meta).await?;
     if let Some(key) = &input.indexed.thumb_key {
-        assets.set_thumb_key(input.asset_id, key).await?;
+        sqlx::query("UPDATE asset SET thumb_key = ? WHERE id = ?")
+            .bind(key)
+            .bind(input.asset_id)
+            .execute(&mut **tx)
+            .await?;
+    }
+    if let Some(hash) = &input.indexed.content_hash {
+        sqlx::query("UPDATE asset SET content_hash = ? WHERE id = ?")
+            .bind(hash)
+            .bind(input.asset_id)
+            .execute(&mut **tx)
+            .await?;
     }
     let thumb_key = resolved_thumb_key(
-        &input.kind,
         input.indexed.thumb_key.as_deref(),
         input.prior_thumb_key.as_deref(),
     );
     if is_index_complete(input.mtime_ns, Some(input.mtime_ns), thumb_key, &input.kind) {
-        assets.mark_indexed(input.asset_id, input.mtime_ns).await?;
+        sqlx::query(
+            "UPDATE asset SET indexed_mtime_ns = ?, sync_state = 'ok' WHERE id = ? AND deleted_at IS NULL",
+        )
+        .bind(input.mtime_ns)
+        .bind(input.asset_id)
+        .execute(&mut **tx)
+        .await?;
     }
     Ok(())
 }
 
-pub async fn index_asset_and_apply(
-    pool: &SqlitePool,
+async fn replace_raw_tags_in_tx(
+    tx: &mut Transaction<'_, sqlx::Sqlite>,
     asset_id: i64,
-    path: &Path,
-    thumb_dir: &Path,
+    tags: &[RawTag],
+) -> Result<()> {
+    sqlx::query("DELETE FROM asset_raw_tag WHERE asset_id = ?")
+        .bind(asset_id)
+        .execute(&mut **tx)
+        .await?;
+    for tag in tags {
+        sqlx::query("INSERT INTO asset_raw_tag (asset_id, name, value) VALUES (?, ?, ?)")
+            .bind(asset_id)
+            .bind(&tag.name)
+            .bind(&tag.value)
+            .execute(&mut **tx)
+            .await?;
+    }
+    Ok(())
+}
+
+async fn upsert_meta_in_tx(
+    tx: &mut Transaction<'_, sqlx::Sqlite>,
+    meta: &crate::catalog::models::AssetMeta,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO asset_meta (asset_id, capture_at, camera, lens, rating, latitude, longitude, keywords_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(asset_id) DO UPDATE SET
+            capture_at = excluded.capture_at,
+            camera = excluded.camera,
+            lens = excluded.lens,
+            rating = excluded.rating,
+            latitude = excluded.latitude,
+            longitude = excluded.longitude,
+            keywords_json = excluded.keywords_json
+        "#,
+    )
+    .bind(meta.asset_id)
+    .bind(meta.capture_at)
+    .bind(&meta.camera)
+    .bind(&meta.lens)
+    .bind(meta.rating)
+    .bind(meta.latitude)
+    .bind(meta.longitude)
+    .bind(&meta.keywords_json)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+pub async fn index_asset_and_apply(
+    pools: &CatalogPools,
+    asset_id: i64,
+    path: &std::path::Path,
+    thumb_dir: &std::path::Path,
     mtime_ns: i64,
     kind: &str,
     prior_thumb_key: Option<String>,
@@ -49,10 +135,15 @@ pub async fn index_asset_and_apply(
     let path_buf = path.to_path_buf();
     let thumb_dir_buf = thumb_dir.to_path_buf();
     let kind_str = kind.to_string();
+    let index_batch_panic = crate::scan::test_hooks::take_flag("MEMHG_TEST_INDEX_BATCH_PANIC");
+    let index_on_disk_panic =
+        crate::scan::test_hooks::take_flag("MEMHG_TEST_INDEX_ON_DISK_PANIC");
     let indexed = tokio::task::spawn_blocking(move || {
-        if std::env::var_os("MEMHG_TEST_INDEX_BATCH_PANIC").is_some() {
-            std::env::remove_var("MEMHG_TEST_INDEX_BATCH_PANIC");
+        if index_batch_panic {
             panic!("index batch panic");
+        }
+        if index_on_disk_panic {
+            panic!("index on disk panic");
         }
         let metadata_ctx = MetadataContext::in_place(path_buf.clone());
         index_asset_on_disk(asset_id, &path_buf, &thumb_dir_buf, &metadata_ctx)
@@ -60,23 +151,16 @@ pub async fn index_asset_and_apply(
     .await
     .map_err(|e| AppError::Scan(e.to_string()))?;
 
-    apply_index_output(
-        pool,
-        &IndexApplyInput {
-            asset_id,
-            mtime_ns,
-            kind: kind_str,
-            prior_thumb_key,
-            indexed: IndexOutput {
-                meta: indexed.meta.clone(),
-                raw_tags: indexed.raw_tags.clone(),
-                thumb_key: indexed.thumb_key.clone(),
-            },
-        },
-    )
-    .await?;
+    let input = IndexApplyInput {
+        asset_id,
+        mtime_ns,
+        kind: kind_str,
+        prior_thumb_key,
+        indexed,
+    };
+    apply_index_output(pools, &input).await?;
 
-    Ok(indexed)
+    Ok(input.indexed)
 }
 
 #[cfg(test)]
@@ -92,13 +176,13 @@ mod tests {
     async fn apply_index_output_marks_asset_indexed() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(pool.clone());
+        let assets = AssetRepo::new(pools.clone());
         let asset = assets
             .upsert_asset(crate::catalog::repo::UpsertAssetInput {
                 root_id: root.id,
@@ -114,7 +198,7 @@ mod tests {
             .unwrap();
 
         let thumb_dir = dir.path().join("thumbs");
-        std::fs::create_dir_all(&photos_dir(&dir)).unwrap();
+        std::fs::create_dir_all(photos_dir(&dir)).unwrap();
         std::fs::write(
             photos_dir(&dir).join("photo.jpg"),
             include_bytes!("../../tests/fixtures/minimal.jpg"),
@@ -122,7 +206,7 @@ mod tests {
         .unwrap();
 
         let indexed = index_asset_and_apply(
-            &pool,
+            &pools,
             asset.id,
             &photos_dir(&dir).join("photo.jpg"),
             &thumb_dir,
@@ -142,13 +226,13 @@ mod tests {
     async fn apply_index_output_without_thumb_skips_mark_indexed() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(pool.clone());
+        let assets = AssetRepo::new(pools.clone());
         let asset = assets
             .upsert_asset(crate::catalog::repo::UpsertAssetInput {
                 root_id: root.id,
@@ -173,12 +257,15 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             },
             raw_tags: vec![],
             thumb_key: None,
+            content_hash: None,
+            skipped: false,
         };
         apply_index_output(
-            &pool,
+            &pools,
             &IndexApplyInput {
                 asset_id: asset.id,
                 mtime_ns: 99,
@@ -203,13 +290,13 @@ mod tests {
     async fn index_asset_and_apply_tolerates_missing_file() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(pool.clone());
+        let assets = AssetRepo::new(pools.clone());
         let asset = assets
             .upsert_asset(crate::catalog::repo::UpsertAssetInput {
                 root_id: root.id,
@@ -224,7 +311,7 @@ mod tests {
             .await
             .unwrap();
         let indexed = index_asset_and_apply(
-            &pool,
+            &pools,
             asset.id,
             &dir.path().join("missing.jpg"),
             &dir.path().join("thumbs"),
@@ -243,13 +330,13 @@ mod tests {
     async fn apply_index_output_uses_prior_thumb_for_completeness() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(pool.clone());
+        let assets = AssetRepo::new(pools.clone());
         let asset = assets
             .upsert_asset(crate::catalog::repo::UpsertAssetInput {
                 root_id: root.id,
@@ -273,12 +360,15 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             },
             raw_tags: vec![],
             thumb_key: None,
+            content_hash: None,
+            skipped: false,
         };
         apply_index_output(
-            &pool,
+            &pools,
             &IndexApplyInput {
                 asset_id: asset.id,
                 mtime_ns: 55,
@@ -297,13 +387,13 @@ mod tests {
     async fn apply_index_output_sets_thumb_key_when_present() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(pool.clone());
+        let assets = AssetRepo::new(pools.clone());
         let asset = assets
             .upsert_asset(crate::catalog::repo::UpsertAssetInput {
                 root_id: root.id,
@@ -318,7 +408,7 @@ mod tests {
             .await
             .unwrap();
         apply_index_output(
-            &pool,
+            &pools,
             &IndexApplyInput {
                 asset_id: asset.id,
                 mtime_ns: 77,
@@ -334,12 +424,15 @@ mod tests {
                         latitude: None,
                         longitude: None,
                         keywords_json: None,
+                        rotation: None,
                     },
                     raw_tags: vec![crate::catalog::models::RawTag {
                         name: "keyword".into(),
                         value: "trip".into(),
                     }],
                     thumb_key: Some("77.webp".into()),
+                    content_hash: Some("abc123".into()),
+                    skipped: false,
                 },
             },
         )
@@ -347,6 +440,7 @@ mod tests {
         .unwrap();
         let updated = assets.get_asset(asset.id).await.unwrap();
         assert_eq!(updated.thumb_key.as_deref(), Some("77.webp"));
+        assert_eq!(updated.content_hash.as_deref(), Some("abc123"));
         assert_eq!(updated.indexed_mtime_ns, Some(77));
     }
 
@@ -354,10 +448,11 @@ mod tests {
     async fn apply_index_output_fails_when_pool_closed() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        pool.close().await;
+        let pools = catalog.pools().clone();
+        pools.write().close().await;
+        pools.read().close().await;
         let err = apply_index_output(
-            &pool,
+            &pools,
             &IndexApplyInput {
                 asset_id: 1,
                 mtime_ns: 1,
@@ -373,9 +468,12 @@ mod tests {
                         latitude: None,
                         longitude: None,
                         keywords_json: None,
+                        rotation: None,
                     },
                     raw_tags: vec![],
                     thumb_key: None,
+                    content_hash: None,
+                    skipped: false,
                 },
             },
         )
@@ -388,10 +486,10 @@ mod tests {
     async fn index_asset_and_apply_propagates_spawn_blocking_failure() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        std::env::set_var("MEMHG_TEST_INDEX_BATCH_PANIC", "1");
+        let pools = catalog.pools().clone();
+        crate::scan::test_hooks::set_flag("MEMHG_TEST_INDEX_BATCH_PANIC");
         let err = index_asset_and_apply(
-            &pool,
+            &pools,
             1,
             &dir.path().join("missing.jpg"),
             &dir.path().join("thumbs"),

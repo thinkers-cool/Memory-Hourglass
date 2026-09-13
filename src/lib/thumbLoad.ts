@@ -9,12 +9,8 @@ let activeLoads = 0;
 
 function pumpThumbLoadQueue() {
   while (activeLoads < MAX_CONCURRENT_THUMB_LOADS && queue.length > 0) {
-    const entry = queue.shift();
-    if (!entry) {
-      return;
-    }
     activeLoads += 1;
-    entry.run();
+    queue.shift()!.run();
   }
 }
 

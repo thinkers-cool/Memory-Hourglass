@@ -1,10 +1,22 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { sampleCard, sampleVideoCard } from "../../test/fixtures";
 import { SlideStage } from "./SlideStage";
 
+function mockImageDecode() {
+  class MockImage {
+    onload: (() => void) | null = null;
+    set src(_value: string) {
+      queueMicrotask(() => this.onload?.());
+    }
+    decode = vi.fn().mockResolvedValue(undefined);
+  }
+  vi.stubGlobal("Image", MockImage as unknown as typeof Image);
+}
+
 describe("SlideStage", () => {
-  it("renders incoming photo slide", () => {
+  it("renders incoming photo slide", async () => {
+    mockImageDecode();
     render(
       <SlideStage
         items={[sampleCard]}
@@ -12,14 +24,18 @@ describe("SlideStage", () => {
         toIndex={0}
         progress={1}
         theme="dissolve"
-        kenBurns={false}
         dwellMs={3000}
         playing
+        incomingElapsedMs={0}
+        outgoingElapsedMs={0}
         muted
         onVideoEnded={vi.fn()}
       />,
     );
-    expect(screen.getByAltText("photo.jpg")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByAltText("photo.jpg")).toBeInTheDocument(),
+    );
+    vi.unstubAllGlobals();
   });
 
   it("returns null when no backdrop card exists", () => {
@@ -30,9 +46,10 @@ describe("SlideStage", () => {
         toIndex={0}
         progress={1}
         theme="dissolve"
-        kenBurns={false}
         dwellMs={3000}
         playing
+        incomingElapsedMs={0}
+        outgoingElapsedMs={0}
         muted
         onVideoEnded={vi.fn()}
       />,
@@ -47,10 +64,11 @@ describe("SlideStage", () => {
         fromIndex={null}
         toIndex={0}
         progress={1}
-        theme="push"
-        kenBurns={false}
+        theme="dissolve"
         dwellMs={5000}
         playing
+        incomingElapsedMs={0}
+        outgoingElapsedMs={0}
         muted
         onVideoEnded={vi.fn()}
       />,
@@ -58,42 +76,28 @@ describe("SlideStage", () => {
     expect(document.querySelector("video")).toBeInTheDocument();
   });
 
-  it("renders outgoing layer during transition", () => {
+  it("renders outgoing layer during transition", async () => {
+    mockImageDecode();
     render(
       <SlideStage
         items={[sampleCard, { ...sampleCard, id: 2, file_name: "two.jpg" }]}
         fromIndex={0}
         toIndex={1}
         progress={0.5}
-        theme="fade-zoom"
-        kenBurns
+        theme="ken-burns"
         dwellMs={3000}
         playing
+        incomingElapsedMs={100}
+        outgoingElapsedMs={2000}
         muted
         onVideoEnded={vi.fn()}
       />,
     );
-    expect(screen.getByAltText("photo.jpg")).toBeInTheDocument();
-    expect(screen.getByAltText("two.jpg")).toBeInTheDocument();
-  });
-
-  it("applies ken burns on incoming photo when playing", () => {
-    render(
-      <SlideStage
-        items={[sampleCard]}
-        fromIndex={null}
-        toIndex={0}
-        progress={1}
-        theme="ken-burns"
-        kenBurns
-        dwellMs={8000}
-        playing
-        muted
-        onVideoEnded={vi.fn()}
-      />,
-    );
-    const img = screen.getByAltText("photo.jpg");
-    expect(img.className).toContain("animate-ken-burns");
+    await waitFor(() => {
+      expect(screen.getByAltText("photo.jpg")).toBeInTheDocument();
+      expect(screen.getByAltText("two.jpg")).toBeInTheDocument();
+    });
+    vi.unstubAllGlobals();
   });
 
   it("fires onVideoEnded for video slide", () => {
@@ -105,9 +109,10 @@ describe("SlideStage", () => {
         toIndex={0}
         progress={1}
         theme="dissolve"
-        kenBurns={false}
         dwellMs={3000}
         playing
+        incomingElapsedMs={0}
+        outgoingElapsedMs={0}
         muted
         onVideoEnded={onVideoEnded}
       />,

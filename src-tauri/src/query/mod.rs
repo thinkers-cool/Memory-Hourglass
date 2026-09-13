@@ -11,8 +11,8 @@ use crate::scan::index_pipeline::{apply_index_output, IndexApplyInput};
 use crate::sort::SortSpec;
 use crate::workspace::WorkspaceMediaSettings;
 use serde::{Deserialize, Serialize};
+use crate::catalog::pools::CatalogPools;
 use sqlx::QueryBuilder;
-use sqlx::SqlitePool;
 use std::path::PathBuf;
 
 mod display_path;
@@ -33,23 +33,23 @@ pub struct QueryResult {
 }
 
 pub struct QueryService {
-    pool: SqlitePool,
+    pools: CatalogPools,
     thumb_dir: PathBuf,
     media_settings: WorkspaceMediaSettings,
 }
 
 impl QueryService {
-    pub fn new(pool: SqlitePool, thumb_dir: PathBuf) -> Self {
-        Self::with_media_settings(pool, thumb_dir, WorkspaceMediaSettings::default())
+    pub fn new(pools: CatalogPools, thumb_dir: PathBuf) -> Self {
+        Self::with_media_settings(pools, thumb_dir, WorkspaceMediaSettings::default())
     }
 
     pub fn with_media_settings(
-        pool: SqlitePool,
+        pools: CatalogPools,
         thumb_dir: PathBuf,
         media_settings: WorkspaceMediaSettings,
     ) -> Self {
         Self {
-            pool,
+            pools,
             thumb_dir,
             media_settings,
         }
@@ -69,7 +69,7 @@ impl QueryService {
         let mut resolved = filter.clone();
         if let Some(tag_ids) = &filter.tag_ids {
             if !tag_ids.is_empty() {
-                let tag_repo = TagRepo::new(self.pool.clone());
+                let tag_repo = TagRepo::new(self.pools.clone());
                 resolved.tag_ids = Some(tag_repo.expand_tag_ids_with_descendants(tag_ids).await?);
             }
         }
@@ -83,7 +83,7 @@ impl QueryService {
         apply_deleted_clause(&mut builder, filter);
         apply_filter(&mut builder, filter);
         let query = builder.build_query_scalar::<i64>();
-        Ok(query.fetch_one(&self.pool).await?)
+        Ok(query.fetch_one(self.pools.read()).await?)
     }
 
     pub async fn count(&self, filter: &AssetFilter) -> Result<i64> {
@@ -104,7 +104,7 @@ impl QueryService {
         let (sort_field, sort_desc) = sort_spec.query_order_sql();
 
         let mut builder = QueryBuilder::new(format!(
-            "SELECT a.id, a.file_name, a.ext, a.kind, {} as capture_at, m.rating, a.sync_state, a.thumb_key, a.has_duplicate, r.path as root_path, a.rel_path FROM asset a LEFT JOIN asset_meta m ON m.asset_id = a.id JOIN source_root r ON r.id = a.root_id WHERE ",
+            "SELECT a.id, a.file_name, a.ext, a.kind, {} as capture_at, m.rating, m.rotation, a.sync_state, a.thumb_key, a.has_duplicate, r.path as root_path, a.rel_path FROM asset a LEFT JOIN asset_meta m ON m.asset_id = a.id JOIN source_root r ON r.id = a.root_id WHERE ",
             CAPTURE_AT_SQL
         ));
         apply_deleted_clause(&mut builder, &filter);
@@ -115,7 +115,7 @@ impl QueryService {
 
         let rows = builder
             .build_query_as::<Row>()
-            .fetch_all(&self.pool)
+            .fetch_all(self.pools.read())
             .await?;
 
         let items = rows
@@ -133,6 +133,7 @@ impl QueryService {
                     kind: r.kind,
                     capture_at: r.capture_at,
                     rating: r.rating,
+                    rotation: r.rotation,
                     sync_state: r.sync_state,
                     thumb_path,
                     abs_path: abs.to_string_lossy().to_string(),
@@ -145,11 +146,11 @@ impl QueryService {
     }
 
     pub async fn get_detail(&self, asset_id: i64) -> Result<AssetDetail> {
-        let assets = AssetRepo::new(self.pool.clone());
-        let meta_repo = AssetMetaRepo::new(self.pool.clone());
-        let tag_repo = TagRepo::new(self.pool.clone());
-        let raw_tag_repo = RawTagRepo::new(self.pool.clone());
-        let roots = SourceRootRepo::new(self.pool.clone());
+        let assets = AssetRepo::new(self.pools.clone());
+        let meta_repo = AssetMetaRepo::new(self.pools.clone());
+        let tag_repo = TagRepo::new(self.pools.clone());
+        let raw_tag_repo = RawTagRepo::new(self.pools.clone());
+        let roots = SourceRootRepo::new(self.pools.clone());
 
         let asset = assets.get_asset(asset_id).await?;
         let root = roots.get_root(asset.root_id).await?;
@@ -167,14 +168,19 @@ impl QueryService {
             let thumb_dir = self.thumb_dir.clone();
             let metadata_ctx =
                 self.metadata_ctx(asset.root_id, &asset.rel_path, abs_path_for_index.clone());
+            let index_on_disk_panic =
+                crate::scan::test_hooks::take_flag("MEMHG_TEST_INDEX_ON_DISK_PANIC");
             let indexed = tokio::task::spawn_blocking(move || {
+                if index_on_disk_panic {
+                    panic!("index on disk panic");
+                }
                 index_asset_on_disk(asset_id, &abs_path_for_index, &thumb_dir, &metadata_ctx)
             })
             .await
             .map_err(|e| AppError::Catalog(e.to_string()))?;
 
             apply_index_output(
-                &self.pool,
+                &self.pools,
                 &IndexApplyInput {
                     asset_id,
                     mtime_ns: asset.mtime_ns,
@@ -197,10 +203,10 @@ impl QueryService {
         };
 
         let tag_ids = tag_repo.list_ids_for_asset(asset_id).await?;
-        let album_ids = crate::collection::CollectionRepo::new(self.pool.clone())
+        let album_ids = crate::collection::CollectionRepo::new(self.pools.clone())
             .list_album_ids_for_asset(asset_id)
             .await?;
-        let link_service = LinkService::new(self.pool.clone());
+        let link_service = LinkService::new(self.pools.clone());
         let links = link_service.list_links(asset_id).await?;
         let duplicates = link_service.list_duplicates_for_asset(asset_id).await?;
         let abs_path_str = abs_path.to_string_lossy().to_string();
@@ -225,7 +231,7 @@ impl QueryService {
         patch: AssetMetaPatch,
     ) -> Result<AssetDetail> {
         self.apply_meta_patch_inner(asset_id, patch).await?;
-        LinkService::new(self.pool.clone())
+        LinkService::new(self.pools.clone())
             .refresh_duplicate_index()
             .await?;
         self.get_detail(asset_id).await
@@ -237,14 +243,14 @@ impl QueryService {
                 .await?;
         }
         if !asset_ids.is_empty() {
-            refresh_duplicate_index(&self.pool).await?;
+            refresh_duplicate_index(&self.pools).await?;
         }
         Ok(asset_ids.len() as u64)
     }
 
     async fn apply_meta_patch_inner(&self, asset_id: i64, patch: AssetMetaPatch) -> Result<()> {
-        let assets = AssetRepo::new(self.pool.clone());
-        let roots = SourceRootRepo::new(self.pool.clone());
+        let assets = AssetRepo::new(self.pools.clone());
+        let roots = SourceRootRepo::new(self.pools.clone());
 
         let asset = assets.get_asset(asset_id).await?;
         let root = roots.get_root(asset.root_id).await?;
@@ -254,8 +260,11 @@ impl QueryService {
         if let Some(rating) = patch.rating {
             MetadataService::write_rating(&metadata_ctx, rating)?;
         }
+        if let Some(rotation) = patch.rotation {
+            MetadataService::write_rotation(&metadata_ctx, rotation)?;
+        }
         refresh_asset_after_metadata_write(
-            &self.pool,
+            &self.pools,
             asset_id,
             &abs_path,
             &metadata_ctx,
@@ -266,24 +275,24 @@ impl QueryService {
     }
 
     pub async fn batch_append_tags(&self, asset_ids: &[i64], tag_id: i64) -> Result<u64> {
-        let tag_repo = TagRepo::new(self.pool.clone());
+        let tag_repo = TagRepo::new(self.pools.clone());
         let updated = tag_repo.append_tag_id_to_assets(asset_ids, tag_id).await?;
-        sync_assets_tag_keywords(&self.pool, asset_ids, &self.media_settings).await?;
+        sync_assets_tag_keywords(&self.pools, asset_ids, &self.media_settings).await?;
         Ok(updated)
     }
 
     pub async fn batch_remove_tags(&self, asset_ids: &[i64], tag_id: i64) -> Result<u64> {
-        let tag_repo = TagRepo::new(self.pool.clone());
+        let tag_repo = TagRepo::new(self.pools.clone());
         let updated = tag_repo
             .remove_tag_id_from_assets(asset_ids, tag_id)
             .await?;
-        sync_assets_tag_keywords(&self.pool, asset_ids, &self.media_settings).await?;
+        sync_assets_tag_keywords(&self.pools, asset_ids, &self.media_settings).await?;
         Ok(updated)
     }
 }
 
-async fn refresh_duplicate_index(pool: &sqlx::SqlitePool) -> Result<()> {
-    LinkService::new(pool.clone())
+async fn refresh_duplicate_index(pools: &CatalogPools) -> Result<()> {
+    LinkService::new(pools.clone())
         .refresh_duplicate_index()
         .await
 }
@@ -310,24 +319,24 @@ mod tests {
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
 
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .find_by_path(root.id, "high.jpg")
             .await
             .unwrap()
             .unwrap();
-        AssetMetaRepo::new(catalog.pool().clone())
+        AssetMetaRepo::new(catalog.pools().clone())
             .upsert(&AssetMeta {
                 asset_id: asset.id,
                 capture_at: Some(1_700_000_000),
@@ -337,11 +346,12 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             })
             .await
             .unwrap();
 
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let result = query
             .query(
                 &AssetFilter {
@@ -373,18 +383,18 @@ mod tests {
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
 
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let clip = assets
             .find_by_path(root.id, "clip.mp4")
             .await
@@ -401,11 +411,11 @@ mod tests {
         )
         .bind(dated.id)
         .bind(capture_at)
-        .execute(catalog.pool())
+        .execute(catalog.write_pool())
         .await
         .unwrap();
 
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let result = query
             .query(
                 &AssetFilter {
@@ -445,18 +455,18 @@ mod tests {
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
 
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let one = assets
             .find_by_path(root.id, "one.jpg")
             .await
@@ -468,7 +478,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        let collection = CollectionRepo::new(catalog.pool().clone());
+        let collection = CollectionRepo::new(catalog.pools().clone());
         let album = collection
             .create_album("Trip", "date:desc", None)
             .await
@@ -478,7 +488,7 @@ mod tests {
             .await
             .unwrap();
 
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let filtered = query
             .query(
                 &AssetFilter {
@@ -510,24 +520,24 @@ mod tests {
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
 
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .find_by_path(root.id, "child.jpg")
             .await
             .unwrap()
             .unwrap();
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
         let parent_id = tag_repo.create_tag("travel", None, None).await.unwrap();
         let child_id = tag_repo
             .create_tag("japan", Some(parent_id), None)
@@ -538,7 +548,7 @@ mod tests {
             .await
             .unwrap();
 
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let filtered = query
             .query(
                 &AssetFilter {
@@ -574,17 +584,17 @@ mod tests {
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let alpha = assets
             .find_by_path(root.id, "alpha.jpg")
             .await
@@ -595,7 +605,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        AssetMetaRepo::new(catalog.pool().clone())
+        AssetMetaRepo::new(catalog.pools().clone())
             .upsert(&AssetMeta {
                 asset_id: alpha.id,
                 capture_at: Some(1_700_000_000),
@@ -605,10 +615,11 @@ mod tests {
                 latitude: Some(35.0),
                 longitude: Some(139.0),
                 keywords_json: None,
+                rotation: None,
             })
             .await
             .unwrap();
-        AssetMetaRepo::new(catalog.pool().clone())
+        AssetMetaRepo::new(catalog.pools().clone())
             .upsert(&AssetMeta {
                 asset_id: beta.id,
                 capture_at: Some(1_600_000_000),
@@ -618,11 +629,12 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             })
             .await
             .unwrap();
 
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let filtered_count = query
             .count(&AssetFilter {
                 root_id: Some(root.id),
@@ -697,7 +709,7 @@ mod tests {
     async fn get_detail_returns_not_found_for_missing_asset() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let query = QueryService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let query = QueryService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let err = query.get_detail(999_999).await.unwrap_err();
         assert!(err.to_string().contains("not found"));
     }
@@ -715,12 +727,12 @@ mod tests {
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .upsert_asset(crate::catalog::repo::UpsertAssetInput {
                 root_id: root.id,
@@ -735,7 +747,7 @@ mod tests {
             .await
             .unwrap();
 
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let detail = query.get_detail(asset.id).await.unwrap();
         assert_eq!(detail.asset.id, asset.id);
         assert!(detail.meta.is_some());
@@ -753,25 +765,25 @@ mod tests {
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "tags.jpg")
             .await
             .unwrap()
             .unwrap();
-        let tag_id = TagRepo::new(catalog.pool().clone())
+        let tag_id = TagRepo::new(catalog.pools().clone())
             .create_tag("counted", None, None)
             .await
             .unwrap();
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let appended = query.batch_append_tags(&[asset.id], tag_id).await.unwrap();
         assert_eq!(appended, 1);
         let removed = query.batch_remove_tags(&[asset.id], tag_id).await.unwrap();
@@ -791,27 +803,27 @@ mod tests {
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .find_by_path(root.id, "tagged.jpg")
             .await
             .unwrap()
             .unwrap();
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
         let tag_id = tag_repo.create_tag("nature", None, None).await.unwrap();
 
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let count = query
-            .batch_apply_meta(&[asset.id], AssetMetaPatch { rating: Some(3) })
+            .batch_apply_meta(&[asset.id], AssetMetaPatch { rating: Some(3), ..Default::default() })
             .await
             .unwrap();
         assert_eq!(count, 1);
@@ -832,22 +844,22 @@ mod tests {
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .find_by_path(root.id, "dup.jpg")
             .await
             .unwrap()
             .unwrap();
-        AssetMetaRepo::new(catalog.pool().clone())
+        AssetMetaRepo::new(catalog.pools().clone())
             .upsert(&AssetMeta {
                 asset_id: asset.id,
                 capture_at: Some(1_700_000_000),
@@ -857,17 +869,18 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             })
             .await
             .unwrap();
         sqlx::query("UPDATE asset SET has_duplicate = 1, sync_state = ? WHERE id = ?")
             .bind("new")
             .bind(asset.id)
-            .execute(catalog.pool())
+            .execute(catalog.write_pool())
             .await
             .unwrap();
 
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let camera = query
             .count(&AssetFilter {
                 camera: Some("Canon".into()),
@@ -933,25 +946,25 @@ mod tests {
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .find_by_path(root.id, "meta.jpg")
             .await
             .unwrap()
             .unwrap();
 
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         query
-            .apply_meta_patch(asset.id, AssetMetaPatch { rating: Some(2) })
+            .apply_meta_patch(asset.id, AssetMetaPatch { rating: Some(2), ..Default::default() })
             .await
             .unwrap();
         let detail = query.get_detail(asset.id).await.unwrap();
@@ -970,23 +983,23 @@ mod tests {
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "batch.jpg")
             .await
             .unwrap()
             .unwrap();
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let count = query
-            .batch_apply_meta(&[asset.id], AssetMetaPatch { rating: Some(4) })
+            .batch_apply_meta(&[asset.id], AssetMetaPatch { rating: Some(4), ..Default::default() })
             .await
             .unwrap();
         assert_eq!(count, 1);
@@ -1008,16 +1021,16 @@ mod tests {
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let alpha = assets
             .find_by_path(root.id, "alpha.jpg")
             .await
@@ -1028,7 +1041,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let collection = CollectionRepo::new(catalog.pool().clone());
+        let collection = CollectionRepo::new(catalog.pools().clone());
         let album_a = collection
             .create_album("A", "date:desc", None)
             .await
@@ -1046,7 +1059,7 @@ mod tests {
             .await
             .unwrap();
 
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let filtered = query
             .count(&AssetFilter {
                 kind: Some("image".into()),
@@ -1074,16 +1087,16 @@ mod tests {
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let page1 = query
             .query(&AssetFilter::default(), "date:desc", 0, 1)
             .await
@@ -1102,7 +1115,7 @@ mod tests {
     async fn query_rejects_invalid_sort_string() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let query = QueryService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let query = QueryService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         assert!(query
             .query(&AssetFilter::default(), "bad-sort", 0, 10)
             .await
@@ -1113,9 +1126,9 @@ mod tests {
     async fn batch_apply_meta_empty_returns_zero() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let query = QueryService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let query = QueryService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let count = query
-            .batch_apply_meta(&[], AssetMetaPatch { rating: Some(1) })
+            .batch_apply_meta(&[], AssetMetaPatch { rating: Some(1), ..Default::default() })
             .await
             .unwrap();
         assert_eq!(count, 0);
@@ -1135,19 +1148,19 @@ mod tests {
         std::fs::write(photos.join("dup.jpg"), jpeg).unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(pool.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), thumb_dir.clone())
+        ScanService::new(pools.clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
-        let link = LinkService::new(pool.clone());
+        let link = LinkService::new(pools.clone());
         link.link_raw_jpeg_in_root(root.id).await.unwrap();
         link.compute_hashes_for_root(root.id, &photos)
             .await
@@ -1157,11 +1170,11 @@ mod tests {
         let raw_id: i64 =
             sqlx::query_scalar("SELECT id FROM asset WHERE root_id = ? AND kind = 'raw' LIMIT 1")
                 .bind(root.id)
-                .fetch_one(&pool)
+                .fetch_one(pools.read())
                 .await
                 .unwrap();
 
-        let collection = CollectionRepo::new(pool.clone());
+        let collection = CollectionRepo::new(pools.clone());
         let album = collection
             .create_album("Trip", "date:desc", None)
             .await
@@ -1171,7 +1184,7 @@ mod tests {
             .await
             .unwrap();
 
-        let query = QueryService::new(pool.clone(), thumb_dir);
+        let query = QueryService::new(pools.clone(), thumb_dir);
         let detail = query.get_detail(raw_id).await.unwrap();
         assert!(!detail.links.is_empty());
         assert_ne!(detail.display_path, detail.abs_path);
@@ -1192,17 +1205,17 @@ mod tests {
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let filters = [
             AssetFilter {
                 sync_states: Some(vec![]),
@@ -1236,17 +1249,17 @@ mod tests {
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let first = assets
             .find_by_path(root.id, "first.jpg")
             .await
@@ -1257,7 +1270,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        AssetMetaRepo::new(catalog.pool().clone())
+        AssetMetaRepo::new(catalog.pools().clone())
             .upsert(&AssetMeta {
                 asset_id: first.id,
                 capture_at: Some(1_700_000_000),
@@ -1267,10 +1280,11 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             })
             .await
             .unwrap();
-        AssetMetaRepo::new(catalog.pool().clone())
+        AssetMetaRepo::new(catalog.pools().clone())
             .upsert(&AssetMeta {
                 asset_id: second.id,
                 capture_at: Some(1_600_000_000),
@@ -1280,11 +1294,12 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             })
             .await
             .unwrap();
 
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         for sort in ["rating:desc", "path:desc", "date:desc"] {
             let page = query
                 .query(&AssetFilter::default(), sort, 0, 10)
@@ -1307,23 +1322,23 @@ mod tests {
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "refresh.jpg")
             .await
             .unwrap()
             .unwrap();
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let count = query
-            .batch_apply_meta(&[asset.id], AssetMetaPatch { rating: None })
+            .batch_apply_meta(&[asset.id], AssetMetaPatch { rating: None, ..Default::default() })
             .await
             .unwrap();
         assert_eq!(count, 1);
@@ -1345,23 +1360,23 @@ mod tests {
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "readonly.jpg")
             .await
             .unwrap()
             .unwrap();
         let before = std::fs::read(photos.join("readonly.jpg")).unwrap();
         let query = QueryService::with_media_settings(
-            catalog.pool().clone(),
+            catalog.pools().clone(),
             thumb_dir,
             WorkspaceMediaSettings {
                 read_only: true,
@@ -1369,7 +1384,7 @@ mod tests {
             },
         );
         query
-            .apply_meta_patch(asset.id, AssetMetaPatch { rating: Some(3) })
+            .apply_meta_patch(asset.id, AssetMetaPatch { rating: Some(3), ..Default::default() })
             .await
             .unwrap();
         let after = std::fs::read(photos.join("readonly.jpg")).unwrap();
@@ -1388,21 +1403,21 @@ mod tests {
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "lens.jpg")
             .await
             .unwrap()
             .unwrap();
-        AssetMetaRepo::new(catalog.pool().clone())
+        AssetMetaRepo::new(catalog.pools().clone())
             .upsert(&AssetMeta {
                 asset_id: asset.id,
                 capture_at: None,
@@ -1412,10 +1427,11 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             })
             .await
             .unwrap();
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let result = query
             .query(
                 &AssetFilter {
@@ -1443,22 +1459,22 @@ mod tests {
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .find_by_path(root.id, "detail.jpg")
             .await
             .unwrap()
             .unwrap();
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let detail = query.get_detail(asset.id).await.unwrap();
         assert!(detail.asset.indexed_mtime_ns.is_some());
     }
@@ -1467,9 +1483,9 @@ mod tests {
     async fn batch_apply_meta_skips_duplicate_refresh_for_empty_ids() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let query = QueryService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let query = QueryService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let count = query
-            .batch_apply_meta(&[], AssetMetaPatch { rating: Some(2) })
+            .batch_apply_meta(&[], AssetMetaPatch { rating: Some(2), ..Default::default() })
             .await
             .unwrap();
         assert_eq!(count, 0);
@@ -1479,7 +1495,7 @@ mod tests {
     async fn resolve_filter_skips_empty_tag_ids() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let query = QueryService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let query = QueryService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let total = query
             .count(&AssetFilter {
                 tag_ids: Some(vec![]),
@@ -1501,29 +1517,29 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(pool.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), thumb_dir.clone())
+        ScanService::new(pools.clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let assets = AssetRepo::new(pool.clone());
+        let assets = AssetRepo::new(pools.clone());
         let asset = assets
             .find_by_path(root.id, "closed.jpg")
             .await
             .unwrap()
             .unwrap();
-        let tag_id = TagRepo::new(pool.clone())
+        let tag_id = TagRepo::new(pools.clone())
             .create_tag("closed", None, None)
             .await
             .unwrap();
-        let query = QueryService::new(pool.clone(), thumb_dir);
-        pool.close().await;
+        let query = QueryService::new(pools.clone(), thumb_dir);
+        pools.close().await;
         assert!(query.count(&AssetFilter::default()).await.is_err());
         assert!(query
             .count(&AssetFilter {
@@ -1550,11 +1566,11 @@ mod tests {
             .is_err());
         assert!(query.get_detail(asset.id).await.is_err());
         assert!(query
-            .apply_meta_patch(asset.id, AssetMetaPatch { rating: Some(1) })
+            .apply_meta_patch(asset.id, AssetMetaPatch { rating: Some(1), ..Default::default() })
             .await
             .is_err());
         assert!(query
-            .batch_apply_meta(&[asset.id], AssetMetaPatch { rating: Some(1) })
+            .batch_apply_meta(&[asset.id], AssetMetaPatch { rating: Some(1), ..Default::default() })
             .await
             .is_err());
         assert!(query.batch_append_tags(&[asset.id], tag_id).await.is_err());
@@ -1573,16 +1589,16 @@ mod tests {
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         for filter in [
             AssetFilter {
                 sync_states: Some(vec![]),
@@ -1616,16 +1632,16 @@ mod tests {
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let one = assets
             .find_by_path(root.id, "one.jpg")
             .await
@@ -1636,7 +1652,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
         let tag_a = tag_repo.create_tag("alpha", None, None).await.unwrap();
         let tag_b = tag_repo.create_tag("beta", None, None).await.unwrap();
         tag_repo
@@ -1647,7 +1663,7 @@ mod tests {
             .append_tag_id_to_assets(&[two.id], tag_b)
             .await
             .unwrap();
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let result = query
             .query(
                 &AssetFilter {
@@ -1680,16 +1696,16 @@ mod tests {
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let result = query
             .query(
                 &AssetFilter {
@@ -1718,22 +1734,22 @@ mod tests {
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .find_by_path(root.id, "child.jpg")
             .await
             .unwrap()
             .unwrap();
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
         let parent_id = tag_repo.create_tag("travel", None, None).await.unwrap();
         let child_id = tag_repo
             .create_tag("japan", Some(parent_id), None)
@@ -1743,7 +1759,7 @@ mod tests {
             .append_tag_id_to_assets(&[asset.id], child_id)
             .await
             .unwrap();
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let total = query
             .count(&AssetFilter {
                 tag_ids: Some(vec![parent_id]),
@@ -1766,12 +1782,12 @@ mod tests {
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .upsert_asset(crate::catalog::repo::UpsertAssetInput {
                 root_id: root.id,
@@ -1785,8 +1801,8 @@ mod tests {
             })
             .await
             .unwrap();
-        std::env::set_var("MEMHG_TEST_INDEX_ON_DISK_PANIC", "1");
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        crate::scan::test_hooks::set_flag("MEMHG_TEST_INDEX_ON_DISK_PANIC");
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         let err = query.get_detail(asset.id).await.unwrap_err();
         assert!(err.to_string().contains("index on disk panic"));
     }
@@ -1803,23 +1819,23 @@ mod tests {
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), thumb_dir.clone())
+        ScanService::new(catalog.pools().clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "norating.jpg")
             .await
             .unwrap()
             .unwrap();
-        let query = QueryService::new(catalog.pool().clone(), thumb_dir);
+        let query = QueryService::new(catalog.pools().clone(), thumb_dir);
         query
-            .apply_meta_patch(asset.id, AssetMetaPatch { rating: None })
+            .apply_meta_patch(asset.id, AssetMetaPatch { rating: None, ..Default::default() })
             .await
             .unwrap();
     }

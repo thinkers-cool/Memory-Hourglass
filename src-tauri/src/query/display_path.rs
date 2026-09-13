@@ -1,9 +1,10 @@
 use crate::catalog::models::LinkedAsset;
+use crate::path_util::join_root_rel;
 
 pub fn resolve_display_path(abs_path: &str, kind: &str, links: &[LinkedAsset]) -> String {
     if matches!(kind, "raw" | "video") {
         if let Some(link) = links.iter().find(|entry| entry.asset_kind == "image") {
-            return format!("{}/{}", link.root_path, link.rel_path);
+            return join_root_rel(&link.root_path, &link.rel_path);
         }
     }
     abs_path.to_string()

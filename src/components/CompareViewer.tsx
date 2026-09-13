@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { useZoomableMedia } from "../hooks/useZoomableMedia";
 import type { Album, AssetCard, TagDto } from "../types";
 import { CompareItemBar } from "./CompareItemBar";
+import { imageRotationStyle, resolveRotation } from "../lib/imageRotation";
+import { ImageViewerRotateControls } from "./shared/ImageViewerRotateControls";
 import { ImageViewerZoomControls } from "./shared/ImageViewerZoomControls";
 import { ZoomableMedia } from "./shared/ZoomableMedia";
 
@@ -22,6 +24,7 @@ function ComparePane({
   onTagMenuOpenChange,
   onAlbumMenuOpenChange,
   onRate,
+  onRotate,
   onToggleTag,
   onCreateTag,
   onToggleAlbum,
@@ -43,6 +46,7 @@ function ComparePane({
   onTagMenuOpenChange: (id: number, open: boolean) => void;
   onAlbumMenuOpenChange: (id: number, open: boolean) => void;
   onRate: (id: number, rating: number) => void;
+  onRotate: (id: number, direction: "cw" | "ccw") => void;
   onToggleTag: (
     id: number,
     tagId: number,
@@ -67,6 +71,8 @@ function ComparePane({
   const { t } = useTranslation(["library", "common"]);
   const zoom = useZoomableMedia();
   const mediaSrc = convertFileSrc(item.abs_path);
+  const canRotate = item.kind === "image";
+  const displayRotation = resolveRotation(item.rotation);
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col border-l border-divider-subtle first:border-l-0">
@@ -81,6 +87,12 @@ function ComparePane({
           </span>
         </div>
         <div className="navbar-end gap-1">
+          {canRotate ? (
+            <ImageViewerRotateControls
+              onRotateClockwise={() => onRotate(item.id, "cw")}
+              onRotateCounterClockwise={() => onRotate(item.id, "ccw")}
+            />
+          ) : null}
           <ImageViewerZoomControls
             zoom={zoom.scale}
             onZoomIn={zoom.zoomIn}
@@ -117,6 +129,7 @@ function ComparePane({
               src={mediaSrc}
               alt={item.file_name}
               className="max-h-full max-w-full object-contain"
+              style={imageRotationStyle(displayRotation)}
               draggable={false}
             />
           )}
@@ -166,6 +179,7 @@ export function CompareViewer({
   onToggleStamp,
   onClose,
   onRate,
+  onRotate,
   onToggleTag,
   onCreateTag,
   onToggleAlbum,
@@ -182,6 +196,7 @@ export function CompareViewer({
   onToggleStamp: () => void;
   onClose: () => void;
   onRate: (id: number, rating: number) => void;
+  onRotate: (id: number, direction: "cw" | "ccw") => void;
   onToggleTag: (
     id: number,
     tagId: number,
@@ -256,6 +271,7 @@ export function CompareViewer({
               if (open) setTagMenuId(null);
             }}
             onRate={onRate}
+            onRotate={onRotate}
             onToggleTag={onToggleTag}
             onCreateTag={onCreateTag}
             onToggleAlbum={onToggleAlbum}

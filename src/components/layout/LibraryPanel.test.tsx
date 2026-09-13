@@ -27,6 +27,7 @@ function renderPanel(
   const actions = overrides.actions ?? mockLibraryActions();
   const props = {
     tab: "library" as const,
+    workspaceId: "ws-test",
     roots: [] as RootStats[],
     albums: [],
     collections: [],
@@ -37,6 +38,7 @@ function renderPanel(
     deleteStatus: "",
     deletedCount: 0,
     busy: false,
+    scanStatusByRoot: {},
     actions,
     ...overrides,
   };
@@ -72,6 +74,7 @@ describe("LibraryPanel", () => {
         deleteStatus=""
         deletedCount={0}
         busy={false}
+        scanStatusByRoot={{}}
         actions={actions}
       />,
     );

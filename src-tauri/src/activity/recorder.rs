@@ -1,7 +1,7 @@
 use crate::activity::models::ActivityInput;
 use crate::activity::repo::ActivityRepo;
 use crate::error::Result;
-use sqlx::sqlite::SqlitePool;
+use crate::catalog::pools::CatalogPools;
 use sqlx::Transaction;
 
 pub struct ActivityRecorder {
@@ -9,9 +9,9 @@ pub struct ActivityRecorder {
 }
 
 impl ActivityRecorder {
-    pub fn new(pool: SqlitePool) -> Self {
+    pub fn new(pools: CatalogPools) -> Self {
         Self {
-            repo: ActivityRepo::new(pool),
+            repo: ActivityRepo::new(pools),
         }
     }
 
@@ -46,7 +46,7 @@ mod recorder_tests {
     async fn append_in_tx_commits_through_repo() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let recorder = ActivityRecorder::new(catalog.pool().clone());
+        let recorder = ActivityRecorder::new(catalog.pools().clone());
         let mut tx = recorder.repo().begin().await.unwrap();
         let id = recorder
             .append_in_tx(
@@ -73,7 +73,7 @@ mod recorder_tests {
     async fn append_commits_transaction() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let recorder = ActivityRecorder::new(catalog.pool().clone());
+        let recorder = ActivityRecorder::new(catalog.pools().clone());
         let id = recorder
             .append(ActivityInput {
                 event_type: "test.append".into(),
@@ -95,9 +95,9 @@ mod recorder_tests {
     async fn append_fails_when_pool_closed() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let recorder = ActivityRecorder::new(pool.clone());
-        pool.close().await;
+        let pools = catalog.pools().clone();
+        let recorder = ActivityRecorder::new(pools.clone());
+        pools.close().await;
         let err = recorder
             .append(ActivityInput {
                 event_type: "test.closed".into(),

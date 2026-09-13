@@ -1,16 +1,16 @@
 use crate::catalog::models::{DuplicateAsset, LinkedAsset};
+use crate::catalog::pools::CatalogPools;
 use crate::error::{AppError, Result};
-use sqlx::SqlitePool;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub struct LinkService {
-    pool: SqlitePool,
+    pools: CatalogPools,
 }
 
 impl LinkService {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(pools: CatalogPools) -> Self {
+        Self { pools }
     }
 
     pub async fn link_raw_jpeg_in_root(&self, root_id: i64) -> Result<u64> {
@@ -18,7 +18,7 @@ impl LinkService {
             "SELECT id, file_name, ext, kind, rel_path FROM asset WHERE root_id = ? AND deleted_at IS NULL",
         )
         .bind(root_id)
-        .fetch_all(&self.pool)
+        .fetch_all(self.pools.read())
         .await?;
 
         let mut by_stem: HashMap<String, Vec<&AssetRow>> = HashMap::new();
@@ -54,13 +54,13 @@ impl LinkService {
                 "SELECT id, content_hash, rel_path FROM asset WHERE root_id = ? AND content_hash IS NOT NULL AND deleted_at IS NULL",
             )
             .bind(id)
-            .fetch_all(&self.pool)
+            .fetch_all(self.pools.read())
             .await?
         } else {
             sqlx::query_as::<_, HashRow>(
                 "SELECT id, content_hash, rel_path FROM asset WHERE content_hash IS NOT NULL AND deleted_at IS NULL",
             )
-            .fetch_all(&self.pool)
+            .fetch_all(self.pools.read())
             .await?
         };
 
@@ -82,7 +82,7 @@ impl LinkService {
 
     pub async fn rebuild_duplicate_links(&self) -> Result<()> {
         sqlx::query("DELETE FROM asset_link WHERE kind = 'duplicate_hash'")
-            .execute(&self.pool)
+            .execute(self.pools.write())
             .await?;
 
         let groups = self.find_duplicates_by_hash(None).await?;
@@ -97,7 +97,7 @@ impl LinkService {
 
     pub async fn refresh_duplicate_flags(&self) -> Result<()> {
         sqlx::query("UPDATE asset SET has_duplicate = 0")
-            .execute(&self.pool)
+            .execute(self.pools.write())
             .await?;
 
         sqlx::query(
@@ -112,7 +112,35 @@ impl LinkService {
               )
             "#,
         )
-        .execute(&self.pool)
+        .execute(self.pools.write())
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn refresh_duplicate_flags_for_root(&self, root_id: i64) -> Result<()> {
+        sqlx::query("UPDATE asset SET has_duplicate = 0 WHERE root_id = ?")
+            .bind(root_id)
+            .execute(self.pools.write())
+            .await?;
+
+        sqlx::query(
+            r#"
+            UPDATE asset SET has_duplicate = 1
+            WHERE root_id = ?
+              AND deleted_at IS NULL
+              AND content_hash IS NOT NULL
+              AND content_hash IN (
+                SELECT content_hash FROM asset
+                WHERE root_id = ?
+                  AND content_hash IS NOT NULL AND deleted_at IS NULL
+                GROUP BY content_hash HAVING COUNT(*) > 1
+              )
+            "#,
+        )
+        .bind(root_id)
+        .bind(root_id)
+        .execute(self.pools.write())
         .await?;
 
         Ok(())
@@ -134,7 +162,7 @@ impl LinkService {
         )
         .bind(asset_id)
         .bind(asset_id)
-        .fetch_all(&self.pool)
+        .fetch_all(self.pools.read())
         .await?)
     }
 
@@ -171,7 +199,7 @@ impl LinkService {
         )
         .bind(asset_id)
         .bind(asset_id)
-        .fetch_all(&self.pool)
+        .fetch_all(self.pools.read())
         .await?)
     }
 
@@ -184,7 +212,7 @@ impl LinkService {
         sqlx::query("UPDATE asset SET content_hash = ? WHERE id = ? AND deleted_at IS NULL")
             .bind(&hash)
             .bind(asset_id)
-            .execute(&self.pool)
+            .execute(self.pools.write())
             .await?;
 
         Ok(hash)
@@ -205,7 +233,7 @@ impl LinkService {
             "#,
         )
         .bind(root_id)
-        .fetch_all(&self.pool)
+        .fetch_all(self.pools.read())
         .await?;
 
         if rows.is_empty() {
@@ -244,7 +272,7 @@ impl LinkService {
             builder.push_bind(*id);
         }
         builder.push(")");
-        builder.build().execute(&self.pool).await?;
+        builder.build().execute(self.pools.write()).await?;
         Ok(updates.len() as u64)
     }
 
@@ -262,25 +290,28 @@ impl LinkService {
             .bind(src)
             .bind(dst)
             .bind(kind)
-            .execute(&self.pool)
+            .execute(self.pools.write())
             .await?;
         Ok(())
     }
 }
 
 fn stem_name(file_name: &str) -> String {
-    PathBuf::from(file_name)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or(file_name)
-        .to_lowercase()
+    let stem = crate::path_util::os_file_stem(Path::new(file_name));
+    if stem.is_empty() {
+        file_name.to_lowercase()
+    } else {
+        stem.to_lowercase()
+    }
+}
+
+pub fn sha256_bytes(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 fn file_sha256(path: &std::path::Path) -> Result<String> {
-    use sha2::{Digest, Sha256};
-    let bytes = std::fs::read(path)?;
-    let hash = Sha256::digest(&bytes);
-    Ok(format!("{:x}", hash))
+    Ok(sha256_bytes(&std::fs::read(path)?))
 }
 
 #[derive(sqlx::FromRow)]
@@ -323,8 +354,8 @@ mod tests {
     async fn links_raw_and_jpeg_from_catalog_rows() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
@@ -333,17 +364,17 @@ mod tests {
             "INSERT INTO asset (root_id, rel_path, file_name, ext, kind, size, mtime_ns, sync_state) VALUES (?, 'a.arw', 'a.arw', 'arw', 'raw', 1, 1, 'ok') RETURNING id",
         )
         .bind(root.id)
-        .fetch_one(&pool)
+        .fetch_one(pools.write())
         .await
         .unwrap();
-        let _jpeg_id: i64 = sqlx::query_scalar(
+        sqlx::query_scalar::<_, i64>(
             "INSERT INTO asset (root_id, rel_path, file_name, ext, kind, size, mtime_ns, sync_state) VALUES (?, 'a.jpg', 'a.jpg', 'jpg', 'image', 1, 1, 'ok') RETURNING id",
         )
         .bind(root.id)
-        .fetch_one(&pool)
+        .fetch_one(pools.write())
         .await
         .unwrap();
-        let link = LinkService::new(pool);
+        let link = LinkService::new(pools);
         let count = link.link_raw_jpeg_in_root(root.id).await.unwrap();
         assert_eq!(count, 1);
         let links = link.list_links(raw_id).await.unwrap();
@@ -355,8 +386,8 @@ mod tests {
     async fn links_multiple_raws_to_first_jpeg() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
@@ -374,11 +405,11 @@ mod tests {
             .bind(rel_path)
             .bind(ext)
             .bind(kind)
-            .execute(&pool)
+            .execute(pools.write())
             .await
             .unwrap();
         }
-        let link = LinkService::new(pool);
+        let link = LinkService::new(pools);
         let count = link.link_raw_jpeg_in_root(root.id).await.unwrap();
         assert_eq!(count, 2);
     }
@@ -394,20 +425,32 @@ mod tests {
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
 
-        ScanService::new(catalog.pool().clone(), thumb_dir)
+        ScanService::new(catalog.pools().clone(), thumb_dir)
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
-        let link = LinkService::new(catalog.pool().clone());
+        let link = LinkService::new(catalog.pools().clone());
         let count = link.link_raw_jpeg_in_root(root.id).await.unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn sha256_bytes_matches_file_hash() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("hash.jpg");
+        std::fs::write(&file, include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
+        let from_file = file_sha256(&file).unwrap();
+        let from_bytes = sha256_bytes(
+            &std::fs::read(&file).unwrap(),
+        );
+        assert_eq!(from_file, from_bytes);
     }
 
     #[tokio::test]
@@ -420,20 +463,20 @@ mod tests {
         std::fs::write(&file_path, jpeg).unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(pool.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
 
-        ScanService::new(pool.clone(), thumb_dir)
+        ScanService::new(pools.clone(), thumb_dir)
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
-        let link = LinkService::new(pool.clone());
+        let link = LinkService::new(pools.clone());
         link.compute_hashes_for_root(root.id, &photos)
             .await
             .unwrap();
@@ -442,7 +485,7 @@ mod tests {
             "SELECT id, content_hash, rel_path FROM asset WHERE root_id = ? LIMIT 1",
         )
         .bind(root.id)
-        .fetch_one(&pool)
+        .fetch_one(pools.read())
         .await
         .unwrap();
         let before = asset.content_hash.clone().expect("hash");
@@ -454,13 +497,15 @@ mod tests {
 
         let after = sqlx::query_scalar::<_, String>("SELECT content_hash FROM asset WHERE id = ?")
             .bind(asset.id)
-            .fetch_one(&pool)
+            .fetch_one(pools.read())
             .await
             .unwrap();
         assert_ne!(before, after);
     }
 
-    async fn seed_duplicate_assets(dir: &tempfile::TempDir) -> (sqlx::SqlitePool, i64, i64, i64) {
+    async fn seed_duplicate_assets(
+        dir: &tempfile::TempDir,
+    ) -> (crate::catalog::pools::CatalogPools, i64, i64, i64) {
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
         let jpeg = include_bytes!("../../tests/fixtures/minimal.jpg");
@@ -468,18 +513,18 @@ mod tests {
         std::fs::write(photos.join("b.jpg"), jpeg).unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(pool.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), thumb_dir)
+        ScanService::new(pools.clone(), thumb_dir)
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let link = LinkService::new(pool.clone());
+        let link = LinkService::new(pools.clone());
         link.compute_hashes_for_root(root.id, &photos)
             .await
             .unwrap();
@@ -487,17 +532,17 @@ mod tests {
             "SELECT id FROM asset WHERE root_id = ? ORDER BY rel_path",
         )
         .bind(root.id)
-        .fetch_all(&pool)
+        .fetch_all(pools.read())
         .await
         .unwrap();
-        (pool, root.id, ids[0], ids[1])
+        (pools, root.id, ids[0], ids[1])
     }
 
     #[tokio::test]
     async fn find_duplicates_without_root_scope() {
         let dir = tempdir().unwrap();
-        let (pool, _root, _a, _b) = seed_duplicate_assets(&dir).await;
-        let link = LinkService::new(pool);
+        let (pools, _root, _a, _b) = seed_duplicate_assets(&dir).await;
+        let link = LinkService::new(pools);
         let groups = link.find_duplicates_by_hash(None).await.unwrap();
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].len(), 2);
@@ -506,8 +551,8 @@ mod tests {
     #[tokio::test]
     async fn rebuild_and_refresh_duplicate_index() {
         let dir = tempdir().unwrap();
-        let (pool, root, a, b) = seed_duplicate_assets(&dir).await;
-        let link = LinkService::new(pool.clone());
+        let (pools, root, a, b) = seed_duplicate_assets(&dir).await;
+        let link = LinkService::new(pools.clone());
         link.rebuild_duplicate_links().await.unwrap();
         link.refresh_duplicate_flags().await.unwrap();
         link.refresh_duplicate_index().await.unwrap();
@@ -516,7 +561,7 @@ mod tests {
             "SELECT COUNT(*) FROM asset WHERE has_duplicate = 1 AND root_id = ?",
         )
         .bind(root)
-        .fetch_one(&pool)
+        .fetch_one(pools.read())
         .await
         .unwrap();
         assert_eq!(flagged, 2);
@@ -541,24 +586,24 @@ mod tests {
         std::fs::write(photos.join("DSC010.jpg"), jpeg).unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(pool.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), thumb_dir)
+        ScanService::new(pools.clone(), thumb_dir)
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let link = LinkService::new(pool.clone());
+        let link = LinkService::new(pools.clone());
         link.link_raw_jpeg_in_root(root.id).await.unwrap();
 
         let raw_id: i64 =
             sqlx::query_scalar("SELECT id FROM asset WHERE root_id = ? AND kind = 'raw' LIMIT 1")
                 .bind(root.id)
-                .fetch_one(&pool)
+                .fetch_one(pools.read())
                 .await
                 .unwrap();
         let links = link.list_links(raw_id).await.unwrap();
@@ -576,8 +621,8 @@ mod tests {
     async fn compute_hashes_for_root_returns_zero_when_files_missing() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
@@ -586,10 +631,10 @@ mod tests {
             "INSERT INTO asset (root_id, rel_path, file_name, ext, kind, size, mtime_ns, sync_state) VALUES (?, 'missing.jpg', 'missing.jpg', 'jpg', 'image', 1, 1, 'new')",
         )
         .bind(root.id)
-        .execute(&pool)
+        .execute(pools.write())
         .await
         .unwrap();
-        let link = LinkService::new(pool);
+        let link = LinkService::new(pools);
         let hashed = link
             .compute_hashes_for_root(root.id, dir.path())
             .await
@@ -601,8 +646,8 @@ mod tests {
     async fn list_duplicates_for_asset_returns_empty_without_peers() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let link = LinkService::new(pool);
+        let pools = catalog.pools().clone();
+        let link = LinkService::new(pools);
         let peers = link.list_duplicates_for_asset(999_999).await.unwrap();
         assert!(peers.is_empty());
     }
@@ -618,17 +663,17 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), dir.path().join("thumbs"))
+        ScanService::new(pools.clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let link = LinkService::new(pool);
+        let link = LinkService::new(pools);
         link.compute_hashes_for_root(root.id, &photos)
             .await
             .unwrap();
@@ -641,8 +686,8 @@ mod tests {
     async fn link_raw_jpeg_matches_jpeg_extension() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
@@ -651,24 +696,24 @@ mod tests {
             "INSERT INTO asset (root_id, rel_path, file_name, ext, kind, size, mtime_ns, sync_state) VALUES (?, 'a.arw', 'a.arw', 'arw', 'raw', 1, 1, 'ok')",
         )
         .bind(root.id)
-        .execute(&pool)
+        .execute(pools.write())
         .await
         .unwrap();
         sqlx::query(
             "INSERT INTO asset (root_id, rel_path, file_name, ext, kind, size, mtime_ns, sync_state) VALUES (?, 'a.jpeg', 'a.jpeg', 'jpeg', 'image', 1, 1, 'ok')",
         )
         .bind(root.id)
-        .execute(&pool)
+        .execute(pools.write())
         .await
         .unwrap();
-        let link = LinkService::new(pool);
+        let link = LinkService::new(pools);
         assert_eq!(link.link_raw_jpeg_in_root(root.id).await.unwrap(), 1);
     }
 
     #[tokio::test]
     async fn find_duplicates_scoped_to_single_root() {
         let dir = tempdir().unwrap();
-        let (pool, root_a, a, _b) = seed_duplicate_assets(&dir).await;
+        let (pools, root_a, a, _b) = seed_duplicate_assets(&dir).await;
         let photos_b = dir.path().join("photos-b");
         std::fs::create_dir_all(&photos_b).unwrap();
         std::fs::write(
@@ -676,16 +721,16 @@ mod tests {
             include_bytes!("../../tests/fixtures/minimal.jpg"),
         )
         .unwrap();
-        let roots = SourceRootRepo::new(pool.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let root_b = roots
             .insert_root(photos_b.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), dir.path().join("thumbs-b"))
+        ScanService::new(pools.clone(), dir.path().join("thumbs-b"))
             .scan_root(root_b.id, &ScanControl::noop())
             .await
             .unwrap();
-        let link = LinkService::new(pool);
+        let link = LinkService::new(pools);
         link.compute_hashes_for_root(root_b.id, &photos_b)
             .await
             .unwrap();
@@ -697,8 +742,8 @@ mod tests {
     #[tokio::test]
     async fn find_duplicates_by_hash_skips_rows_without_hash() {
         let (catalog, dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
@@ -707,10 +752,10 @@ mod tests {
             "INSERT INTO asset (root_id, rel_path, file_name, ext, kind, size, mtime_ns, sync_state, content_hash) VALUES (?, 'solo.jpg', 'solo.jpg', 'jpg', 'image', 1, 1, 'ok', NULL)",
         )
         .bind(root.id)
-        .execute(&pool)
+        .execute(pools.write())
         .await
         .unwrap();
-        let link = LinkService::new(pool);
+        let link = LinkService::new(pools);
         let groups = link.find_duplicates_by_hash(None).await.unwrap();
         assert!(groups.is_empty());
     }
@@ -718,8 +763,8 @@ mod tests {
     #[tokio::test]
     async fn link_raw_jpeg_prefers_first_jpeg_by_rel_path() {
         let (catalog, dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
@@ -737,23 +782,23 @@ mod tests {
             .bind(file_name)
             .bind(ext)
             .bind(kind)
-            .execute(&pool)
+            .execute(pools.write())
             .await
             .unwrap();
         }
-        let link = LinkService::new(pool.clone());
+        let link = LinkService::new(pools.clone());
         assert_eq!(link.link_raw_jpeg_in_root(root.id).await.unwrap(), 1);
         let raw_id: i64 =
             sqlx::query_scalar("SELECT id FROM asset WHERE root_id = ? AND kind = 'raw' LIMIT 1")
                 .bind(root.id)
-                .fetch_one(&pool)
+                .fetch_one(pools.read())
                 .await
                 .unwrap();
         let first_jpeg_id: i64 = sqlx::query_scalar(
             "SELECT id FROM asset WHERE root_id = ? AND rel_path = 'a/shot.jpg'",
         )
         .bind(root.id)
-        .fetch_one(&pool)
+        .fetch_one(pools.read())
         .await
         .unwrap();
         let links = link.list_links(raw_id).await.unwrap();
@@ -771,22 +816,22 @@ mod tests {
             include_bytes!("../../tests/fixtures/minimal.jpg"),
         )
         .unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), dir.path().join("thumbs"))
+        ScanService::new(pools.clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
         sqlx::query("UPDATE asset SET content_hash = NULL WHERE root_id = ?")
             .bind(root.id)
-            .execute(&pool)
+            .execute(pools.write())
             .await
             .unwrap();
-        let link = LinkService::new(pool.clone());
+        let link = LinkService::new(pools.clone());
         let hashed = link
             .compute_hashes_for_root(root.id, &photos)
             .await
@@ -795,7 +840,7 @@ mod tests {
         let stored: Option<String> =
             sqlx::query_scalar("SELECT content_hash FROM asset WHERE root_id = ? LIMIT 1")
                 .bind(root.id)
-                .fetch_one(&pool)
+                .fetch_one(pools.read())
                 .await
                 .unwrap();
         assert!(stored.is_some());
@@ -804,20 +849,20 @@ mod tests {
     #[tokio::test]
     async fn refresh_duplicate_index_runs_rebuild_and_refresh() {
         let dir = tempdir().unwrap();
-        let (pool, root, a, b) = seed_duplicate_assets(&dir).await;
-        let link = LinkService::new(pool.clone());
+        let (pools, root, a, b) = seed_duplicate_assets(&dir).await;
+        let link = LinkService::new(pools.clone());
         link.refresh_duplicate_index().await.unwrap();
         let flagged: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM asset WHERE has_duplicate = 1 AND root_id = ?",
         )
         .bind(root)
-        .fetch_one(&pool)
+        .fetch_one(pools.read())
         .await
         .unwrap();
         assert_eq!(flagged, 2);
         let links: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM asset_link WHERE kind = 'duplicate_hash'")
-                .fetch_one(&pool)
+                .fetch_one(pools.read())
                 .await
                 .unwrap();
         assert_eq!(links, 1);
@@ -833,29 +878,29 @@ mod tests {
         std::fs::create_dir_all(&photos).unwrap();
         let file = photos.join("changed.jpg");
         std::fs::write(&file, include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), dir.path().join("thumbs"))
+        ScanService::new(pools.clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
         let before: String =
             sqlx::query_scalar("SELECT content_hash FROM asset WHERE root_id = ? LIMIT 1")
                 .bind(root.id)
-                .fetch_one(&pool)
+                .fetch_one(pools.read())
                 .await
                 .unwrap();
         std::fs::write(&file, b"changed-bytes").unwrap();
         sqlx::query("UPDATE asset SET sync_state = 'modified' WHERE root_id = ?")
             .bind(root.id)
-            .execute(&pool)
+            .execute(pools.write())
             .await
             .unwrap();
-        let link = LinkService::new(pool.clone());
+        let link = LinkService::new(pools.clone());
         assert_eq!(
             link.compute_hashes_for_root(root.id, &photos)
                 .await
@@ -865,7 +910,7 @@ mod tests {
         let after: String =
             sqlx::query_scalar("SELECT content_hash FROM asset WHERE root_id = ? LIMIT 1")
                 .bind(root.id)
-                .fetch_one(&pool)
+                .fetch_one(pools.read())
                 .await
                 .unwrap();
         assert_ne!(before, after);
@@ -874,10 +919,10 @@ mod tests {
     #[tokio::test]
     async fn insert_link_is_idempotent_for_duplicate_pairs() {
         let dir = tempdir().unwrap();
-        let (pool, _root, a, b) = seed_duplicate_assets(&dir).await;
-        let link = LinkService::new(pool.clone());
-        let first = link.link_duplicates_in_root(_root).await.unwrap();
-        let second = link.link_duplicates_in_root(_root).await.unwrap();
+        let (pools, root, a, b) = seed_duplicate_assets(&dir).await;
+        let link = LinkService::new(pools.clone());
+        let first = link.link_duplicates_in_root(root).await.unwrap();
+        let second = link.link_duplicates_in_root(root).await.unwrap();
         assert_eq!(first, 1);
         assert_eq!(second, 1);
         let links: i64 = sqlx::query_scalar(
@@ -885,7 +930,7 @@ mod tests {
         )
         .bind(a)
         .bind(b)
-        .fetch_one(&pool)
+        .fetch_one(pools.read())
         .await
         .unwrap();
         assert_eq!(links, 1);
@@ -894,8 +939,8 @@ mod tests {
     #[tokio::test]
     async fn link_raw_jpeg_errors_under_exclusive_lock() {
         let (catalog, dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
@@ -904,22 +949,22 @@ mod tests {
             "INSERT INTO asset (root_id, rel_path, file_name, ext, kind, size, mtime_ns, sync_state) VALUES (?, 'a.arw', 'a.arw', 'arw', 'raw', 1, 1, 'ok')",
         )
         .bind(root.id)
-        .execute(&pool)
+        .execute(pools.write())
         .await
         .unwrap();
         sqlx::query(
             "INSERT INTO asset (root_id, rel_path, file_name, ext, kind, size, mtime_ns, sync_state) VALUES (?, 'a.jpg', 'a.jpg', 'jpg', 'image', 1, 1, 'ok')",
         )
         .bind(root.id)
-        .execute(&pool)
+        .execute(pools.write())
         .await
         .unwrap();
-        let mut locker = pool.acquire().await.unwrap();
+        let mut locker = pools.write().acquire().await.unwrap();
         sqlx::query("BEGIN EXCLUSIVE")
             .execute(&mut *locker)
             .await
             .unwrap();
-        let link = LinkService::new(pool);
+        let link = LinkService::new(pools);
         assert!(link.link_raw_jpeg_in_root(root.id).await.is_err());
         sqlx::query("ROLLBACK").execute(&mut *locker).await.unwrap();
     }
@@ -927,8 +972,8 @@ mod tests {
     #[tokio::test]
     async fn recompute_content_hash_errors_for_missing_file() {
         let (catalog, dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
@@ -937,10 +982,10 @@ mod tests {
             "INSERT INTO asset (root_id, rel_path, file_name, ext, kind, size, mtime_ns, sync_state) VALUES (?, 'gone.jpg', 'gone.jpg', 'jpg', 'image', 1, 1, 'ok') RETURNING id",
         )
         .bind(root.id)
-        .fetch_one(&pool)
+        .fetch_one(pools.write())
         .await
         .unwrap();
-        let link = LinkService::new(pool);
+        let link = LinkService::new(pools);
         assert!(link
             .recompute_content_hash(asset_id, &dir.path().join("gone.jpg"))
             .await
@@ -950,9 +995,9 @@ mod tests {
     #[tokio::test]
     async fn find_duplicates_errors_after_pool_close() {
         let dir = tempdir().unwrap();
-        let (pool, root, _a, _b) = seed_duplicate_assets(&dir).await;
-        pool.close().await;
-        let link = LinkService::new(pool);
+        let (pools, root, _a, _b) = seed_duplicate_assets(&dir).await;
+        pools.close().await;
+        let link = LinkService::new(pools);
         assert!(link.find_duplicates_by_hash(Some(root)).await.is_err());
         assert!(link.find_duplicates_by_hash(None).await.is_err());
     }
@@ -960,22 +1005,22 @@ mod tests {
     #[tokio::test]
     async fn list_links_errors_after_pool_close() {
         let dir = tempdir().unwrap();
-        let (pool, _root, a, _b) = seed_duplicate_assets(&dir).await;
-        pool.close().await;
-        let link = LinkService::new(pool);
+        let (pools, _root, a, _b) = seed_duplicate_assets(&dir).await;
+        pools.close().await;
+        let link = LinkService::new(pools);
         assert!(link.list_links(a).await.is_err());
     }
 
     #[tokio::test]
     async fn refresh_duplicate_flags_errors_under_exclusive_lock() {
         let dir = tempdir().unwrap();
-        let (pool, _root, _a, _b) = seed_duplicate_assets(&dir).await;
-        let mut locker = pool.acquire().await.unwrap();
+        let (pools, _root, _a, _b) = seed_duplicate_assets(&dir).await;
+        let mut locker = pools.write().acquire().await.unwrap();
         sqlx::query("BEGIN EXCLUSIVE")
             .execute(&mut *locker)
             .await
             .unwrap();
-        let link = LinkService::new(pool);
+        let link = LinkService::new(pools);
         assert!(link.refresh_duplicate_flags().await.is_err());
         sqlx::query("ROLLBACK").execute(&mut *locker).await.unwrap();
     }
@@ -983,13 +1028,13 @@ mod tests {
     #[tokio::test]
     async fn rebuild_duplicate_links_errors_under_exclusive_lock() {
         let dir = tempdir().unwrap();
-        let (pool, _root, _a, _b) = seed_duplicate_assets(&dir).await;
-        let mut locker = pool.acquire().await.unwrap();
+        let (pools, _root, _a, _b) = seed_duplicate_assets(&dir).await;
+        let mut locker = pools.write().acquire().await.unwrap();
         sqlx::query("BEGIN EXCLUSIVE")
             .execute(&mut *locker)
             .await
             .unwrap();
-        let link = LinkService::new(pool);
+        let link = LinkService::new(pools);
         assert!(link.rebuild_duplicate_links().await.is_err());
         sqlx::query("ROLLBACK").execute(&mut *locker).await.unwrap();
     }
@@ -997,18 +1042,18 @@ mod tests {
     #[tokio::test]
     async fn list_duplicates_for_asset_errors_after_pool_close() {
         let dir = tempdir().unwrap();
-        let (pool, _root, a, _b) = seed_duplicate_assets(&dir).await;
-        pool.close().await;
-        let link = LinkService::new(pool);
+        let (pools, _root, a, _b) = seed_duplicate_assets(&dir).await;
+        pools.close().await;
+        let link = LinkService::new(pools);
         assert!(link.list_duplicates_for_asset(a).await.is_err());
     }
 
     #[tokio::test]
     async fn compute_hashes_for_root_errors_after_pool_close() {
         let dir = tempdir().unwrap();
-        let (pool, root, _a, _b) = seed_duplicate_assets(&dir).await;
-        pool.close().await;
-        let link = LinkService::new(pool);
+        let (pools, root, _a, _b) = seed_duplicate_assets(&dir).await;
+        pools.close().await;
+        let link = LinkService::new(pools);
         assert!(link
             .compute_hashes_for_root(root, &dir.path().join("photos"))
             .await

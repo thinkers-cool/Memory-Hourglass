@@ -3,22 +3,24 @@ import {
   INTERVAL_OPTIONS,
   KEN_BURNS_VARIANTS,
   THEME_CONFIG,
-  slideshowThemeLabel,
   THEME_ORDER,
   VIDEO_END_PADDING_MS,
   coerceIntervalMs,
+  coerceTheme,
   easeInOutCubic,
+  easeInOutSine,
   kenBurnsVariantForIndex,
   nextInterval,
   nextTheme,
+  slideshowThemeLabel,
 } from "./timing";
 
 describe("slideshow timing constants", () => {
   it("defines interval and theme metadata", () => {
     expect(INTERVAL_OPTIONS).toEqual([2000, 3000, 5000, 8000]);
-    expect(THEME_ORDER).toHaveLength(4);
+    expect(THEME_ORDER).toHaveLength(5);
     expect(slideshowThemeLabel("dissolve")).toBe("Dissolve");
-    expect(THEME_CONFIG["ken-burns"].kenBurns).toBe(true);
+    expect(THEME_CONFIG["ken-burns"].transitionMs).toBe(600);
     expect(VIDEO_END_PADDING_MS).toBe(300);
   });
 });
@@ -49,6 +51,17 @@ describe("coerceIntervalMs", () => {
   });
 });
 
+describe("coerceTheme", () => {
+  it("accepts known themes", () => {
+    expect(coerceTheme("ken-burns")).toBe("ken-burns");
+  });
+
+  it("falls back to dissolve for unknown themes", () => {
+    expect(coerceTheme("push")).toBe("push");
+    expect(coerceTheme("wipe")).toBe("dissolve");
+  });
+});
+
 describe("nextInterval", () => {
   it("advances through known intervals", () => {
     expect(nextInterval(3000)).toBe(5000);
@@ -63,7 +76,10 @@ describe("nextInterval", () => {
 describe("nextTheme", () => {
   it("advances through theme order", () => {
     expect(nextTheme("dissolve")).toBe("ken-burns");
-    expect(nextTheme("fade-zoom")).toBe("dissolve");
+    expect(nextTheme("ken-burns")).toBe("fade-zoom");
+    expect(nextTheme("fade-zoom")).toBe("push");
+    expect(nextTheme("push")).toBe("dip-black");
+    expect(nextTheme("dip-black")).toBe("dissolve");
   });
 
   it("starts from first theme for unknown values", () => {
@@ -81,5 +97,12 @@ describe("easeInOutCubic", () => {
     expect(easeInOutCubic(0.5)).toBe(0.5);
     expect(easeInOutCubic(0.25)).toBeGreaterThan(0);
     expect(easeInOutCubic(0.25)).toBeLessThan(0.5);
+  });
+});
+
+describe("easeInOutSine", () => {
+  it("returns 0 at start and 1 at end", () => {
+    expect(easeInOutSine(0)).toBeCloseTo(0);
+    expect(easeInOutSine(1)).toBe(1);
   });
 });

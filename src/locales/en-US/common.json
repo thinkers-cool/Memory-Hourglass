@@ -44,6 +44,8 @@
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
     "fitToView": "Fit to view",
+    "rotateClockwise": "Rotate clockwise",
+    "rotateCounterClockwise": "Rotate counter-clockwise",
     "previous": "Previous",
     "next": "Next",
     "slideshow": "Slideshow",

@@ -1,4 +1,5 @@
 use crate::error::{AppError, Result};
+use crate::path_util::canonicalize;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -150,7 +151,14 @@ pub fn mount_point(base: &Path, host: &str, share: &str, username: &str) -> Path
 }
 
 fn local_test_mounts_enabled() -> bool {
-    std::env::var_os("MEMHG_TEST_LOCAL_MOUNTS").is_some()
+    #[cfg(test)]
+    {
+        return crate::test_support::smb::local_mounts_enabled();
+    }
+    #[cfg(not(test))]
+    {
+        false
+    }
 }
 
 pub fn browse_mount_point(base: &Path, host: &str, share: &str, username: &str) -> PathBuf {
@@ -258,11 +266,9 @@ pub fn library_mount_root(mount_dir: &Path, library_path: &Path) -> Option<PathB
 }
 
 pub fn smb_share_sub_path(mount_root: &Path, library_path: &Path) -> Result<String> {
-    let mount_root = mount_root
-        .canonicalize()
-        .map_err(|_| AppError::Library("SMB mount is not available".into()))?;
-    let library_path = library_path
-        .canonicalize()
+    let mount_root =
+        canonicalize(mount_root).map_err(|_| AppError::Library("SMB mount is not available".into()))?;
+    let library_path = canonicalize(library_path)
         .map_err(|_| AppError::Library("library path is not available".into()))?;
     if library_path == mount_root {
         return Ok(String::new());
@@ -323,10 +329,6 @@ fn normalize_sub_path(path: String) -> String {
 }
 
 pub fn mount_share(mount_path: &Path, req: &SmbConnectRequest) -> Result<()> {
-    #[cfg(test)]
-    if std::env::var_os("MEMHG_TEST_MOUNT_PANIC").is_some() {
-        panic!("test mount panic");
-    }
     validate_component(&req.host, "host")?;
     validate_component(&req.share, "share")?;
     validate_component(&req.username, "username")?;
@@ -584,7 +586,7 @@ fn is_mounted_in_system_table(path: &Path) -> bool {
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
-fn is_mounted_in_system_table(_path: &Path) -> bool {
+fn is_mounted_in_system_table(_: &Path) -> bool {
     false
 }
 

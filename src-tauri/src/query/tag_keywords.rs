@@ -4,7 +4,7 @@ use crate::error::Result;
 use crate::link::LinkService;
 use crate::metadata::{metadata_context_for_asset, MetadataService};
 use crate::workspace::WorkspaceMediaSettings;
-use sqlx::SqlitePool;
+use crate::catalog::pools::CatalogPools;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -33,14 +33,14 @@ fn merge_keywords_for_xmp(
 }
 
 pub async fn sync_asset_tag_keywords(
-    pool: &SqlitePool,
+    pools: &CatalogPools,
     asset_id: i64,
     settings: &WorkspaceMediaSettings,
 ) -> Result<()> {
-    let assets = AssetRepo::new(pool.clone());
-    let meta_repo = AssetMetaRepo::new(pool.clone());
-    let tag_repo = TagRepo::new(pool.clone());
-    let roots = SourceRootRepo::new(pool.clone());
+    let assets = AssetRepo::new(pools.clone());
+    let meta_repo = AssetMetaRepo::new(pools.clone());
+    let tag_repo = TagRepo::new(pools.clone());
+    let roots = SourceRootRepo::new(pools.clone());
 
     let asset = assets.get_asset(asset_id).await?;
     let root = roots.get_root(asset.root_id).await?;
@@ -65,7 +65,7 @@ pub async fn sync_asset_tag_keywords(
     );
     MetadataService::write_keywords(&metadata_ctx, &keywords)?;
     refresh_asset_after_metadata_write(
-        pool,
+        pools,
         asset_id,
         &abs_path,
         &metadata_ctx,
@@ -76,15 +76,15 @@ pub async fn sync_asset_tag_keywords(
 }
 
 pub async fn sync_assets_tag_keywords(
-    pool: &SqlitePool,
+    pools: &CatalogPools,
     asset_ids: &[i64],
     settings: &crate::workspace::WorkspaceMediaSettings,
 ) -> Result<()> {
     for &asset_id in asset_ids {
-        sync_asset_tag_keywords(pool, asset_id, settings).await?;
+        sync_asset_tag_keywords(pools, asset_id, settings).await?;
     }
     if !asset_ids.is_empty() {
-        LinkService::new(pool.clone())
+        LinkService::new(pools.clone())
             .refresh_duplicate_index()
             .await?;
     }
@@ -120,7 +120,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let settings = WorkspaceMediaSettings::default();
-        let err = sync_asset_tag_keywords(catalog.pool(), 999_999, &settings)
+        let err = sync_asset_tag_keywords(catalog.pools(), 999_999, &settings)
             .await
             .unwrap_err();
         assert!(err.to_string().contains("not found"));
@@ -134,7 +134,7 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        sync_assets_tag_keywords(catalog.pool(), &[], &settings)
+        sync_assets_tag_keywords(catalog.pools(), &[], &settings)
             .await
             .unwrap();
     }
@@ -150,10 +150,10 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
-        let tags = TagRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
+        let tags = TagRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
@@ -179,7 +179,7 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        sync_asset_tag_keywords(&pool, asset.id, &settings)
+        sync_asset_tag_keywords(&pools, asset.id, &settings)
             .await
             .unwrap();
         assert!(photos.join("plain.cr2.xmp").exists());
@@ -194,10 +194,10 @@ mod tests {
         std::fs::write(photos.join("one.jpg"), jpeg).unwrap();
         std::fs::write(photos.join("two.jpg"), jpeg).unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
-        let tags = TagRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
+        let tags = TagRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
@@ -236,7 +236,7 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        sync_assets_tag_keywords(&pool, &[one.id, two.id], &settings)
+        sync_assets_tag_keywords(&pools, &[one.id, two.id], &settings)
             .await
             .unwrap();
     }
@@ -252,11 +252,11 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
-        let meta_repo = AssetMetaRepo::new(pool.clone());
-        let tags = TagRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
+        let meta_repo = AssetMetaRepo::new(pools.clone());
+        let tags = TagRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
@@ -288,6 +288,7 @@ mod tests {
                 rating: None,
                 latitude: None,
                 longitude: None,
+                rotation: None,
             })
             .await
             .unwrap();
@@ -295,7 +296,7 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        sync_asset_tag_keywords(&pool, asset.id, &settings)
+        sync_asset_tag_keywords(&pools, asset.id, &settings)
             .await
             .unwrap();
         assert!(photos.join("tagged.cr2.xmp").exists());
@@ -308,11 +309,11 @@ mod tests {
         std::fs::create_dir_all(&photos).unwrap();
         std::fs::write(photos.join("tagged.cr2"), b"raw").unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
-        let meta_repo = AssetMetaRepo::new(pool.clone());
-        let tags = TagRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
+        let meta_repo = AssetMetaRepo::new(pools.clone());
+        let tags = TagRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
@@ -344,6 +345,7 @@ mod tests {
                 rating: None,
                 latitude: None,
                 longitude: None,
+                rotation: None,
             })
             .await
             .unwrap();
@@ -351,7 +353,7 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        sync_asset_tag_keywords(&pool, asset.id, &settings)
+        sync_asset_tag_keywords(&pools, asset.id, &settings)
             .await
             .unwrap();
         assert!(photos.join("tagged.cr2.xmp").exists());
@@ -368,11 +370,11 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
-        let meta_repo = AssetMetaRepo::new(pool.clone());
-        let tags = TagRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
+        let meta_repo = AssetMetaRepo::new(pools.clone());
+        let tags = TagRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
@@ -404,6 +406,7 @@ mod tests {
                 rating: None,
                 latitude: None,
                 longitude: None,
+                rotation: None,
             })
             .await
             .unwrap();
@@ -411,7 +414,7 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        sync_asset_tag_keywords(&pool, asset.id, &settings)
+        sync_asset_tag_keywords(&pools, asset.id, &settings)
             .await
             .unwrap();
         assert!(photos.join("dup.cr2.xmp").exists());
@@ -428,10 +431,10 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
-        let tags = TagRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
+        let tags = TagRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
@@ -457,11 +460,11 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        pool.close().await;
-        assert!(sync_asset_tag_keywords(&pool, asset.id, &settings)
+        pools.close().await;
+        assert!(sync_asset_tag_keywords(&pools, asset.id, &settings)
             .await
             .is_err());
-        assert!(sync_assets_tag_keywords(&pool, &[asset.id], &settings)
+        assert!(sync_assets_tag_keywords(&pools, &[asset.id], &settings)
             .await
             .is_err());
     }

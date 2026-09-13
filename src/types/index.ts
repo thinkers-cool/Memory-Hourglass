@@ -66,6 +66,7 @@ export interface AssetCard {
   thumb_path: string | null;
   abs_path: string;
   has_duplicate: boolean;
+  rotation?: number | null;
 }
 
 export interface AssetMeta {
@@ -77,6 +78,7 @@ export interface AssetMeta {
   latitude: number | null;
   longitude: number | null;
   keywords_json: string | null;
+  rotation: number | null;
 }
 
 export interface Asset {

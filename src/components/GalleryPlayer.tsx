@@ -4,6 +4,7 @@ import {
   Blend,
   ChevronLeft,
   ChevronRight,
+  Circle,
   Clock2,
   Clock3,
   Clock5,
@@ -39,8 +40,9 @@ const ICON_CLASS = "h-4 w-4";
 const THEME_ICONS: Record<SlideshowTheme, LucideIcon> = {
   dissolve: Blend,
   "ken-burns": Scan,
-  push: PanelRight,
   "fade-zoom": ZoomIn,
+  push: PanelRight,
+  "dip-black": Circle,
 };
 
 const INTERVAL_ICONS: Record<SlideshowIntervalMs, LucideIcon> = {
@@ -119,10 +121,11 @@ export function GalleryPlayer({
     playing,
     setPlaying,
     theme,
-    kenBurns,
     fromIndex,
     toIndex,
     progress,
+    incomingElapsedMs,
+    outgoingElapsedMs,
     goNext,
     goPrev,
     onVideoEnded,
@@ -205,9 +208,10 @@ export function GalleryPlayer({
           toIndex={toIndex}
           progress={progress}
           theme={theme}
-          kenBurns={kenBurns}
           dwellMs={settings.intervalMs}
           playing={playing}
+          incomingElapsedMs={incomingElapsedMs}
+          outgoingElapsedMs={outgoingElapsedMs}
           muted={settings.muteVideos}
           onVideoEnded={onVideoEnded}
         />

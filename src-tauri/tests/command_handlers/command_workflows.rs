@@ -50,7 +50,7 @@ async fn tag_filter_query_and_undo_metadata_change() {
 
     update_asset_meta(
         asset_id,
-        AssetMetaPatch { rating: Some(2) },
+        AssetMetaPatch { rating: Some(2), ..Default::default() },
         handle.clone(),
         state.clone(),
     )
@@ -58,7 +58,7 @@ async fn tag_filter_query_and_undo_metadata_change() {
     .unwrap();
     update_asset_meta(
         asset_id,
-        AssetMetaPatch { rating: Some(5) },
+        AssetMetaPatch { rating: Some(5), ..Default::default() },
         handle.clone(),
         state.clone(),
     )
@@ -95,7 +95,7 @@ async fn smart_collection_filter_matches_saved_criteria() {
 
     update_asset_meta(
         low_id,
-        AssetMetaPatch { rating: Some(2) },
+        AssetMetaPatch { rating: Some(2), ..Default::default() },
         handle.clone(),
         state.clone(),
     )
@@ -103,7 +103,7 @@ async fn smart_collection_filter_matches_saved_criteria() {
     .unwrap();
     update_asset_meta(
         high_id,
-        AssetMetaPatch { rating: Some(5) },
+        AssetMetaPatch { rating: Some(5), ..Default::default() },
         handle.clone(),
         state.clone(),
     )
@@ -320,7 +320,7 @@ async fn remove_local_root_scopes_library_to_remaining_source() {
     start_scan(drop_root.id, handle.clone(), state.clone())
         .await
         .unwrap();
-    let status = wait_for_scan(state.clone(), Duration::from_secs(30)).await;
+    let status = wait_for_scan(state.clone(), drop_root.id, Duration::from_secs(30)).await;
     assert_eq!(status.stage, "done");
     wait_for_jobs_idle(state.clone(), Duration::from_secs(30)).await;
 

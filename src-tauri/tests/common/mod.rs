@@ -46,13 +46,40 @@ impl TauriFixture {
     }
 }
 
+async fn scan_is_active(
+    state: tauri::State<'_, AppState>,
+    root_id: i64,
+) -> bool {
+    let running = state
+        .with_active(|ws| async move { Ok(ws.jobs.is_scan_running(root_id).await) })
+        .await
+        .expect("jobs");
+    if running {
+        return true;
+    }
+    let status = get_scan_status(Some(root_id), state.clone())
+        .await
+        .expect("scan status");
+    status.stage == "cataloging" || status.stage == "indexing"
+}
+
 pub async fn wait_for_scan(
     state: tauri::State<'_, AppState>,
+    root_id: i64,
     timeout: Duration,
 ) -> ScanProgressEvent {
     let deadline = tokio::time::Instant::now() + timeout;
+    let activation_deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    while tokio::time::Instant::now() < activation_deadline {
+        if scan_is_active(state.clone(), root_id).await {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
     loop {
-        let status = get_scan_status(state.clone()).await.expect("scan status");
+        let status = get_scan_status(Some(root_id), state.clone())
+            .await
+            .expect("scan status");
         if status.stage == "done" || status.stage == "error" {
             return status;
         }
@@ -63,18 +90,23 @@ pub async fn wait_for_scan(
     }
 }
 
+pub async fn wait_for_watcher_quiescence(state: tauri::State<'_, AppState>) {
+    wait_for_jobs_idle(state.clone(), Duration::from_secs(30)).await;
+    tokio::time::sleep(Duration::from_secs(4)).await;
+}
+
 pub async fn wait_for_jobs_idle(state: tauri::State<'_, AppState>, timeout: Duration) {
     let deadline = tokio::time::Instant::now() + timeout;
     loop {
-        let current = state
-            .with_active(|ws| async move { Ok(ws.jobs.current().await) })
+        let idle = state
+            .with_active(|ws| async move { Ok(ws.jobs.is_idle().await) })
             .await
             .expect("jobs status");
-        if current.is_none() {
+        if idle {
             return;
         }
         if tokio::time::Instant::now() >= deadline {
-            panic!("jobs timed out while running {}", current.unwrap());
+            panic!("jobs timed out while still active");
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
@@ -82,6 +114,7 @@ pub async fn wait_for_jobs_idle(state: tauri::State<'_, AppState>, timeout: Dura
 
 pub async fn wait_for_export_idle(state: tauri::State<'_, AppState>, timeout: Duration) {
     let deadline = tokio::time::Instant::now() + timeout;
+    let started_at = tokio::time::Instant::now();
     loop {
         let status = get_export_status(state.clone())
             .await
@@ -91,6 +124,16 @@ pub async fn wait_for_export_idle(state: tauri::State<'_, AppState>, timeout: Du
             "completed" | "failed" | "partial" | "cancelled"
         ) {
             return;
+        }
+        let jobs_idle = state
+            .with_active(|ws| async move { Ok(ws.jobs.is_idle().await) })
+            .await
+            .expect("jobs");
+        if jobs_idle
+            && status.status == "idle"
+            && started_at.elapsed() > Duration::from_secs(2)
+        {
+            panic!("export job never started");
         }
         if tokio::time::Instant::now() >= deadline {
             panic!("export timed out with status {}", status.status);
@@ -118,12 +161,25 @@ pub async fn seed_scanned_asset(
         .await
         .expect("add root");
 
+    state
+        .with_active(|ws| async move {
+            sqlx::query("UPDATE source_root SET scan_policy = 'poll' WHERE id = ?")
+                .bind(root.id)
+                .execute(ws.catalog.write_pool())
+                .await?;
+            ws.notify_roots_refresh();
+            Ok(())
+        })
+        .await
+        .expect("set scan policy");
+
+    wait_for_jobs_idle(state.clone(), Duration::from_secs(30)).await;
     start_scan(root.id, handle, state.clone())
         .await
         .expect("start scan");
-    let status = wait_for_scan(state.clone(), Duration::from_secs(30)).await;
+    let status = wait_for_scan(state.clone(), root.id, Duration::from_secs(30)).await;
     assert_eq!(status.stage, "done");
-    wait_for_jobs_idle(state.clone(), Duration::from_secs(30)).await;
+    wait_for_watcher_quiescence(state.clone()).await;
 
     let listed = query_assets(
         AssetFilter::default(),
@@ -173,7 +229,7 @@ pub async fn seed_extra_asset(
         wait_for_jobs_idle(state.clone(), Duration::from_secs(5)).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    let status = wait_for_scan(state.clone(), Duration::from_secs(30)).await;
+    let status = wait_for_scan(state.clone(), root_id, Duration::from_secs(30)).await;
     assert_eq!(status.stage, "done");
     wait_for_jobs_idle(state.clone(), Duration::from_secs(30)).await;
 

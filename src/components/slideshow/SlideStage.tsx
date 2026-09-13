@@ -1,8 +1,8 @@
 import { BlurredBackdrop } from "./BlurredBackdrop";
 import { PhotoSlide } from "./PhotoSlide";
 import { VideoSlide } from "./VideoSlide";
+import { layerMotion } from "../../lib/slideshow/motion";
 import { kenBurnsVariantForIndex } from "../../lib/slideshow/timing";
-import { layerStyle } from "../../lib/slideshow/transitions";
 import type {
   SlideshowIntervalMs,
   SlideshowTheme,
@@ -13,51 +13,50 @@ function SlideLayer({
   card,
   theme,
   role,
-  progress,
+  crossfadeProgress,
+  slideElapsedMs,
   dwellMs,
-  kenBurns,
   playing,
   muted,
-  transitioning,
   onVideoEnded,
 }: {
   card: AssetCard;
   theme: SlideshowTheme;
   role: "outgoing" | "incoming";
-  progress: number;
+  crossfadeProgress: number;
+  slideElapsedMs: number;
   dwellMs: SlideshowIntervalMs;
-  kenBurns: boolean;
   playing: boolean;
   muted: boolean;
-  transitioning: boolean;
   onVideoEnded: () => void;
 }) {
-  const style = layerStyle(theme, role, progress);
+  const motion = layerMotion({
+    theme,
+    role,
+    crossfadeT: crossfadeProgress,
+    slideElapsedMs,
+    dwellMs,
+    variant: kenBurnsVariantForIndex(card.id),
+  });
   const isPhoto = card.kind !== "video";
-  const showKenBurns =
-    kenBurns && isPhoto && role === "incoming" && !transitioning && playing;
 
   return (
     <div
-      className="absolute inset-0 flex items-center justify-center will-change-[opacity,transform]"
+      className="absolute inset-0 isolate overflow-hidden"
       style={{
-        opacity: style.opacity,
-        transform: style.transform,
+        opacity: motion.opacity,
+        transform: motion.transform,
+        transformOrigin: "center center",
         zIndex: role === "incoming" ? 2 : 1,
+        willChange: "opacity, transform",
       }}
     >
       {isPhoto ? (
-        <PhotoSlide
-          card={card}
-          kenBurns={kenBurns}
-          kenBurnsVariant={kenBurnsVariantForIndex(card.id)}
-          dwellMs={dwellMs}
-          animate={showKenBurns && playing}
-        />
+        <PhotoSlide card={card} />
       ) : (
         <VideoSlide
           card={card}
-          playing={playing && role === "incoming" && !transitioning}
+          playing={playing && role === "incoming"}
           muted={muted}
           onEnded={onVideoEnded}
         />
@@ -72,9 +71,10 @@ export function SlideStage({
   toIndex,
   progress,
   theme,
-  kenBurns,
   dwellMs,
   playing,
+  incomingElapsedMs,
+  outgoingElapsedMs,
   muted,
   onVideoEnded,
 }: {
@@ -83,34 +83,50 @@ export function SlideStage({
   toIndex: number;
   progress: number;
   theme: SlideshowTheme;
-  kenBurns: boolean;
   dwellMs: SlideshowIntervalMs;
   playing: boolean;
+  incomingElapsedMs: number;
+  outgoingElapsedMs: number;
   muted: boolean;
   onVideoEnded: () => void;
 }) {
   const incoming = items[toIndex];
   const outgoing = fromIndex !== null ? items[fromIndex] : null;
-  const transitioning =
-    fromIndex !== null && fromIndex !== toIndex && progress < 1;
+  const transitioning = fromIndex !== null && fromIndex !== toIndex;
   const backdropCard = incoming ?? outgoing;
 
   if (!backdropCard) return null;
 
+  const backdropStrength = 0.35;
+
   return (
     <div className="relative h-full w-full overflow-hidden bg-black">
-      <BlurredBackdrop card={backdropCard} />
+      {transitioning && outgoing ? (
+        <>
+          <BlurredBackdrop
+            card={outgoing}
+            opacity={backdropStrength * (1 - progress)}
+          />
+          {incoming && (
+            <BlurredBackdrop
+              card={incoming}
+              opacity={backdropStrength * progress}
+            />
+          )}
+        </>
+      ) : (
+        <BlurredBackdrop card={backdropCard} opacity={backdropStrength} />
+      )}
       {transitioning && outgoing && (
         <SlideLayer
           card={outgoing}
           theme={theme}
           role="outgoing"
-          progress={progress}
+          crossfadeProgress={progress}
+          slideElapsedMs={outgoingElapsedMs}
           dwellMs={dwellMs}
-          kenBurns={kenBurns}
           playing={false}
           muted={muted}
-          transitioning={true}
           onVideoEnded={onVideoEnded}
         />
       )}
@@ -119,12 +135,11 @@ export function SlideStage({
           card={incoming}
           theme={theme}
           role="incoming"
-          progress={transitioning ? progress : 1}
+          crossfadeProgress={transitioning ? progress : 1}
+          slideElapsedMs={incomingElapsedMs}
           dwellMs={dwellMs}
-          kenBurns={kenBurns}
           playing={playing}
           muted={muted}
-          transitioning={transitioning}
           onVideoEnded={onVideoEnded}
         />
       )}

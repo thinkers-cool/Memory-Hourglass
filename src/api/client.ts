@@ -134,8 +134,12 @@ export async function startScan(rootId: number): Promise<void> {
   return invoke("start_scan", { rootId });
 }
 
-export async function cancelScan(): Promise<void> {
-  return invoke("cancel_scan");
+export async function resumePendingScans(): Promise<void> {
+  return invoke("resume_pending_scans");
+}
+
+export async function cancelScan(rootId?: number): Promise<void> {
+  return invoke("cancel_scan", { rootId: rootId ?? null });
 }
 
 export async function pauseScan(): Promise<void> {
@@ -150,8 +154,14 @@ export async function rebuildCatalog(): Promise<void> {
   return invoke("rebuild_catalog");
 }
 
-export async function getScanStatus(): Promise<ScanProgress> {
-  return invoke<ScanProgress>("get_scan_status");
+export async function getScanStatus(rootId?: number): Promise<ScanProgress> {
+  return invoke<ScanProgress>("get_scan_status", {
+    rootId: rootId ?? null,
+  });
+}
+
+export async function listScanStatuses(): Promise<ScanProgress[]> {
+  return invoke<ScanProgress[]>("list_scan_statuses");
 }
 
 export async function queryAssets(
@@ -173,7 +183,7 @@ export async function getAsset(id: number): Promise<AssetDetail> {
 
 export async function updateAssetMeta(
   id: number,
-  patch: { rating?: number },
+  patch: { rating?: number; rotation?: number },
 ): Promise<AssetDetail> {
   return invoke<AssetDetail>("update_asset_meta", { id, patch });
 }
@@ -194,7 +204,7 @@ export async function batchRemoveTags(
 
 export async function batchUpdateAssetMeta(
   ids: number[],
-  patch: { rating?: number },
+  patch: { rating?: number; rotation?: number },
 ): Promise<number> {
   return invoke<number>("batch_update_asset_meta", { ids, patch });
 }

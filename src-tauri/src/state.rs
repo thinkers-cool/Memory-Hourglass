@@ -3,27 +3,32 @@ use crate::catalog::Catalog;
 use crate::collection::CollectionRepo;
 use crate::error::{AppError, Result};
 use crate::export::ExportService;
-use crate::jobs::JobQueue;
+use crate::jobs::JobPool;
+use std::collections::HashMap;
 use crate::library::LibraryService;
 use crate::link::LinkService;
 use crate::query::QueryService;
 use crate::scan::ScanService;
 use crate::watcher::WatcherService;
+use crate::path_util::canonicalize;
 use crate::workspace::{
     workspace_mounts_dir, WorkspaceInfo, WorkspaceMediaSettings, WorkspacePaths, WorkspaceService,
 };
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{watch, RwLock};
 
-pub struct ScanStatus {
-    pub root_id: Option<i64>,
+#[derive(Clone, Default)]
+pub struct RootScanStatus {
     pub stage: String,
     pub scanned: u64,
     pub indexed: u64,
     pub running: bool,
 }
+
+pub type ScanStatusMap = Arc<RwLock<HashMap<i64, RootScanStatus>>>;
 
 pub struct ActiveWorkspace {
     pub info: WorkspaceInfo,
@@ -32,8 +37,8 @@ pub struct ActiveWorkspace {
     pub catalog: Catalog,
     pub thumb_dir: PathBuf,
     pub library: LibraryService,
-    pub jobs: JobQueue,
-    pub scan_status: Arc<RwLock<ScanStatus>>,
+    pub jobs: JobPool,
+    pub scan_status: ScanStatusMap,
     pub collection: CollectionRepo,
     pub activity: ActivityRecorder,
     pub link: LinkService,
@@ -44,7 +49,7 @@ pub struct ActiveWorkspace {
 
 impl ActiveWorkspace {
     pub async fn open(path: &Path, app_data_dir: &Path) -> Result<Self> {
-        let canonical = std::fs::canonicalize(path).map_err(|_| {
+        let canonical = canonicalize(path).map_err(|_| {
             AppError::Workspace(format!("workspace path not found: {}", path.display()))
         })?;
         let info = crate::workspace::workspace_info(&canonical)?;
@@ -53,7 +58,7 @@ impl ActiveWorkspace {
         let media_settings = WorkspaceMediaSettings::from_paths(&paths, info.read_only);
 
         let catalog = Catalog::open(&paths.catalog_path()).await?;
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = paths.thumbs_dir();
         let mount_dir = workspace_mounts_dir(app_data_dir, &info.id);
         std::fs::create_dir_all(&mount_dir)?;
@@ -61,12 +66,12 @@ impl ActiveWorkspace {
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let (roots_refresh, roots_refresh_rx) = watch::channel(0u64);
 
-        let watcher = WatcherService::new(pool.clone(), thumb_dir.clone(), media_settings.clone());
-        let jobs = JobQueue::new();
+        let watcher = WatcherService::new(pools.clone(), thumb_dir.clone(), media_settings.clone());
+        let jobs = JobPool::new();
         watcher.spawn_dynamic_local_watcher(jobs.clone(), shutdown_rx.clone(), roots_refresh_rx);
         watcher.spawn_smb_poller(jobs.clone(), shutdown_rx);
 
-        let library = LibraryService::with_mount_mode(pool.clone(), mount_dir, info.read_only);
+        let library = LibraryService::with_mount_mode(pools.clone(), mount_dir, info.read_only);
         library.ensure_smb_mounts_ready().await?;
 
         Ok(Self {
@@ -77,16 +82,10 @@ impl ActiveWorkspace {
             thumb_dir,
             library,
             jobs,
-            scan_status: Arc::new(RwLock::new(ScanStatus {
-                root_id: None,
-                stage: "idle".into(),
-                scanned: 0,
-                indexed: 0,
-                running: false,
-            })),
-            collection: CollectionRepo::new(pool.clone()),
-            activity: ActivityRecorder::new(pool.clone()),
-            link: LinkService::new(pool.clone()),
+            scan_status: Arc::new(RwLock::new(HashMap::new())),
+            collection: CollectionRepo::new(pools.clone()),
+            activity: ActivityRecorder::new(pools.clone()),
+            link: LinkService::new(pools.clone()),
             shutdown_tx,
             scan_pause: Arc::new(AtomicBool::new(false)),
             roots_refresh,
@@ -98,8 +97,16 @@ impl ActiveWorkspace {
         let _ = self.roots_refresh.send(next);
     }
 
-    pub fn scan_control(&self) -> crate::scan::ScanControl {
-        crate::scan::ScanControl::new(self.scan_pause.clone(), self.jobs.cancel_flag())
+    pub async fn terminate_root_jobs(&self, root_id: i64) {
+        self.jobs.cancel_and_clear_root(root_id).await;
+        self.scan_status.write().await.remove(&root_id);
+        self.jobs
+            .wait_scan_stopped(root_id, Duration::from_secs(5))
+            .await;
+    }
+
+    pub fn scan_control(&self, cancel: Arc<AtomicBool>) -> crate::scan::ScanControl {
+        crate::scan::ScanControl::new(self.scan_pause.clone(), cancel)
     }
 
     pub fn pause_scan(&self) {
@@ -112,7 +119,7 @@ impl ActiveWorkspace {
 
     pub fn scan_service(&self) -> ScanService {
         ScanService::with_media_settings(
-            self.catalog.pool().clone(),
+            self.catalog.pools().clone(),
             self.thumb_dir.clone(),
             self.media_settings.clone(),
         )
@@ -120,14 +127,14 @@ impl ActiveWorkspace {
 
     pub fn query_service(&self) -> QueryService {
         QueryService::with_media_settings(
-            self.catalog.pool().clone(),
+            self.catalog.pools().clone(),
             self.thumb_dir.clone(),
             self.media_settings.clone(),
         )
     }
 
     pub fn export_service(&self) -> ExportService {
-        ExportService::new(self.catalog.pool().clone())
+        ExportService::new(self.catalog.pools().clone())
     }
 
     pub fn shutdown(&self) {
@@ -384,7 +391,7 @@ mod tests {
         let (state, _dir) = AppState::test_with_fresh_workspace().await.unwrap();
         state
             .with_active(|ws| async move {
-                let _ = ws.scan_control();
+                let _ = ws.scan_control(Arc::new(AtomicBool::new(false)));
                 let _ = ws.scan_service();
                 let _ = ws.query_service();
                 let _ = ws.export_service();

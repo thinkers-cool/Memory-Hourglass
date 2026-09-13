@@ -40,6 +40,7 @@ pub struct AssetScanState {
     pub size: i64,
     pub indexed_mtime_ns: Option<i64>,
     pub thumb_key: Option<String>,
+    pub content_hash: Option<String>,
     pub kind: String,
     pub raw_tag_count: i64,
 }
@@ -54,6 +55,7 @@ pub struct AssetMeta {
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
     pub keywords_json: Option<String>,
+    pub rotation: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +70,7 @@ pub struct AssetCard {
     pub thumb_path: Option<String>,
     pub abs_path: String,
     pub has_duplicate: bool,
+    pub rotation: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -149,4 +152,5 @@ pub struct ExportOptions {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AssetMetaPatch {
     pub rating: Option<i64>,
+    pub rotation: Option<i64>,
 }

@@ -55,7 +55,8 @@ export type LibraryActionsDeps = {
   setPurgeDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setPurgeTargetIds: React.Dispatch<React.SetStateAction<number[]>>;
   setGridColumnCount: React.Dispatch<React.SetStateAction<number>>;
-  setScanStatus: React.Dispatch<React.SetStateAction<string>>;
+  clearScanStatus: () => void;
+  setFocusScanRootId: React.Dispatch<React.SetStateAction<number | null>>;
   setNotification: React.Dispatch<React.SetStateAction<Notification | null>>;
   refreshMeta: () => Promise<void>;
   refreshGrid: () => Promise<void>;

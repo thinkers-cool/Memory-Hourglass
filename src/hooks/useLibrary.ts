@@ -3,7 +3,7 @@ import * as api from "../api/client";
 import { loadGridColumnCount, saveGridColumnCount } from "../lib/gridSettings";
 import i18n from "../i18n";
 import { infoNotification, errorNotification } from "../lib/notification";
-import { pickFolder } from "../lib/pickFolder";
+import { pickFolders } from "../lib/pickFolder";
 import { createLibraryActions } from "./library/createLibraryActions";
 import { useLibraryConfirm } from "./library/useLibraryConfirm";
 import { useLibraryExport } from "./library/useLibraryExport";
@@ -84,24 +84,35 @@ export function useLibrary(readOnly = false) {
 
   const addRootAndScan = useCallback(
     async (add: (path: string) => Promise<{ id: number; path: string }>) => {
-      let path: string | null;
+      let paths: string[];
       try {
-        path = await pickFolder();
+        paths = await pickFolders();
       } catch (error) {
         setNotification(errorNotification(error));
         return;
       }
-      if (!path) return;
+      if (paths.length === 0) return;
 
       await withBusy(async () => {
-        const root = await add(path);
+        const roots = [];
+        for (const path of paths) {
+          roots.push(await add(path));
+        }
         await query.refreshMeta();
         setNotification(
-          infoNotification(i18n.t("library:notification.addedFolderScanning")),
+          infoNotification(
+            roots.length === 1
+              ? i18n.t("library:notification.addedFolderScanning")
+              : i18n.t("library:notification.addedFoldersScanning", {
+                  count: roots.length,
+                }),
+          ),
         );
-        void api.startScan(root.id).catch((error) => {
-          setNotification(errorNotification(error));
-        });
+        for (const root of roots) {
+          void api.startScan(root.id).catch((error) => {
+            setNotification(errorNotification(error));
+          });
+        }
       });
     },
     [query, setNotification, withBusy],
@@ -152,7 +163,8 @@ export function useLibrary(readOnly = false) {
         setPurgeDialogOpen,
         setPurgeTargetIds,
         setGridColumnCount,
-        setScanStatus: query.setScanStatus,
+        clearScanStatus: query.clearScanStatus,
+        setFocusScanRootId: query.setFocusScanRootId,
         setNotification,
         refreshMeta: query.refreshMeta,
         refreshGrid: query.refreshGrid,
@@ -188,7 +200,8 @@ export function useLibrary(readOnly = false) {
       query.refreshMeta,
       query.setExtraFilter,
       query.setFilterBar,
-      query.setScanStatus,
+      query.clearScanStatus,
+      query.setFocusScanRootId,
       query.setSelectedCollectionId,
       query.sortParam,
       requestConfirm,
@@ -230,6 +243,8 @@ export function useLibrary(readOnly = false) {
     busy,
     notification,
     scanStatus: query.scanStatus,
+    scanStatusByRoot: query.scanStatusByRoot,
+    focusScanRootId: query.focusScanRootId,
     galleryIndex,
     setGalleryIndex,
     fullView,

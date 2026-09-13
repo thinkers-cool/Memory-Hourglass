@@ -1,6 +1,6 @@
 use crate::activity::revert::UndoContext;
 use crate::activity::ActivityEntry;
-use crate::commands::context::trace_command;
+use crate::commands::context::{trace_command, trace_command_with_id};
 use crate::error::Result;
 use crate::state::AppState;
 use tauri::State;
@@ -12,7 +12,7 @@ pub async fn query_asset_activity(
     limit: Option<i64>,
     state: State<'_, AppState>,
 ) -> Result<Vec<ActivityEntry>> {
-    trace_command("query_asset_activity", |_correlation_id| async move {
+    trace_command("query_asset_activity", || async move {
         state
             .with_active(|ws| async move {
                 ws.activity
@@ -27,12 +27,12 @@ pub async fn query_asset_activity(
 
 #[tauri::command]
 pub async fn undo_activity(activity_id: i64, state: State<'_, AppState>) -> Result<i64> {
-    trace_command("undo_activity", |correlation_id| async move {
+    trace_command_with_id("undo_activity", |correlation_id| async move {
         let correlation_for_undo = correlation_id.clone();
         state
             .with_active(|ws| async move {
                 let undo_ctx = UndoContext {
-                    pool: ws.catalog.pool().clone(),
+                    pools: ws.catalog.pools().clone(),
                     thumb_dir: ws.thumb_dir.clone(),
                     read_only: ws.media_settings.read_only,
                     correlation_id: Some(correlation_for_undo),

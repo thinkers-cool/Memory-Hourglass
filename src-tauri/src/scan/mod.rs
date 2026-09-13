@@ -4,70 +4,48 @@ pub mod index_asset;
 pub mod index_integrity;
 pub mod index_pipeline;
 
-use crate::catalog::repo::UpsertAssetInput;
-use crate::catalog::Catalog;
+use crate::catalog::models::SourceRoot;
+use crate::catalog::repo::{AssetRepo, SourceRootRepo, UpsertAssetInput};
 use crate::error::{AppError, Result};
+use crate::path_util::is_network_storage_path;
 use crate::metadata::metadata_context_for_asset;
 use crate::scan::extensions::{asset_kind, is_media_file, should_ignore};
 use crate::scan::index_asset::{index_batch_on_disk, BatchIndexItem};
 use crate::scan::index_integrity::is_index_complete;
-use crate::scan::index_pipeline::{apply_index_output, IndexApplyInput};
+use crate::scan::index_pipeline::{apply_index_outputs_batch, IndexApplyInput};
 use crate::workspace::WorkspaceMediaSettings;
 use extensions::MEDIA_EXTENSIONS;
-use sqlx::SqlitePool;
+use crate::catalog::pools::CatalogPools;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use walkdir::WalkDir;
 
 pub use control::ScanControl;
 
 use control::{should_stop_index_batch, should_stop_inventory_batch};
 
-pub mod test_hooks {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Mutex;
-
-    pub static FINALIZE_SCAN_LINKS_FAIL: AtomicBool = AtomicBool::new(false);
-
-    static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
-
-    pub(crate) fn reset_unlocked() {
-        FINALIZE_SCAN_LINKS_FAIL.store(false, Ordering::SeqCst);
-        std::env::remove_var("MEMHG_TEST_INDEX_QUEUE_FAIL");
-        std::env::remove_var("MEMHG_TEST_CANCEL_AFTER_PAUSE");
-        std::env::remove_var("MEMHG_TEST_FORCE_INDEX_CANCEL");
-        std::env::remove_var("MEMHG_TEST_FORCE_INVALID_FILE_NAME");
-        std::env::remove_var("MEMHG_TEST_NULL_MTIME");
-        std::env::remove_var("MEMHG_TEST_DISCOVERY_FAIL");
-        std::env::remove_var("MEMHG_TEST_DISCOVERY_PANIC");
-        std::env::remove_var("MEMHG_TEST_INDEX_BATCH_PANIC");
-        std::env::remove_var("MEMHG_TEST_STRIP_PREFIX_FAIL");
-    }
-
-    pub fn with_env_test_lock<F, R>(f: F) -> R
-    where
-        F: FnOnce() -> R,
-    {
-        let _guard = ENV_TEST_LOCK.lock().unwrap();
-        f()
-    }
-
-    pub fn env_test_guard() -> std::sync::MutexGuard<'static, ()> {
-        ENV_TEST_LOCK.lock().unwrap()
-    }
-
-    pub fn reset() {
-        let _guard = ENV_TEST_LOCK.lock().unwrap();
-        reset_unlocked();
-    }
-}
+pub mod test_hooks;
 
 const SCAN_BATCH_SIZE: usize = 250;
-const INDEX_BATCH_SIZE: usize = 32;
+const INDEX_CHUNK_SIZE: usize = 8;
 const DISCOVERY_PROGRESS_INTERVAL: u64 = 500;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IoProfile {
+    Local,
+    Network,
+}
+
+pub fn io_profile_for_root(kind: &str, path: &Path) -> IoProfile {
+    if kind == "smb" || is_network_storage_path(path) {
+        IoProfile::Network
+    } else {
+        IoProfile::Local
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct PostProcessItem {
@@ -78,6 +56,8 @@ pub(crate) struct PostProcessItem {
     pub mtime_ns: i64,
     pub kind: String,
     pub prior_thumb_key: Option<String>,
+    pub prior_indexed_mtime_ns: Option<i64>,
+    pub prior_content_hash: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -108,37 +88,81 @@ pub struct ScanSummary {
 pub(crate) struct ScanInventoryResult {
     pub summary: ScanSummary,
     pub index_queue: Vec<PostProcessItem>,
-    pub root_path: PathBuf,
 }
 
 pub struct ScanService {
-    pub(crate) pool: SqlitePool,
+    pub(crate) pools: CatalogPools,
     pub(crate) thumb_dir: PathBuf,
     pub(crate) media_settings: WorkspaceMediaSettings,
+    pub(crate) io_profile: IoProfile,
+}
+
+pub async fn list_roots_needing_scan(pools: &CatalogPools) -> Result<Vec<i64>> {
+    use std::collections::HashSet;
+    let mut ids = HashSet::new();
+    let never_scanned = sqlx::query_scalar::<_, i64>(
+        "SELECT id FROM source_root WHERE last_scan_at IS NULL ORDER BY id",
+    )
+    .fetch_all(pools.read())
+    .await?;
+    ids.extend(never_scanned);
+    let incomplete = sqlx::query_scalar::<_, i64>(
+        r"SELECT DISTINCT root_id FROM asset
+           WHERE deleted_at IS NULL
+             AND sync_state != 'missing'
+             AND (
+               indexed_mtime_ns IS NULL
+               OR indexed_mtime_ns != mtime_ns
+               OR (kind IN ('image','video','raw') AND (thumb_key IS NULL OR thumb_key = ''))
+             )
+           ORDER BY root_id",
+    )
+    .fetch_all(pools.read())
+    .await?;
+    ids.extend(incomplete);
+    let mut sorted: Vec<i64> = ids.into_iter().collect();
+    sorted.sort_unstable();
+    Ok(sorted)
 }
 
 impl ScanService {
-    pub fn new(pool: SqlitePool, thumb_dir: PathBuf) -> Self {
-        Self::with_media_settings(pool, thumb_dir, WorkspaceMediaSettings::default())
+    pub fn new(pools: CatalogPools, thumb_dir: PathBuf) -> Self {
+        Self::with_media_settings(pools, thumb_dir, WorkspaceMediaSettings::default())
     }
 
     pub fn with_media_settings(
-        pool: SqlitePool,
+        pools: CatalogPools,
         thumb_dir: PathBuf,
         media_settings: WorkspaceMediaSettings,
     ) -> Self {
         Self {
-            pool,
+            pools,
             thumb_dir,
             media_settings,
+            io_profile: IoProfile::Local,
+        }
+    }
+
+    pub fn for_root(&self, root: &SourceRoot) -> Self {
+        Self {
+            pools: self.pools.clone(),
+            thumb_dir: self.thumb_dir.clone(),
+            media_settings: self.media_settings.clone(),
+            io_profile: io_profile_for_root(&root.kind, Path::new(&root.path)),
         }
     }
 
     pub async fn scan_root(&self, root_id: i64, ctrl: &ScanControl) -> Result<ScanSummary> {
-        let inventory = self.scan_inventory(root_id, ctrl, |_, _| {}).await?;
-        self.process_index_queue(ctrl, &inventory.index_queue, |_, _, _| {})
+        let root = SourceRootRepo::new(self.pools.clone()).get_root(root_id).await?;
+        let scanner = self.for_root(&root);
+        let inventory = scanner
+            .scan_inventory(root_id, ctrl, |_, _| {})
             .await?;
-        self.finalize_scan_links(root_id, &inventory.root_path)
+        scanner
+            .process_index_queue(ctrl, &inventory.index_queue, |_, _, _| {})
+            .await?;
+        scanner
+            .finalize_scan_links(root_id)
             .await?;
         Ok(inventory.summary)
     }
@@ -164,8 +188,7 @@ impl ScanService {
     where
         F: FnMut(u64, u64),
     {
-        let catalog = Catalog::from_pool(self.pool.clone());
-        let roots = catalog.roots();
+        let roots = SourceRootRepo::new(self.pools.clone());
         let root = roots.get_root(root_id).await?;
         let root_path = PathBuf::from(&root.path);
         if !root_path.is_dir() {
@@ -179,13 +202,20 @@ impl ScanService {
                     missing_count: 0,
                 },
                 index_queue: Vec::new(),
-                root_path,
             });
         }
 
         roots.set_status(root_id, "scanning").await?;
 
-        let assets = catalog.assets();
+        tracing::info!(
+            root_id,
+            path = %root_path.display(),
+            io_profile = ?self.io_profile,
+            "scan inventory start"
+        );
+        let inventory_start = Instant::now();
+
+        let assets = AssetRepo::new(self.pools.clone());
         let existing = assets.list_scan_state_for_root(root_id).await?;
         let existing_by_path: HashMap<String, _> = existing
             .into_iter()
@@ -201,9 +231,19 @@ impl ScanService {
         let discovered_count = Arc::new(AtomicU64::new(0));
         let cancelled = ctrl.cancelled_flag();
         let root_path_for_walk = root_path.clone();
+        let discovery_fail = test_hooks::take_flag("MEMHG_TEST_DISCOVERY_FAIL");
+        let discovery_panic = test_hooks::take_flag("MEMHG_TEST_DISCOVERY_PANIC");
         let collect_handle = tokio::task::spawn_blocking({
             let discovered_count = discovered_count.clone();
-            move || collect_discovered_files(&root_path_for_walk, cancelled, discovered_count)
+            move || {
+                if discovery_fail {
+                    return Err(AppError::Scan("discovery failed".into()));
+                }
+                if discovery_panic {
+                    panic!("discovery panic");
+                }
+                collect_discovered_files(&root_path_for_walk, cancelled, discovered_count)
+            }
         });
 
         while !collect_handle.is_finished() {
@@ -221,6 +261,15 @@ impl ScanService {
         let discovered = collect_handle
             .await
             .map_err(|error| AppError::Scan(format!("discovery failed: {}", error)))??;
+
+        let discovery_ms = inventory_start.elapsed().as_millis() as u64;
+        tracing::info!(
+            root_id,
+            discovery_ms,
+            files = discovered.len(),
+            "scan discovery complete"
+        );
+        let catalog_start = Instant::now();
 
         let mut seen = HashMap::new();
         let mut summary = ScanSummary {
@@ -242,7 +291,13 @@ impl ScanService {
             }
 
             let mut batch_inputs = Vec::new();
-            let mut batch_meta: Vec<(&DiscoveredFile, bool, Option<String>)> = Vec::new();
+            let mut batch_meta: Vec<(
+                &DiscoveredFile,
+                bool,
+                Option<String>,
+                Option<i64>,
+                Option<String>,
+            )> = Vec::new();
 
             for entry in batch {
                 seen.insert(entry.rel_path.clone(), (entry.mtime_ns, entry.size));
@@ -286,12 +341,16 @@ impl ScanService {
                     entry,
                     needs_index,
                     prior.and_then(|row| row.thumb_key.clone()),
+                    prior.and_then(|row| row.indexed_mtime_ns),
+                    prior.and_then(|row| row.content_hash.clone()),
                 ));
             }
 
             let asset_ids = assets.upsert_assets_batch(root_id, &batch_inputs).await?;
-            for ((entry, needs_index, prior_thumb_key), asset_id) in
-                batch_meta.into_iter().zip(asset_ids)
+            for (
+                (entry, needs_index, prior_thumb_key, prior_indexed_mtime_ns, prior_content_hash),
+                asset_id,
+            ) in batch_meta.into_iter().zip(asset_ids)
             {
                 summary.indexed += 1;
                 if needs_index {
@@ -303,6 +362,8 @@ impl ScanService {
                         mtime_ns: entry.mtime_ns,
                         kind: entry.kind.clone(),
                         prior_thumb_key,
+                        prior_indexed_mtime_ns,
+                        prior_content_hash,
                     });
                 }
             }
@@ -325,11 +386,75 @@ impl ScanService {
 
         on_progress(summary.scanned, summary.indexed);
 
+        tracing::info!(
+            root_id,
+            discovery_ms,
+            catalog_ms = catalog_start.elapsed().as_millis() as u64,
+            total_ms = inventory_start.elapsed().as_millis() as u64,
+            scanned = summary.scanned,
+            new = summary.new_count,
+            modified = summary.modified_count,
+            missing = summary.missing_count,
+            index_queue = index_queue.len(),
+            "scan catalog complete"
+        );
+
         Ok(ScanInventoryResult {
             summary,
             index_queue,
-            root_path,
         })
+    }
+
+    async fn apply_indexed_chunk<F>(
+        &self,
+        root_id: i64,
+        processed: u64,
+        total: u64,
+        chunk_len: usize,
+        index_ms: u64,
+        indexed_batch: Vec<(i64, i64, String, Option<String>, index_asset::IndexOutput)>,
+        on_progress: &mut F,
+    ) -> Result<u64>
+    where
+        F: FnMut(u64, u64, &[IndexedThumbUpdate]),
+    {
+        let mut batch_thumbs = Vec::new();
+        let mut batch_inputs = Vec::new();
+        for (asset_id, mtime_ns, kind, prior_thumb_key, indexed) in indexed_batch {
+            if let Some(key) = indexed.thumb_key.as_ref() {
+                batch_thumbs.push(IndexedThumbUpdate {
+                    asset_id,
+                    thumb_path: self.thumb_dir.join(key).to_string_lossy().to_string(),
+                });
+            }
+            if indexed.skipped {
+                continue;
+            }
+            batch_inputs.push(IndexApplyInput {
+                asset_id,
+                mtime_ns,
+                kind,
+                prior_thumb_key,
+                indexed,
+            });
+        }
+        let db_start = Instant::now();
+        apply_index_outputs_batch(&self.pools, &batch_inputs).await?;
+        let db_ms = db_start.elapsed().as_millis() as u64;
+
+        let processed = processed + chunk_len as u64;
+        on_progress(processed, total, &batch_thumbs);
+        tracing::info!(
+            root_id,
+            processed,
+            total,
+            chunk = chunk_len,
+            index_ms,
+            db_ms,
+            thumbs = batch_thumbs.len(),
+            "scan index chunk"
+        );
+        Ok(processed)
     }
 
     pub(crate) async fn process_index_queue<F>(
@@ -350,8 +475,29 @@ impl ScanService {
             return Err(AppError::Scan("index queue failed".into()));
         }
 
+        let root_id = index_queue.first().map(|item| item.root_id).unwrap_or(0);
+        tracing::info!(
+            root_id,
+            total,
+            io_profile = ?self.io_profile,
+            chunk_size = INDEX_CHUNK_SIZE,
+            "scan index start"
+        );
+        let index_start = Instant::now();
+
+        let chunks: Vec<Vec<PostProcessItem>> = index_queue
+            .chunks(INDEX_CHUNK_SIZE)
+            .map(|batch| batch.to_vec())
+            .collect();
+
         let mut processed = 0u64;
-        for batch in index_queue.chunks(INDEX_BATCH_SIZE) {
+        let mut in_flight: Option<
+            tokio::task::JoinHandle<
+                Result<Vec<(i64, i64, String, Option<String>, index_asset::IndexOutput)>>,
+            >,
+        > = None;
+
+        for chunk_index in 0..chunks.len() {
             if should_stop_index_batch(ctrl) {
                 return Ok(());
             }
@@ -360,90 +506,167 @@ impl ScanService {
                 return Ok(());
             }
 
-            let thumb_dir = self.thumb_dir.clone();
-            let media_settings = self.media_settings.clone();
-            let batch_items = batch.to_vec();
-            let indexed_batch = tokio::task::spawn_blocking(move || {
-                if std::env::var_os("MEMHG_TEST_INDEX_BATCH_PANIC").is_some() {
-                    std::env::remove_var("MEMHG_TEST_INDEX_BATCH_PANIC");
-                    panic!("index batch panic");
-                }
-                let batch_index_items = batch_items
-                    .iter()
-                    .map(|item| {
-                        let metadata_ctx = metadata_context_for_asset(
-                            media_settings.read_only,
-                            &media_settings.workspace_xmp_dir,
-                            item.root_id,
-                            &item.rel_path,
-                            item.path.clone(),
-                        );
-                        BatchIndexItem {
-                            asset_id: item.asset_id,
-                            path: item.path.clone(),
-                            metadata_ctx,
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                let indexed_by_id = index_batch_on_disk(&batch_index_items, &thumb_dir);
-                batch_items
-                    .into_iter()
-                    .zip(indexed_by_id)
-                    .map(|(item, (asset_id, indexed))| {
-                        (
-                            asset_id,
-                            item.mtime_ns,
-                            item.kind,
-                            item.prior_thumb_key,
-                            indexed,
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .await
-            .map_err(|error| AppError::Scan(format!("index batch failed: {}", error)))?;
-
-            let mut batch_thumbs = Vec::new();
-            for (asset_id, mtime_ns, kind, prior_thumb_key, indexed) in indexed_batch {
-                if let Some(key) = indexed.thumb_key.as_ref() {
-                    batch_thumbs.push(IndexedThumbUpdate {
-                        asset_id,
-                        thumb_path: self.thumb_dir.join(key).to_string_lossy().to_string(),
-                    });
-                }
-                apply_index_output(
-                    &self.pool,
-                    &IndexApplyInput {
-                        asset_id,
-                        mtime_ns,
-                        kind,
-                        prior_thumb_key,
-                        indexed,
-                    },
-                )
-                .await?;
+            if in_flight.is_none() {
+                let batch_items = chunks[chunk_index].clone();
+                let thumb_dir = self.thumb_dir.clone();
+                let media_settings = self.media_settings.clone();
+                let io_profile = self.io_profile;
+                in_flight = Some(
+                    spawn_index_chunk(batch_items, thumb_dir, media_settings, io_profile),
+                );
             }
 
-            processed += batch.len() as u64;
-            on_progress(processed, total, &batch_thumbs);
+            if chunk_index + 1 < chunks.len() {
+                let batch_items = chunks[chunk_index + 1].clone();
+                let thumb_dir = self.thumb_dir.clone();
+                let media_settings = self.media_settings.clone();
+                let io_profile = self.io_profile;
+                let next_handle =
+                    spawn_index_chunk(batch_items, thumb_dir, media_settings, io_profile);
+                let chunk_index_start = Instant::now();
+                let handle = in_flight.take().expect("index batch in flight");
+                in_flight = Some(next_handle);
+                let indexed_batch = handle
+                    .await
+                    .map_err(|error| AppError::Scan(format!("index batch failed: {}", error)))??;
+                let index_ms = chunk_index_start.elapsed().as_millis() as u64;
+                let chunk_len = chunks[chunk_index].len();
+                processed = self
+                    .apply_indexed_chunk(
+                        root_id,
+                        processed,
+                        total,
+                        chunk_len,
+                        index_ms,
+                        indexed_batch,
+                        &mut on_progress,
+                    )
+                    .await?;
+            } else {
+                let chunk_index_start = Instant::now();
+                let handle = in_flight.take().expect("index batch in flight");
+                let indexed_batch = handle
+                    .await
+                    .map_err(|error| AppError::Scan(format!("index batch failed: {}", error)))??;
+                let index_ms = chunk_index_start.elapsed().as_millis() as u64;
+                let chunk_len = chunks[chunk_index].len();
+                processed = self
+                    .apply_indexed_chunk(
+                        root_id,
+                        processed,
+                        total,
+                        chunk_len,
+                        index_ms,
+                        indexed_batch,
+                        &mut on_progress,
+                    )
+                    .await?;
+            }
+
             tokio::task::yield_now().await;
         }
 
+        tracing::info!(
+            root_id,
+            total,
+            elapsed_ms = index_start.elapsed().as_millis() as u64,
+            "scan index complete"
+        );
+
         Ok(())
     }
 
-    pub async fn finalize_scan_links(&self, root_id: i64, root_path: &Path) -> Result<()> {
+    pub async fn finalize_scan_links(&self, root_id: i64) -> Result<()> {
         #[cfg(test)]
-        if test_hooks::FINALIZE_SCAN_LINKS_FAIL.load(Ordering::SeqCst) {
+        if test_hooks::finalize_scan_links_should_fail() {
             return Err(AppError::Scan("finalize scan links failed".into()));
         }
-        let link = crate::link::LinkService::new(self.pool.clone());
+        let link = crate::link::LinkService::new(self.pools.clone());
         link.link_raw_jpeg_in_root(root_id).await?;
-        link.compute_hashes_for_root(root_id, root_path).await?;
-        link.rebuild_duplicate_links().await?;
-        link.refresh_duplicate_flags().await?;
         Ok(())
     }
+
+    pub async fn run_duplicate_index(&self, root_id: i64) -> Result<()> {
+        let link = crate::link::LinkService::new(self.pools.clone());
+        link.rebuild_duplicate_links().await?;
+        link.refresh_duplicate_flags_for_root(root_id).await?;
+        Ok(())
+    }
+
+    pub fn spawn_duplicate_index(&self, root_id: i64) {
+        let pools = self.pools.clone();
+        tokio::spawn(async move {
+            let link = crate::link::LinkService::new(pools);
+            if let Err(error) = link.rebuild_duplicate_links().await {
+                tracing::warn!(root_id, error = %error, "duplicate index rebuild failed");
+                return;
+            }
+            if let Err(error) = link.refresh_duplicate_flags_for_root(root_id).await {
+                tracing::warn!(root_id, error = %error, "duplicate flag refresh failed");
+            }
+        });
+    }
+}
+
+fn spawn_index_chunk(
+    batch_items: Vec<PostProcessItem>,
+    thumb_dir: PathBuf,
+    media_settings: WorkspaceMediaSettings,
+    io_profile: IoProfile,
+) -> tokio::task::JoinHandle<
+    Result<Vec<(i64, i64, String, Option<String>, index_asset::IndexOutput)>>,
+> {
+    let index_batch_panic = test_hooks::take_flag("MEMHG_TEST_INDEX_BATCH_PANIC");
+    tokio::task::spawn_blocking(move || {
+        if index_batch_panic {
+            panic!("index batch panic");
+        }
+        Ok(run_index_chunk(batch_items, thumb_dir, media_settings, io_profile))
+    })
+}
+
+fn run_index_chunk(
+    batch_items: Vec<PostProcessItem>,
+    thumb_dir: PathBuf,
+    media_settings: WorkspaceMediaSettings,
+    io_profile: IoProfile,
+) -> Vec<(i64, i64, String, Option<String>, index_asset::IndexOutput)> {
+    let batch_index_items = batch_items
+        .iter()
+        .map(|item| {
+            let metadata_ctx = metadata_context_for_asset(
+                media_settings.read_only,
+                &media_settings.workspace_xmp_dir,
+                item.root_id,
+                &item.rel_path,
+                item.path.clone(),
+            );
+            BatchIndexItem {
+                asset_id: item.asset_id,
+                path: item.path.clone(),
+                metadata_ctx,
+                mtime_ns: item.mtime_ns,
+                kind: item.kind.clone(),
+                prior_thumb_key: item.prior_thumb_key.clone(),
+                prior_indexed_mtime_ns: item.prior_indexed_mtime_ns,
+                prior_content_hash: item.prior_content_hash.clone(),
+            }
+        })
+        .collect::<Vec<_>>();
+    let indexed_by_id = index_batch_on_disk(&batch_index_items, &thumb_dir, io_profile);
+    batch_items
+        .into_iter()
+        .zip(indexed_by_id)
+        .map(|(item, (asset_id, indexed))| {
+            (
+                asset_id,
+                item.mtime_ns,
+                item.kind,
+                item.prior_thumb_key,
+                indexed,
+            )
+        })
+        .collect()
 }
 
 fn collect_discovered_files(
@@ -451,14 +674,6 @@ fn collect_discovered_files(
     cancelled: Arc<std::sync::atomic::AtomicBool>,
     discovered_count: Arc<AtomicU64>,
 ) -> Result<Vec<DiscoveredFile>> {
-    if std::env::var_os("MEMHG_TEST_DISCOVERY_FAIL").is_some() {
-        std::env::remove_var("MEMHG_TEST_DISCOVERY_FAIL");
-        return Err(AppError::Scan("discovery failed".into()));
-    }
-    if std::env::var_os("MEMHG_TEST_DISCOVERY_PANIC").is_some() {
-        std::env::remove_var("MEMHG_TEST_DISCOVERY_PANIC");
-        panic!("discovery panic");
-    }
     let mut entries = Vec::new();
     for entry in WalkDir::new(root_path)
         .follow_links(false)
@@ -484,22 +699,22 @@ fn collect_discovered_files(
             None => continue,
         };
         let size = meta.len() as i64;
-        if std::env::var_os("MEMHG_TEST_STRIP_PREFIX_FAIL").is_some()
+        if test_hooks::flag_active("MEMHG_TEST_STRIP_PREFIX_FAIL")
             && path
                 .file_name()
                 .and_then(|name| name.to_str())
                 .is_some_and(|name| name == "strip-fail.jpg")
         {
-            std::env::remove_var("MEMHG_TEST_STRIP_PREFIX_FAIL");
+            test_hooks::clear_flag("MEMHG_TEST_STRIP_PREFIX_FAIL");
             return Err(AppError::Scan("strip prefix failed".into()));
         }
-        let strip_root = if std::env::var_os("MEMHG_TEST_STRIP_PREFIX_MAP_ERR").is_some()
+        let strip_root = if test_hooks::flag_active("MEMHG_TEST_STRIP_PREFIX_MAP_ERR")
             && path
                 .file_name()
                 .and_then(|name| name.to_str())
                 .is_some_and(|name| name == "strip-map.jpg")
         {
-            std::env::remove_var("MEMHG_TEST_STRIP_PREFIX_MAP_ERR");
+            test_hooks::clear_flag("MEMHG_TEST_STRIP_PREFIX_MAP_ERR");
             Path::new("/memhg-strip-prefix-mismatch")
         } else {
             root_path
@@ -509,11 +724,7 @@ fn collect_discovered_files(
             .map_err(|error| AppError::Scan(error.to_string()))?
             .to_string_lossy()
             .replace('\\', "/");
-        let ext = path
-            .extension()
-            .and_then(|value| value.to_str())
-            .map(|value| value.to_lowercase())
-            .unwrap_or_default();
+        let ext = crate::path_util::os_extension(path).to_lowercase();
         let kind = asset_kind(&ext).to_string();
 
         entries.push(DiscoveredFile {
@@ -537,23 +748,21 @@ fn collect_discovered_files(
 }
 
 fn valid_discovered_file_name(path: &Path) -> Option<String> {
-    if std::env::var_os("MEMHG_TEST_FORCE_INVALID_FILE_NAME").is_some()
-        && path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name == "force-invalid.jpg")
+    let name = crate::path_util::os_file_name(path);
+    if test_hooks::flag_active("MEMHG_TEST_FORCE_INVALID_FILE_NAME") && name == "force-invalid.jpg"
     {
-        std::env::remove_var("MEMHG_TEST_FORCE_INVALID_FILE_NAME");
+        test_hooks::clear_flag("MEMHG_TEST_FORCE_INVALID_FILE_NAME");
         return None;
     }
-    match path.file_name().and_then(|name| name.to_str()) {
-        Some(name) if !name.is_empty() => Some(name.to_string()),
-        _ => None,
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
     }
 }
 
 pub fn file_mtime_ns(meta: &std::fs::Metadata) -> Option<i64> {
-    if std::env::var_os("MEMHG_TEST_NULL_MTIME").is_some() {
+    if test_hooks::flag_active("MEMHG_TEST_NULL_MTIME") {
         return None;
     }
     meta.modified()
@@ -576,14 +785,15 @@ mod tests {
     use tempfile::tempdir;
 
     struct ScanTestGuard {
-        _lock: std::sync::MutexGuard<'static, ()>,
+        #[allow(dead_code)]
+        lock: std::sync::MutexGuard<'static, ()>,
     }
 
     impl ScanTestGuard {
         fn new() -> Self {
             let lock = test_hooks::env_test_guard();
             test_hooks::reset_unlocked();
-            Self { _lock: lock }
+            Self { lock }
         }
     }
 
@@ -614,13 +824,13 @@ mod tests {
         let thumb_dir = dir.path().join("thumbs");
         let catalog = Catalog::open(&db).await.unwrap();
 
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
 
-        let scanner = ScanService::new(catalog.pool().clone(), thumb_dir);
+        let scanner = ScanService::new(catalog.pools().clone(), thumb_dir);
         let summary = scanner
             .scan_root(root.id, &ScanControl::noop())
             .await
@@ -629,7 +839,7 @@ mod tests {
         assert_eq!(summary.indexed, 1);
         assert_eq!(summary.new_count, 1);
 
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .find_by_path(root.id, "test.jpg")
             .await
@@ -652,14 +862,14 @@ mod tests {
         let thumb_dir = dir.path().join("thumbs");
         let catalog = Catalog::open(&db).await.unwrap();
 
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
 
-        let assets = AssetRepo::new(catalog.pool().clone());
-        let raw_tag_repo = RawTagRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
+        let raw_tag_repo = RawTagRepo::new(catalog.pools().clone());
         let asset = assets
             .upsert_asset(UpsertAssetInput {
                 root_id: root.id,
@@ -680,7 +890,7 @@ mod tests {
             0
         );
 
-        let scanner = ScanService::new(catalog.pool().clone(), thumb_dir);
+        let scanner = ScanService::new(catalog.pools().clone(), thumb_dir);
         scanner
             .scan_root(root.id, &ScanControl::noop())
             .await
@@ -714,19 +924,19 @@ mod tests {
         let thumb_dir = dir.path().join("thumbs");
         let catalog = Catalog::open(&db).await.unwrap();
 
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
 
-        let scanner = ScanService::new(catalog.pool().clone(), thumb_dir);
+        let scanner = ScanService::new(catalog.pools().clone(), thumb_dir);
         scanner
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .find_by_path(root.id, "trashed.jpg")
             .await
@@ -762,16 +972,16 @@ mod tests {
     #[test]
     fn valid_discovered_file_name_honors_force_invalid_env() {
         let _guard = ScanTestGuard::new();
-        std::env::set_var("MEMHG_TEST_FORCE_INVALID_FILE_NAME", "1");
+        test_hooks::set_flag("MEMHG_TEST_FORCE_INVALID_FILE_NAME");
         assert!(valid_discovered_file_name(Path::new("/tmp/force-invalid.jpg")).is_none());
-        assert!(!std::env::var_os("MEMHG_TEST_FORCE_INVALID_FILE_NAME").is_some());
+        assert!(!test_hooks::flag_active("MEMHG_TEST_FORCE_INVALID_FILE_NAME"));
         assert!(valid_discovered_file_name(Path::new("/tmp/ok.jpg")).is_some());
     }
 
     #[test]
     fn file_mtime_ns_returns_none_when_test_env_set() {
         let _guard = ScanTestGuard::new();
-        std::env::set_var("MEMHG_TEST_NULL_MTIME", "1");
+        test_hooks::set_flag("MEMHG_TEST_NULL_MTIME");
         let dir = tempdir().unwrap();
         let path = dir.path().join("mtime.jpg");
         std::fs::write(&path, b"x").unwrap();
@@ -784,7 +994,7 @@ mod tests {
         let _guard = ScanTestGuard::new();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let item = PostProcessItem {
             asset_id: 1,
             root_id: 1,
@@ -793,8 +1003,10 @@ mod tests {
             mtime_ns: 1,
             kind: "image".into(),
             prior_thumb_key: None,
+            prior_indexed_mtime_ns: None,
+            prior_content_hash: None,
         };
-        std::env::set_var("MEMHG_TEST_INDEX_QUEUE_FAIL", "1");
+        test_hooks::set_flag("MEMHG_TEST_INDEX_QUEUE_FAIL");
         let err = scanner
             .process_index_queue(&ScanControl::noop(), &[item], noop_index_progress)
             .await
@@ -807,7 +1019,7 @@ mod tests {
         let _guard = ScanTestGuard::new();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let item = PostProcessItem {
             asset_id: 1,
             root_id: 1,
@@ -816,8 +1028,10 @@ mod tests {
             mtime_ns: 1,
             kind: "image".into(),
             prior_thumb_key: None,
+            prior_indexed_mtime_ns: None,
+            prior_content_hash: None,
         };
-        std::env::set_var("MEMHG_TEST_FORCE_INDEX_CANCEL", "1");
+        test_hooks::set_flag("MEMHG_TEST_FORCE_INDEX_CANCEL");
         scanner
             .process_index_queue(&ScanControl::noop(), &[item], noop_index_progress)
             .await
@@ -829,10 +1043,10 @@ mod tests {
         let _guard = ScanTestGuard::new();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
-        test_hooks::FINALIZE_SCAN_LINKS_FAIL.store(true, Ordering::SeqCst);
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
+        test_hooks::set_finalize_scan_links_fail(true);
         let err = scanner
-            .finalize_scan_links(1, dir.path())
+            .finalize_scan_links(1)
             .await
             .unwrap_err();
         assert!(err.to_string().contains("finalize scan links failed"));
@@ -852,13 +1066,13 @@ mod tests {
             .unwrap();
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
-        std::env::set_var("MEMHG_TEST_CANCEL_AFTER_PAUSE", "1");
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
+        test_hooks::set_flag("MEMHG_TEST_CANCEL_AFTER_PAUSE");
         let result = scanner
             .scan_inventory(root.id, &ScanControl::noop(), |_, _| {})
             .await
@@ -875,12 +1089,12 @@ mod tests {
         let file = photos.join("track.jpg");
         std::fs::write(&file, include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         scanner
             .scan_inventory(root.id, &ScanControl::noop(), |_, _| {})
             .await
@@ -906,12 +1120,12 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let mut progress = 0u64;
         let result = scanner
             .scan_root_with_progress(root.id, &ScanControl::noop(), |discovered, _| {
@@ -935,13 +1149,13 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        std::env::set_var("MEMHG_TEST_DISCOVERY_FAIL", "1");
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        test_hooks::set_flag("MEMHG_TEST_DISCOVERY_FAIL");
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let result = scanner
             .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await;
@@ -958,13 +1172,13 @@ mod tests {
         let _guard = ScanTestGuard::new();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let missing = dir.path().join("missing-root");
         let root = roots
             .insert_root(missing.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let result = scanner
             .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await
@@ -972,6 +1186,22 @@ mod tests {
         assert_eq!(result.summary.scanned, 0);
         let updated = roots.get_root(root.id).await.unwrap();
         assert_eq!(updated.status, "offline");
+    }
+
+    #[test]
+    fn io_profile_for_root_uses_network_for_smb_and_unc() {
+        assert_eq!(
+            io_profile_for_root("smb", Path::new(r"C:\photos")),
+            IoProfile::Network
+        );
+        assert_eq!(
+            io_profile_for_root("local", Path::new(r"\\server\share")),
+            IoProfile::Network
+        );
+        assert_eq!(
+            io_profile_for_root("local", Path::new(r"C:\photos")),
+            IoProfile::Local
+        );
     }
 
     #[test]
@@ -1000,7 +1230,7 @@ mod tests {
     #[test]
     fn collect_discovered_files_skips_null_mtime_files() {
         let _guard = ScanTestGuard::new();
-        std::env::set_var("MEMHG_TEST_NULL_MTIME", "1");
+        test_hooks::set_flag("MEMHG_TEST_NULL_MTIME");
         let dir = tempdir().unwrap();
         std::fs::write(dir.path().join("skip.jpg"), b"x").unwrap();
         let cancelled = Arc::new(AtomicBool::new(false));
@@ -1036,14 +1266,14 @@ mod tests {
             std::fs::write(photos.join(format!("img-{index}.jpg")), jpeg).unwrap();
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
         let cancelled = Arc::new(AtomicBool::new(false));
         let ctrl = ScanControl::new(Arc::new(AtomicBool::new(false)), cancelled.clone());
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let handle =
             tokio::spawn(async move { scanner.scan_inventory(root.id, &ctrl, |_, _| {}).await });
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1062,7 +1292,7 @@ mod tests {
             std::fs::write(photos.join(format!("img-{index}.jpg")), jpeg).unwrap();
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
@@ -1070,7 +1300,7 @@ mod tests {
         let paused = Arc::new(AtomicBool::new(true));
         let cancelled = Arc::new(AtomicBool::new(false));
         let ctrl = ScanControl::new(paused.clone(), cancelled.clone());
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let handle =
             tokio::spawn(async move { scanner.scan_inventory(root.id, &ctrl, |_, _| {}).await });
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -1084,7 +1314,7 @@ mod tests {
         let _guard = ScanTestGuard::new();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let paused = Arc::new(AtomicBool::new(true));
         let cancelled = Arc::new(AtomicBool::new(false));
         let ctrl = ScanControl::new(paused.clone(), cancelled.clone());
@@ -1096,6 +1326,8 @@ mod tests {
             mtime_ns: 1,
             kind: "image".into(),
             prior_thumb_key: None,
+            prior_indexed_mtime_ns: None,
+            prior_content_hash: None,
         };
         let handle = tokio::spawn(async move {
             scanner
@@ -1121,7 +1353,7 @@ mod tests {
             .unwrap();
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
@@ -1129,7 +1361,7 @@ mod tests {
         let paused = Arc::new(AtomicBool::new(true));
         let cancelled = Arc::new(AtomicBool::new(false));
         let ctrl = ScanControl::new(paused.clone(), cancelled.clone());
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let handle =
             tokio::spawn(async move { scanner.scan_inventory(root.id, &ctrl, |_, _| {}).await });
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1144,7 +1376,7 @@ mod tests {
         let _guard = ScanTestGuard::new();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let paused = Arc::new(AtomicBool::new(true));
         let cancelled = Arc::new(AtomicBool::new(false));
         let ctrl = ScanControl::new(paused.clone(), cancelled.clone());
@@ -1157,6 +1389,8 @@ mod tests {
                 mtime_ns: 1,
                 kind: "image".into(),
                 prior_thumb_key: None,
+                prior_indexed_mtime_ns: None,
+                prior_content_hash: None,
             })
             .collect::<Vec<_>>();
         let handle = tokio::spawn(async move {
@@ -1185,7 +1419,7 @@ mod tests {
             .unwrap();
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
@@ -1193,7 +1427,7 @@ mod tests {
         let paused = Arc::new(AtomicBool::new(true));
         let cancelled = Arc::new(AtomicBool::new(false));
         let ctrl = ScanControl::new(paused.clone(), cancelled.clone());
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let handle =
             tokio::spawn(async move { scanner.scan_inventory(root.id, &ctrl, |_, _| {}).await });
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1205,7 +1439,7 @@ mod tests {
     #[test]
     fn collect_discovered_files_skips_force_invalid_filename() {
         let _guard = ScanTestGuard::new();
-        std::env::set_var("MEMHG_TEST_FORCE_INVALID_FILE_NAME", "1");
+        test_hooks::set_flag("MEMHG_TEST_FORCE_INVALID_FILE_NAME");
         let dir = tempdir().unwrap();
         std::fs::write(
             dir.path().join("force-invalid.jpg"),
@@ -1233,13 +1467,13 @@ mod tests {
         let file = photos.join("vanish.jpg");
         std::fs::write(&file, include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         scanner
             .scan_inventory(root.id, &ScanControl::noop(), |_, _| {})
             .await
@@ -1267,12 +1501,12 @@ mod tests {
         let file = photos.join("indexed.jpg");
         std::fs::write(&file, include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         scanner
             .scan_root(root.id, &ScanControl::noop())
             .await
@@ -1295,13 +1529,13 @@ mod tests {
         let file = photos.join("size.jpg");
         std::fs::write(&file, include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         scanner
             .scan_inventory(root.id, &ScanControl::noop(), |_, _| {})
             .await
@@ -1313,7 +1547,7 @@ mod tests {
             .unwrap();
         sqlx::query("UPDATE asset SET size = 1 WHERE id = ?")
             .bind(asset.id)
-            .execute(catalog.pool())
+            .execute(catalog.write_pool())
             .await
             .unwrap();
         let result = scanner
@@ -1328,7 +1562,7 @@ mod tests {
         let _guard = ScanTestGuard::new();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         scanner
             .process_index_queue(&ScanControl::noop(), &[], noop_index_progress)
             .await
@@ -1376,20 +1610,20 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
-        test_hooks::FINALIZE_SCAN_LINKS_FAIL.store(true, Ordering::SeqCst);
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
+        test_hooks::set_finalize_scan_links_fail(true);
         let result = scanner.scan_root(root.id, &ScanControl::noop()).await;
         let err = result.err().expect("expected finalize failure");
         assert!(err.to_string().contains("finalize scan links failed"));
     }
 
     #[tokio::test]
-    async fn scan_root_finalizes_links_and_hashes() {
+    async fn scan_root_indexes_content_hash_and_duplicate_index() {
         let _guard = ScanTestGuard::new();
         let dir = tempdir().unwrap();
         let photos = dir.path().join("photos");
@@ -1398,13 +1632,13 @@ mod tests {
         std::fs::write(photos.join("dup-a.jpg"), jpeg).unwrap();
         std::fs::write(photos.join("dup-b.jpg"), jpeg).unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(pool.clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(pools.clone(), dir.path().join("thumbs"));
         scanner
             .scan_root(root.id, &ScanControl::noop())
             .await
@@ -1413,15 +1647,16 @@ mod tests {
             "SELECT COUNT(*) FROM asset WHERE root_id = ? AND content_hash IS NOT NULL",
         )
         .bind(root.id)
-        .fetch_one(&pool)
+        .fetch_one(pools.read())
         .await
         .unwrap();
         assert_eq!(hashed, 2);
+        scanner.run_duplicate_index(root.id).await.unwrap();
         let flagged: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM asset WHERE root_id = ? AND has_duplicate = 1",
         )
         .bind(root.id)
-        .fetch_one(&pool)
+        .fetch_one(pools.read())
         .await
         .unwrap();
         assert_eq!(flagged, 2);
@@ -1441,38 +1676,34 @@ mod tests {
             .unwrap();
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let mut saw_discovery = false;
         scanner
-            .scan_inventory(root.id, &ScanControl::noop(), |discovered, indexed| {
-                if discovered > 0 && indexed == 0 {
-                    saw_discovery = true;
-                }
-            })
+            .scan_inventory(
+                root.id,
+                &ScanControl::noop(),
+                |discovered, indexed| {
+                    if discovered > 0 && indexed == 0 {
+                        saw_discovery = true;
+                    }
+                },
+            )
             .await
             .unwrap();
         assert!(saw_discovery);
     }
 
     #[test]
-    fn collect_discovered_files_fails_when_discovery_env_set() {
+    fn discovery_fail_hook_is_consumed_before_walk() {
         let _guard = ScanTestGuard::new();
-        std::env::set_var("MEMHG_TEST_DISCOVERY_FAIL", "1");
-        let dir = tempdir().unwrap();
-        let cancelled = Arc::new(AtomicBool::new(false));
-        let discovered_count = Arc::new(AtomicU64::new(0));
-        let result = collect_discovered_files(dir.path(), cancelled, discovered_count);
-        assert!(result.is_err());
-        assert!(result
-            .err()
-            .expect("discovery error")
-            .to_string()
-            .contains("discovery failed"));
+        test_hooks::set_flag("MEMHG_TEST_DISCOVERY_FAIL");
+        assert!(test_hooks::take_flag("MEMHG_TEST_DISCOVERY_FAIL"));
+        assert!(!test_hooks::flag_active("MEMHG_TEST_DISCOVERY_FAIL"));
     }
 
     #[tokio::test]
@@ -1487,19 +1718,19 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let summary = scanner
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
         assert!(summary.scanned >= 1);
         assert!(summary.indexed >= 1);
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "end-to-end.jpg")
             .await
             .unwrap()
@@ -1517,7 +1748,7 @@ mod tests {
     #[test]
     fn collect_discovered_files_fails_on_strip_prefix_env() {
         let _guard = ScanTestGuard::new();
-        std::env::set_var("MEMHG_TEST_STRIP_PREFIX_FAIL", "1");
+        test_hooks::set_flag("MEMHG_TEST_STRIP_PREFIX_FAIL");
         let dir = tempdir().unwrap();
         std::fs::write(
             dir.path().join("strip-fail.jpg"),
@@ -1563,13 +1794,13 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        std::env::set_var("MEMHG_TEST_DISCOVERY_PANIC", "1");
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        test_hooks::set_flag("MEMHG_TEST_DISCOVERY_PANIC");
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let result = scanner
             .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await;
@@ -1586,7 +1817,7 @@ mod tests {
         let _guard = ScanTestGuard::new();
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let item = PostProcessItem {
             asset_id: 1,
             root_id: 1,
@@ -1595,8 +1826,10 @@ mod tests {
             mtime_ns: 1,
             kind: "image".into(),
             prior_thumb_key: None,
+            prior_indexed_mtime_ns: None,
+            prior_content_hash: None,
         };
-        std::env::set_var("MEMHG_TEST_INDEX_BATCH_PANIC", "1");
+        test_hooks::set_flag("MEMHG_TEST_INDEX_BATCH_PANIC");
         let err = scanner
             .process_index_queue(&ScanControl::noop(), &[item], noop_index_progress)
             .await
@@ -1618,7 +1851,7 @@ mod tests {
             .unwrap();
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
@@ -1626,14 +1859,14 @@ mod tests {
         let paused = Arc::new(AtomicBool::new(true));
         let cancelled = Arc::new(AtomicBool::new(false));
         let ctrl = ScanControl::new(paused.clone(), cancelled.clone());
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         let handle = tokio::spawn(async move {
             scanner
                 .scan_inventory(root.id, &ctrl, noop_inventory_progress)
                 .await
         });
         tokio::time::sleep(Duration::from_millis(100)).await;
-        std::env::set_var("MEMHG_TEST_CANCEL_AFTER_PAUSE", "1");
+        test_hooks::set_flag("MEMHG_TEST_CANCEL_AFTER_PAUSE");
         paused.store(false, Ordering::SeqCst);
         handle.await.unwrap().unwrap();
     }
@@ -1650,18 +1883,18 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(pool.clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(pools.clone(), dir.path().join("thumbs"));
         scanner
             .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await
             .unwrap();
-        pool.close().await;
+        pools.close().await;
         assert!(scanner
             .scan_root(root.id, &ScanControl::noop())
             .await
@@ -1670,7 +1903,7 @@ mod tests {
             .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await
             .is_err());
-        assert!(scanner.finalize_scan_links(root.id, &photos).await.is_err());
+        assert!(scanner.finalize_scan_links(root.id).await.is_err());
         let item = PostProcessItem {
             asset_id: 1,
             root_id: root.id,
@@ -1679,6 +1912,8 @@ mod tests {
             mtime_ns: 1,
             kind: "image".into(),
             prior_thumb_key: None,
+            prior_indexed_mtime_ns: None,
+            prior_content_hash: None,
         };
         assert!(scanner
             .process_index_queue(&ScanControl::noop(), &[item], noop_index_progress)
@@ -1698,13 +1933,13 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
-        std::env::set_var("MEMHG_TEST_INDEX_QUEUE_FAIL", "1");
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
+        test_hooks::set_flag("MEMHG_TEST_INDEX_QUEUE_FAIL");
         let err = scanner
             .scan_root(root.id, &ScanControl::noop())
             .await
@@ -1716,7 +1951,7 @@ mod tests {
     #[test]
     fn collect_discovered_files_strip_prefix_map_err() {
         let _guard = ScanTestGuard::new();
-        std::env::set_var("MEMHG_TEST_STRIP_PREFIX_MAP_ERR", "1");
+        test_hooks::set_flag("MEMHG_TEST_STRIP_PREFIX_MAP_ERR");
         let dir = tempdir().unwrap();
         std::fs::write(
             dir.path().join("strip-map.jpg"),
@@ -1741,17 +1976,17 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let scanner = ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"));
+        let scanner = ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"));
         scanner
             .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await
             .unwrap();
-        scanner.finalize_scan_links(root.id, &photos).await.unwrap();
+        scanner.finalize_scan_links(root.id).await.unwrap();
     }
 
     #[tokio::test]
@@ -1760,14 +1995,14 @@ mod tests {
         let dir = tempdir().unwrap();
         let missing = dir.path().join("missing-root");
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(missing.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        pool.close().await;
-        let scanner = ScanService::new(pool, dir.path().join("thumbs"));
+        pools.close().await;
+        let scanner = ScanService::new(pools, dir.path().join("thumbs"));
         assert!(scanner
             .scan_inventory(root.id, &ScanControl::noop(), noop_inventory_progress)
             .await

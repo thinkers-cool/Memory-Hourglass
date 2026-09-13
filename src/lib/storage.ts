@@ -43,3 +43,11 @@ export function loadStoredJson<T>(
     return fallback;
   }
 }
+
+export function saveStoredJson(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    return;
+  }
+}

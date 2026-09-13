@@ -12,6 +12,7 @@ const {
   onScanProgress,
   onScanThumbs,
   getAsset,
+  resumePendingScans,
 } = vi.hoisted(() => ({
   listRootStats: vi.fn(),
   listAlbums: vi.fn(),
@@ -22,6 +23,7 @@ const {
   onScanProgress: vi.fn(),
   onScanThumbs: vi.fn(),
   getAsset: vi.fn(),
+  resumePendingScans: vi.fn(),
 }));
 
 vi.mock("../../api/client", () => ({
@@ -34,6 +36,7 @@ vi.mock("../../api/client", () => ({
   onScanProgress,
   onScanThumbs,
   getAsset,
+  resumePendingScans,
 }));
 
 import { useLibraryQuery } from "./useLibraryQuery";
@@ -85,6 +88,7 @@ describe("useLibraryQuery", () => {
     getAsset.mockResolvedValue(sampleDetail);
     onScanProgress.mockResolvedValue(() => undefined);
     onScanThumbs.mockResolvedValue(() => undefined);
+    resumePendingScans.mockResolvedValue(undefined);
   });
 
   it("loads metadata and grid on mount", async () => {
@@ -155,6 +159,7 @@ describe("useLibraryQuery", () => {
       });
     });
     expect(result.current.scanStatus).toContain("cataloging");
+    expect(result.current.scanStatusByRoot[1]).toContain("cataloging");
 
     vi.useFakeTimers();
     await act(async () => {
@@ -316,6 +321,87 @@ describe("useLibraryQuery", () => {
     vi.useRealTimers();
 
     await waitFor(() => expect(queryAssets).toHaveBeenCalled());
+  });
+
+  it("exposes active scan status and clears focus when scan completes", async () => {
+    let scanHandler:
+      | ((progress: {
+          root_id: number;
+          stage: string;
+          scanned: number;
+          indexed: number;
+        }) => void)
+      | undefined;
+
+    onScanProgress.mockImplementation(async (handler) => {
+      scanHandler = handler;
+      return () => undefined;
+    });
+
+    const selectedIdRef = { current: null as number | null };
+    const setDetail = vi.fn();
+    const setNotification = vi.fn();
+
+    const { result } = renderHook(() =>
+      useLibraryQuery(selectedIdRef, setDetail, setNotification),
+    );
+    await waitFor(() => expect(onScanProgress).toHaveBeenCalled());
+
+    await act(async () => {
+      scanHandler?.({
+        root_id: 3,
+        stage: "indexing",
+        scanned: 4,
+        indexed: 2,
+      });
+    });
+    await waitFor(() =>
+      expect(result.current.scanStatusByRoot[3]).toContain("indexing"),
+    );
+
+    act(() => {
+      result.current.setFocusScanRootId(3);
+      scanHandler?.({
+        root_id: 3,
+        stage: "done",
+        scanned: 4,
+        indexed: 4,
+      });
+    });
+    expect(result.current.focusScanRootId).toBeNull();
+  });
+
+  it("ignores empty thumb batches and clears scan status", async () => {
+    let thumbHandler:
+      | ((event: {
+          root_id: number;
+          thumbs: { asset_id: number; thumb_path: string }[];
+        }) => void)
+      | undefined;
+
+    onScanThumbs.mockImplementation(async (handler) => {
+      thumbHandler = handler;
+      return () => undefined;
+    });
+
+    const selectedIdRef = { current: null as number | null };
+    const setDetail = vi.fn();
+    const setNotification = vi.fn();
+
+    const { result } = renderHook(() =>
+      useLibraryQuery(selectedIdRef, setDetail, setNotification),
+    );
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+
+    await act(async () => {
+      thumbHandler?.({ root_id: 1, thumbs: [] });
+    });
+    expect(result.current.items[0]?.thumb_path).toBeNull();
+
+    act(() => {
+      result.current.clearScanStatus();
+    });
+    expect(result.current.scanStatusByRoot).toEqual({});
   });
 
   it("skips loadMore when nothing left to load", async () => {

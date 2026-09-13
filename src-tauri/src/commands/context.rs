@@ -18,6 +18,24 @@ pub fn fail_command(command: &str, correlation_id: &str, error: &str) {
 
 pub async fn trace_command<T, F, Fut>(command: &str, f: F) -> Result<T>
 where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = Result<T>>,
+{
+    let correlation_id = begin_command(command);
+    match f().await {
+        Ok(value) => {
+            finish_command(command, &correlation_id);
+            Ok(value)
+        }
+        Err(error) => {
+            fail_command(command, &correlation_id, &error.to_string());
+            Err(error)
+        }
+    }
+}
+
+pub async fn trace_command_with_id<T, F, Fut>(command: &str, f: F) -> Result<T>
+where
     F: FnOnce(String) -> Fut,
     Fut: Future<Output = Result<T>>,
 {

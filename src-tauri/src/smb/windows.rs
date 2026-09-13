@@ -16,7 +16,7 @@ pub fn unc_ipc_path(host: &str) -> PathBuf {
 }
 
 pub fn is_unc_path(path: &Path) -> bool {
-    path.to_string_lossy().starts_with(r"\\")
+    crate::path_util::is_unc_path(path)
 }
 
 fn net_user(req: &SmbConnectRequest) -> String {

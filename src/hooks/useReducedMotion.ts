@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -19,19 +19,23 @@ export function useRafTransition(
   durationMs: number,
   onComplete: () => void,
 ): number {
-  const [progress, setProgress] = useState(active ? 0 : 1);
+  const [progress, setProgress] = useState(1);
   const rafRef = useRef(0);
   const startRef = useRef(0);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
-  useEffect(() => {
-    if (!active) {
-      setProgress(1);
-      return;
-    }
+  useLayoutEffect(() => {
+    if (!active) return;
     setProgress(0);
     startRef.current = performance.now();
+  }, [active, durationMs]);
+
+  useEffect(() => {
+    if (!active) {
+      cancelAnimationFrame(rafRef.current);
+      return;
+    }
 
     const tick = (now: number) => {
       const elapsed = now - startRef.current;

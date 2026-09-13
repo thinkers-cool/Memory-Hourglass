@@ -1,6 +1,7 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AssetCard } from "../../types";
+import { clearDecodeCache } from "./imageDecode";
 import { useSlideshowPreload } from "./preload";
 
 function card(id: number, kind: AssetCard["kind"] = "image"): AssetCard {
@@ -20,6 +21,7 @@ function card(id: number, kind: AssetCard["kind"] = "image"): AssetCard {
 
 describe("useSlideshowPreload", () => {
   afterEach(() => {
+    clearDecodeCache();
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -57,8 +59,9 @@ describe("useSlideshowPreload", () => {
     });
 
     await waitFor(() => expect(imageSrcs.length).toBeGreaterThan(0));
-    expect(imageSrcs.some((src) => src.includes("2.webp"))).toBe(true);
-    expect(imageSrcs.some((src) => src.includes("3.webp"))).toBe(true);
+    expect(imageSrcs.some((src) => src.includes("2.jpg"))).toBe(true);
+    expect(imageSrcs.some((src) => src.includes("3.jpg"))).toBe(true);
+    expect(imageSrcs.some((src) => src.includes("4.jpg"))).toBe(true);
     vi.unstubAllGlobals();
   });
 
@@ -95,8 +98,10 @@ describe("useSlideshowPreload", () => {
   it("preloads full image when thumb is missing", async () => {
     const imageSrcs: string[] = [];
     class MockImage {
+      onload: (() => void) | null = null;
       set src(value: string) {
         imageSrcs.push(value);
+        queueMicrotask(() => this.onload?.());
       }
       decode = vi.fn().mockRejectedValue(new Error("decode failed"));
     }
@@ -108,13 +113,16 @@ describe("useSlideshowPreload", () => {
     await waitFor(() =>
       expect(imageSrcs.some((src) => src.includes("1.jpg"))).toBe(true),
     );
+    vi.unstubAllGlobals();
   });
 
   it("preloads images without decode support", async () => {
     const imageSrcs: string[] = [];
     class MockImage {
+      onload: (() => void) | null = null;
       set src(value: string) {
         imageSrcs.push(value);
+        queueMicrotask(() => this.onload?.());
       }
     }
     vi.stubGlobal("Image", MockImage as unknown as typeof Image);

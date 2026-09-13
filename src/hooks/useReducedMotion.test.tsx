@@ -1,60 +1,50 @@
-import { renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { useReducedMotion, useRafTransition } from "./useReducedMotion";
-
-describe("useReducedMotion", () => {
-  it("reads prefers-reduced-motion on mount", () => {
-    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-      matches: query.includes("reduce"),
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    }));
-
-    const { result } = renderHook(() => useReducedMotion());
-    expect(result.current).toBe(true);
-  });
-});
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { useRafTransition } from "./useReducedMotion";
 
 describe("useRafTransition", () => {
-  it("returns 1 immediately when inactive", () => {
-    const onComplete = vi.fn();
-    const { result } = renderHook(() =>
-      useRafTransition(false, 300, onComplete),
-    );
-    expect(result.current).toBe(1);
-    expect(onComplete).not.toHaveBeenCalled();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it("completes immediately when duration is zero", () => {
-    const onComplete = vi.fn();
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
-      cb(16);
+  it("does not jump to 1 when deactivated after a completed run", () => {
+    let rafCallback: FrameRequestCallback | null = null;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      rafCallback = callback;
       return 1;
     });
-
-    renderHook(() => useRafTransition(true, 0, onComplete));
-    expect(onComplete).toHaveBeenCalledTimes(1);
-  });
-
-  it("animates toward completion when active", async () => {
-    const onComplete = vi.fn();
-    let frame = 0;
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
-      frame += 1;
-      cb(frame * 50);
-      return frame;
-    });
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(
-      () => undefined,
-    );
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
     vi.spyOn(performance, "now").mockReturnValue(0);
 
-    const { result } = renderHook(() =>
-      useRafTransition(true, 100, onComplete),
+    const onComplete = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ active }) => useRafTransition(active, 500, onComplete),
+      { initialProps: { active: true } },
     );
-    await waitFor(() => expect(onComplete).toHaveBeenCalled());
+
+    expect(result.current).toBe(0);
+    act(() => {
+      rafCallback?.(500);
+    });
     expect(result.current).toBe(1);
+    expect(onComplete).toHaveBeenCalled();
+
+    rerender({ active: false });
+    expect(result.current).toBe(1);
+  });
+
+  it("resets to 0 synchronously when reactivated", () => {
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 1);
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    vi.spyOn(performance, "now").mockReturnValue(0);
+
+    const { result, rerender } = renderHook(
+      ({ active }) => useRafTransition(active, 500, vi.fn()),
+      { initialProps: { active: false } },
+    );
+
+    expect(result.current).toBe(1);
+    rerender({ active: true });
+    expect(result.current).toBe(0);
   });
 });

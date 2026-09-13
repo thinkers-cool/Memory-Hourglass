@@ -39,7 +39,7 @@ export function VideoSlide({
       src={src}
       muted={muted}
       playsInline
-      className="max-h-screen max-w-screen object-contain"
+      className="h-full w-full object-cover"
       onEnded={onEnded}
     />
   );

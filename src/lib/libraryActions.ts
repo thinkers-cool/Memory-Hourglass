@@ -32,6 +32,7 @@ export type LibraryActions = {
   selectAsset: (card: AssetCard, multi: boolean, range: boolean) => void;
   openLinked: (id: number) => void;
   rate: (rating: number) => void;
+  rotate: (direction: "cw" | "ccw") => void;
   batchRate: (rating: number) => void;
   openTagMenu: () => void;
   openAlbumMenu: () => void;
@@ -76,6 +77,7 @@ export type LibraryActions = {
   openCompare: () => void;
   closeCompare: () => void;
   rateAsset: (id: number, rating: number) => void;
+  rotateAsset: (id: number, direction: "cw" | "ccw") => void;
   toggleTagOnAsset: (
     id: number,
     tagId: number,

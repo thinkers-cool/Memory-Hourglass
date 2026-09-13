@@ -6,6 +6,11 @@ import {
   runTagCreate,
   runTagToggle,
 } from "../../../lib/libraryMutations";
+import {
+  rotateClockwise,
+  rotateCounterClockwise,
+  resolveRotation,
+} from "../../../lib/imageRotation";
 import { infoNotification } from "../../../lib/notification";
 import type { LibraryActionsDeps } from "../libraryActionsDeps";
 
@@ -13,6 +18,7 @@ export function createCompareActions(deps: LibraryActionsDeps) {
   const {
     selectedList,
     sortParam,
+    compareItems,
     setCompareOpen,
     setCompareIds,
     setCompareItems,
@@ -64,6 +70,29 @@ export function createCompareActions(deps: LibraryActionsDeps) {
     rateAsset: async (id: number, rating: number) => {
       await api.updateAssetMeta(id, { rating });
       await refreshGrid();
+    },
+    rotateAsset: async (id: number, direction: "cw" | "ccw") => {
+      const current = resolveRotation(
+        compareItems.find((item) => item.id === id)?.rotation,
+      );
+      const rotation =
+        direction === "cw"
+          ? rotateClockwise(current)
+          : rotateCounterClockwise(current);
+      await api.updateAssetMeta(id, { rotation });
+      await refreshGrid();
+      const result = await api.queryAssets(
+        { asset_ids: [id] },
+        sortParam,
+        0,
+        1,
+      );
+      const updated = result.items[0];
+      if (updated) {
+        setCompareItems((prev) =>
+          prev.map((item) => (item.id === id ? updated : item)),
+        );
+      }
     },
     toggleTagOnAsset: async (id: number, tagId: number, add: boolean) => {
       await withBusy(async () => {

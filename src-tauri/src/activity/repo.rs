@@ -1,24 +1,25 @@
 use crate::activity::models::ActivityEntry;
 use crate::activity::models::ActivityInput;
 use crate::error::Result;
-use sqlx::sqlite::SqlitePool;
+use crate::catalog::pools::CatalogPools;
+use sqlx::SqlitePool;
 use sqlx::Transaction;
 
 pub struct ActivityRepo {
-    pool: SqlitePool,
+    pools: CatalogPools,
 }
 
 impl ActivityRepo {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(pools: CatalogPools) -> Self {
+        Self { pools }
     }
 
     pub fn pool(&self) -> &SqlitePool {
-        &self.pool
+        self.pools.write()
     }
 
     pub async fn begin(&self) -> Result<Transaction<'_, sqlx::Sqlite>> {
-        Ok(self.pool.begin().await?)
+        Ok(self.pools.write().begin().await?)
     }
 
     pub async fn next_seq(&self, tx: &mut Transaction<'_, sqlx::Sqlite>) -> Result<i64> {
@@ -70,7 +71,7 @@ impl ActivityRepo {
             "#,
         )
         .bind(id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pools.read())
         .await?
         .ok_or_else(|| crate::error::AppError::NotFound(format!("activity {} not found", id)))?;
 
@@ -97,7 +98,7 @@ impl ActivityRepo {
         .bind(asset_id)
         .bind(limit)
         .bind(offset)
-        .fetch_all(&self.pool)
+        .fetch_all(self.pools.read())
         .await?;
 
         Ok(rows.into_iter().map(|r| r.into_entry()).collect())
@@ -135,7 +136,7 @@ mod tests {
     async fn reversible_when_revert_json_present_and_not_undone() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = ActivityRepo::new(catalog.pool().clone());
+        let repo = ActivityRepo::new(catalog.pools().clone());
 
         let mut tx = repo.begin().await.unwrap();
         let id = repo
@@ -167,7 +168,7 @@ mod tests {
     async fn get_returns_not_found_for_missing_activity() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = ActivityRepo::new(catalog.pool().clone());
+        let repo = ActivityRepo::new(catalog.pools().clone());
         let err = repo.get(999_999).await.unwrap_err();
         assert!(err.to_string().contains("not found"));
     }
@@ -176,7 +177,7 @@ mod tests {
     async fn list_for_asset_filters_and_paginates() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = ActivityRepo::new(catalog.pool().clone());
+        let repo = ActivityRepo::new(catalog.pools().clone());
         let mut tx = repo.begin().await.unwrap();
         for _ in 0..3 {
             repo.append_in_tx(
@@ -222,7 +223,7 @@ mod tests {
     async fn mark_undone_sets_timestamp() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = ActivityRepo::new(catalog.pool().clone());
+        let repo = ActivityRepo::new(catalog.pools().clone());
         let mut tx = repo.begin().await.unwrap();
         let id = repo
             .append_in_tx(
@@ -252,9 +253,9 @@ mod tests {
     async fn repo_methods_fail_when_pool_closed() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let repo = ActivityRepo::new(pool.clone());
-        pool.close().await;
+        let pools = catalog.pools().clone();
+        let repo = ActivityRepo::new(pools.clone());
+        pools.close().await;
         assert!(repo.begin().await.is_err());
         assert!(repo.get(1).await.is_err());
         assert!(repo.list_for_asset(1, 0, 10).await.is_err());

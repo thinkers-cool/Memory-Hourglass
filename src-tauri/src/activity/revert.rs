@@ -9,18 +9,18 @@ use crate::link::LinkService;
 use crate::query::QueryService;
 use serde::Deserialize;
 use serde_json::json;
-use sqlx::sqlite::SqlitePool;
+use crate::catalog::pools::CatalogPools;
 use std::path::PathBuf;
 
 pub struct UndoContext {
-    pub pool: SqlitePool,
+    pub pools: CatalogPools,
     pub thumb_dir: PathBuf,
     pub read_only: bool,
     pub correlation_id: Option<String>,
 }
 
 pub async fn undo_activity(ctx: &UndoContext, activity_id: i64) -> Result<i64> {
-    let recorder = ActivityRecorder::new(ctx.pool.clone());
+    let recorder = ActivityRecorder::new(ctx.pools.clone());
     let entry = recorder.repo().get(activity_id).await?;
 
     if entry.undone_at.is_some() {
@@ -44,7 +44,7 @@ pub async fn undo_activity(ctx: &UndoContext, activity_id: i64) -> Result<i64> {
         event_type::ASSET_METADATA_CHANGED => {
             let payload: MetadataRevert = serde_json::from_str(revert)?;
             let query = QueryService::with_media_settings(
-                ctx.pool.clone(),
+                ctx.pools.clone(),
                 ctx.thumb_dir.clone(),
                 media_settings.clone(),
             );
@@ -54,13 +54,13 @@ pub async fn undo_activity(ctx: &UndoContext, activity_id: i64) -> Result<i64> {
         }
         event_type::ASSET_SOFT_DELETED => {
             let payload: SoftDeleteRevert = serde_json::from_str(revert)?;
-            AssetRepo::new(ctx.pool.clone())
+            AssetRepo::new(ctx.pools.clone())
                 .restore_assets(&payload.asset_ids)
                 .await?;
         }
         event_type::ASSET_RESTORED => {
             let payload: RestoreRevert = serde_json::from_str(revert)?;
-            let assets = AssetRepo::new(ctx.pool.clone());
+            let assets = AssetRepo::new(ctx.pools.clone());
             for item in payload.items()? {
                 assets
                     .soft_delete(&[item.asset_id], item.deleted_at)
@@ -70,7 +70,7 @@ pub async fn undo_activity(ctx: &UndoContext, activity_id: i64) -> Result<i64> {
         event_type::ASSET_TAGS_ADDED => {
             let payload: TagsRevert = serde_json::from_str(revert)?;
             QueryService::with_media_settings(
-                ctx.pool.clone(),
+                ctx.pools.clone(),
                 ctx.thumb_dir.clone(),
                 media_settings,
             )
@@ -80,7 +80,7 @@ pub async fn undo_activity(ctx: &UndoContext, activity_id: i64) -> Result<i64> {
         event_type::ASSET_TAGS_REMOVED => {
             let payload: TagsRevert = serde_json::from_str(revert)?;
             QueryService::with_media_settings(
-                ctx.pool.clone(),
+                ctx.pools.clone(),
                 ctx.thumb_dir.clone(),
                 media_settings,
             )
@@ -95,7 +95,7 @@ pub async fn undo_activity(ctx: &UndoContext, activity_id: i64) -> Result<i64> {
         }
     }
 
-    LinkService::new(ctx.pool.clone())
+    LinkService::new(ctx.pools.clone())
         .refresh_duplicate_flags()
         .await?;
 
@@ -110,7 +110,7 @@ pub async fn undo_activity(ctx: &UndoContext, activity_id: i64) -> Result<i64> {
         payload_json: json!({ "undone_activity_id": activity_id }).to_string(),
         revert_json: None,
     };
-    let mut tx = ctx.pool.begin().await?;
+    let mut tx = ctx.pools.write().begin().await?;
     let undo_id = recorder.append_in_tx(&mut tx, undo_event).await?;
     recorder
         .repo()
@@ -193,7 +193,7 @@ mod tests {
     use tempfile::tempdir;
 
     async fn seeded_asset(
-        pool: &sqlx::SqlitePool,
+        pools: &crate::catalog::pools::CatalogPools,
         thumb_dir: &PathBuf,
         workspace_dir: &std::path::Path,
     ) -> (i64, i64) {
@@ -204,16 +204,16 @@ mod tests {
             include_bytes!("../../tests/fixtures/minimal.jpg"),
         )
         .unwrap();
-        let library = LibraryService::new(pool.clone(), workspace_dir.to_path_buf());
+        let library = LibraryService::new(pools.clone(), workspace_dir.to_path_buf());
         let root = library
             .add_local_root(photos.to_str().unwrap())
             .await
             .unwrap();
-        ScanService::new(pool.clone(), thumb_dir.clone())
+        ScanService::new(pools.clone(), thumb_dir.clone())
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let listed = QueryService::new(pool.clone(), thumb_dir.clone())
+        let listed = QueryService::new(pools.clone(), thumb_dir.clone())
             .query(&crate::query::AssetFilter::default(), "date:desc", 0, 10)
             .await
             .unwrap();
@@ -221,9 +221,9 @@ mod tests {
         (asset_id, root.id)
     }
 
-    fn undo_ctx(pool: sqlx::SqlitePool, thumb_dir: PathBuf) -> UndoContext {
+    fn undo_ctx(pools: CatalogPools, thumb_dir: PathBuf) -> UndoContext {
         UndoContext {
-            pool,
+            pools,
             thumb_dir,
             read_only: false,
             correlation_id: Some("undo-test".into()),
@@ -234,15 +234,15 @@ mod tests {
     async fn undo_rejects_already_undone_activity() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
+        let (asset_id, _) = seeded_asset(&pools, &thumb_dir, dir.path()).await;
         let deleted_at = 1_700_000_000i64;
-        AssetRepo::new(pool.clone())
+        AssetRepo::new(pools.clone())
             .soft_delete(&[asset_id], deleted_at)
             .await
             .unwrap();
-        let recorder = ActivityRecorder::new(pool.clone());
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: event_type::ASSET_SOFT_DELETED.to_string(),
@@ -257,7 +257,7 @@ mod tests {
             })
             .await
             .unwrap();
-        let ctx = undo_ctx(pool.clone(), thumb_dir);
+        let ctx = undo_ctx(pools.clone(), thumb_dir);
         undo_activity(&ctx, activity_id).await.unwrap();
         let err = undo_activity(&ctx, activity_id).await.unwrap_err();
         assert!(matches!(err, AppError::Conflict(_)));
@@ -268,9 +268,9 @@ mod tests {
     async fn undo_rejects_already_undone_and_non_reversible() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let recorder = ActivityRecorder::new(pool.clone());
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: "scan.completed".into(),
@@ -285,7 +285,7 @@ mod tests {
             })
             .await
             .unwrap();
-        let ctx = undo_ctx(pool.clone(), thumb_dir);
+        let ctx = undo_ctx(pools.clone(), thumb_dir);
         assert!(undo_activity(&ctx, activity_id).await.is_err());
     }
 
@@ -293,15 +293,15 @@ mod tests {
     async fn undo_soft_delete_restores_assets() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
+        let (asset_id, _) = seeded_asset(&pools, &thumb_dir, dir.path()).await;
         let deleted_at = 1_700_000_000i64;
-        AssetRepo::new(pool.clone())
+        AssetRepo::new(pools.clone())
             .soft_delete(&[asset_id], deleted_at)
             .await
             .unwrap();
-        let recorder = ActivityRecorder::new(pool.clone());
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: event_type::ASSET_SOFT_DELETED.to_string(),
@@ -316,10 +316,10 @@ mod tests {
             })
             .await
             .unwrap();
-        undo_activity(&undo_ctx(pool.clone(), thumb_dir), activity_id)
+        undo_activity(&undo_ctx(pools.clone(), thumb_dir), activity_id)
             .await
             .unwrap();
-        let asset = AssetRepo::new(pool.clone())
+        let asset = AssetRepo::new(pools.clone())
             .get_asset(asset_id)
             .await
             .unwrap();
@@ -330,11 +330,11 @@ mod tests {
     async fn undo_restore_soft_deletes_again() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
+        let (asset_id, _) = seeded_asset(&pools, &thumb_dir, dir.path()).await;
         let deleted_at = 1_700_000_000i64;
-        let recorder = ActivityRecorder::new(pool.clone());
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: event_type::ASSET_RESTORED.to_string(),
@@ -355,10 +355,10 @@ mod tests {
             })
             .await
             .unwrap();
-        undo_activity(&undo_ctx(pool.clone(), thumb_dir), activity_id)
+        undo_activity(&undo_ctx(pools.clone(), thumb_dir), activity_id)
             .await
             .unwrap();
-        let deleted = AssetRepo::new(pool.clone())
+        let deleted = AssetRepo::new(pools.clone())
             .get_deleted_at_map(&[asset_id])
             .await
             .unwrap();
@@ -369,14 +369,14 @@ mod tests {
     async fn undo_tag_changes_restore_prior_tags() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
-        let tag_repo = TagRepo::new(pool.clone());
+        let (asset_id, _) = seeded_asset(&pools, &thumb_dir, dir.path()).await;
+        let tag_repo = TagRepo::new(pools.clone());
         let tag_id = tag_repo.create_tag("trip", None, None).await.unwrap();
-        let query = QueryService::new(pool.clone(), thumb_dir.clone());
+        let query = QueryService::new(pools.clone(), thumb_dir.clone());
         query.batch_append_tags(&[asset_id], tag_id).await.unwrap();
-        let recorder = ActivityRecorder::new(pool.clone());
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: event_type::ASSET_TAGS_ADDED.to_string(),
@@ -393,7 +393,7 @@ mod tests {
             })
             .await
             .unwrap();
-        undo_activity(&undo_ctx(pool.clone(), thumb_dir), activity_id)
+        undo_activity(&undo_ctx(pools.clone(), thumb_dir), activity_id)
             .await
             .unwrap();
         let tag_ids = tag_repo.list_ids_for_asset(asset_id).await.unwrap();
@@ -404,16 +404,16 @@ mod tests {
     async fn undo_tag_removed_restores_tag() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
-        let tag_repo = TagRepo::new(pool.clone());
+        let (asset_id, _) = seeded_asset(&pools, &thumb_dir, dir.path()).await;
+        let tag_repo = TagRepo::new(pools.clone());
         let tag_id = tag_repo.create_tag("trip", None, None).await.unwrap();
         tag_repo
             .append_tag_id_to_assets(&[asset_id], tag_id)
             .await
             .unwrap();
-        let recorder = ActivityRecorder::new(pool.clone());
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: event_type::ASSET_TAGS_REMOVED.to_string(),
@@ -430,7 +430,7 @@ mod tests {
             })
             .await
             .unwrap();
-        undo_activity(&undo_ctx(pool.clone(), thumb_dir), activity_id)
+        undo_activity(&undo_ctx(pools.clone(), thumb_dir), activity_id)
             .await
             .unwrap();
         let tag_ids = tag_repo.list_ids_for_asset(asset_id).await.unwrap();
@@ -441,15 +441,15 @@ mod tests {
     async fn undo_metadata_change_restores_prior_rating() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
-        let query = QueryService::new(pool.clone(), thumb_dir.clone());
+        let (asset_id, _) = seeded_asset(&pools, &thumb_dir, dir.path()).await;
+        let query = QueryService::new(pools.clone(), thumb_dir.clone());
         query
-            .apply_meta_patch(asset_id, AssetMetaPatch { rating: Some(5) })
+            .apply_meta_patch(asset_id, AssetMetaPatch { rating: Some(5), ..Default::default() })
             .await
             .unwrap();
-        let recorder = ActivityRecorder::new(pool.clone());
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: event_type::ASSET_METADATA_CHANGED.to_string(),
@@ -472,7 +472,7 @@ mod tests {
             })
             .await
             .unwrap();
-        undo_activity(&undo_ctx(pool.clone(), thumb_dir), activity_id)
+        undo_activity(&undo_ctx(pools.clone(), thumb_dir), activity_id)
             .await
             .unwrap();
         let detail = query.get_detail(asset_id).await.unwrap();
@@ -483,9 +483,9 @@ mod tests {
     async fn undo_rejects_unknown_event_type() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let recorder = ActivityRecorder::new(pool.clone());
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: "custom.event".into(),
@@ -500,7 +500,7 @@ mod tests {
             })
             .await
             .unwrap();
-        let err = undo_activity(&undo_ctx(pool.clone(), thumb_dir), activity_id)
+        let err = undo_activity(&undo_ctx(pools.clone(), thumb_dir), activity_id)
             .await
             .unwrap_err();
         assert!(err.to_string().contains("cannot undo"));
@@ -510,10 +510,10 @@ mod tests {
     async fn undo_rejects_invalid_revert_json() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
-        let recorder = ActivityRecorder::new(pool.clone());
+        let (asset_id, _) = seeded_asset(&pools, &thumb_dir, dir.path()).await;
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: event_type::ASSET_METADATA_CHANGED.to_string(),
@@ -528,7 +528,7 @@ mod tests {
             })
             .await
             .unwrap();
-        let err = undo_activity(&undo_ctx(pool.clone(), thumb_dir), activity_id)
+        let err = undo_activity(&undo_ctx(pools.clone(), thumb_dir), activity_id)
             .await
             .unwrap_err();
         assert!(!err.to_string().is_empty());
@@ -538,14 +538,14 @@ mod tests {
     async fn undo_fails_when_pool_closed_before_restore() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
-        AssetRepo::new(pool.clone())
+        let (asset_id, _) = seeded_asset(&pools, &thumb_dir, dir.path()).await;
+        AssetRepo::new(pools.clone())
             .soft_delete(&[asset_id], 1)
             .await
             .unwrap();
-        let recorder = ActivityRecorder::new(pool.clone());
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: event_type::ASSET_SOFT_DELETED.to_string(),
@@ -560,8 +560,8 @@ mod tests {
             })
             .await
             .unwrap();
-        pool.close().await;
-        assert!(undo_activity(&undo_ctx(pool, thumb_dir), activity_id)
+        pools.close().await;
+        assert!(undo_activity(&undo_ctx(pools, thumb_dir), activity_id)
             .await
             .is_err());
     }
@@ -570,15 +570,15 @@ mod tests {
     async fn undo_records_followup_activity_and_marks_original() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
+        let (asset_id, _) = seeded_asset(&pools, &thumb_dir, dir.path()).await;
         let deleted_at = 1_700_000_001i64;
-        AssetRepo::new(pool.clone())
+        AssetRepo::new(pools.clone())
             .soft_delete(&[asset_id], deleted_at)
             .await
             .unwrap();
-        let recorder = ActivityRecorder::new(pool.clone());
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: event_type::ASSET_SOFT_DELETED.to_string(),
@@ -593,7 +593,7 @@ mod tests {
             })
             .await
             .unwrap();
-        let undo_id = undo_activity(&undo_ctx(pool.clone(), thumb_dir), activity_id)
+        let undo_id = undo_activity(&undo_ctx(pools.clone(), thumb_dir), activity_id)
             .await
             .unwrap();
         let original = recorder.repo().get(activity_id).await.unwrap();
@@ -606,9 +606,9 @@ mod tests {
     async fn undo_metadata_fails_for_invalid_asset_id() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let recorder = ActivityRecorder::new(pool.clone());
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: event_type::ASSET_METADATA_CHANGED.to_string(),
@@ -631,7 +631,7 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(undo_activity(&undo_ctx(pool, thumb_dir), activity_id)
+        assert!(undo_activity(&undo_ctx(pools, thumb_dir), activity_id)
             .await
             .is_err());
     }
@@ -640,10 +640,10 @@ mod tests {
     async fn undo_restore_fails_when_pool_closed_before_soft_delete() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
-        let recorder = ActivityRecorder::new(pool.clone());
+        let (asset_id, _) = seeded_asset(&pools, &thumb_dir, dir.path()).await;
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: event_type::ASSET_RESTORED.to_string(),
@@ -664,8 +664,8 @@ mod tests {
             })
             .await
             .unwrap();
-        pool.close().await;
-        assert!(undo_activity(&undo_ctx(pool, thumb_dir), activity_id)
+        pools.close().await;
+        assert!(undo_activity(&undo_ctx(pools, thumb_dir), activity_id)
             .await
             .is_err());
     }
@@ -674,14 +674,14 @@ mod tests {
     async fn undo_tags_added_fails_when_pool_closed_before_remove() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
-        let tag_id = TagRepo::new(pool.clone())
+        let (asset_id, _) = seeded_asset(&pools, &thumb_dir, dir.path()).await;
+        let tag_id = TagRepo::new(pools.clone())
             .create_tag("trip", None, None)
             .await
             .unwrap();
-        let recorder = ActivityRecorder::new(pool.clone());
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: event_type::ASSET_TAGS_ADDED.to_string(),
@@ -698,8 +698,8 @@ mod tests {
             })
             .await
             .unwrap();
-        pool.close().await;
-        assert!(undo_activity(&undo_ctx(pool, thumb_dir), activity_id)
+        pools.close().await;
+        assert!(undo_activity(&undo_ctx(pools, thumb_dir), activity_id)
             .await
             .is_err());
     }
@@ -708,14 +708,14 @@ mod tests {
     async fn undo_soft_delete_fails_when_pool_closed_before_mark_undone() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let (asset_id, _) = seeded_asset(&pool, &thumb_dir, dir.path()).await;
-        AssetRepo::new(pool.clone())
+        let (asset_id, _) = seeded_asset(&pools, &thumb_dir, dir.path()).await;
+        AssetRepo::new(pools.clone())
             .soft_delete(&[asset_id], 1)
             .await
             .unwrap();
-        let recorder = ActivityRecorder::new(pool.clone());
+        let recorder = ActivityRecorder::new(pools.clone());
         let activity_id = recorder
             .append(ActivityInput {
                 event_type: event_type::ASSET_SOFT_DELETED.to_string(),
@@ -730,8 +730,8 @@ mod tests {
             })
             .await
             .unwrap();
-        let ctx = undo_ctx(pool.clone(), thumb_dir);
-        pool.close().await;
+        let ctx = undo_ctx(pools.clone(), thumb_dir);
+        pools.close().await;
         assert!(undo_activity(&ctx, activity_id).await.is_err());
     }
 }

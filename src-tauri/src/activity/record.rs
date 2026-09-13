@@ -332,7 +332,7 @@ mod tests {
     async fn record_helpers_append_activity_rows() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let recorder = ActivityRecorder::new(catalog.pool().clone());
+        let recorder = ActivityRecorder::new(catalog.pools().clone());
 
         assert_eq!(
             record_batch_metadata_changed(&recorder, None, &[])
@@ -393,8 +393,8 @@ mod tests {
             1,
             1,
             "rated.jpg",
-            &AssetMetaPatch { rating: Some(1) },
-            &AssetMetaPatch { rating: Some(3) },
+            &AssetMetaPatch { rating: Some(1), ..Default::default() },
+            &AssetMetaPatch { rating: Some(3), ..Default::default() },
         )
         .await
         .unwrap();
@@ -413,8 +413,8 @@ mod tests {
                 1,
                 2,
                 "a.jpg".into(),
-                AssetMetaPatch { rating: Some(1) },
-                AssetMetaPatch { rating: Some(2) },
+                AssetMetaPatch { rating: Some(1), ..Default::default() },
+                AssetMetaPatch { rating: Some(2), ..Default::default() },
             )],
         )
         .await
@@ -426,9 +426,9 @@ mod tests {
     async fn record_asset_missing_errors_when_pool_closed() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let recorder = ActivityRecorder::new(pool.clone());
-        pool.close().await;
+        let pools = catalog.pools().clone();
+        let recorder = ActivityRecorder::new(pools.clone());
+        pools.close().await;
         assert!(
             record_asset_missing(&recorder, 1, &[String::from("gone.jpg")])
                 .await

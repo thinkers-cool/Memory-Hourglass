@@ -8,6 +8,16 @@ vi.mock("../lib/slideshow/preload", () => ({
   useSlideshowPreload: vi.fn(),
 }));
 
+vi.mock("../lib/slideshow/imageDecode", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/slideshow/imageDecode")>();
+  return {
+    ...actual,
+    useSlideImageReady: vi.fn(() => true),
+    isImageDecoded: vi.fn(() => true),
+    decodeImage: vi.fn(() => Promise.resolve()),
+  };
+});
+
 function card(id: number, kind: AssetCard["kind"] = "image"): AssetCard {
   return {
     id,
@@ -104,7 +114,6 @@ describe("useSlideshow", () => {
     );
     expect(result.current.theme).toBe("dissolve");
     expect(result.current.transitionMs).toBe(0);
-    expect(result.current.kenBurns).toBe(false);
   });
 
   it("advances after video ends when playing", () => {

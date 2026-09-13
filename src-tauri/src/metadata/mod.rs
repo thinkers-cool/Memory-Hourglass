@@ -21,28 +21,113 @@ const CAPTURE_DATE_TAGS: &[&str] = &[
     "DateCreated",
 ];
 
+pub struct IndexExifData {
+    pub meta: AssetMeta,
+    pub raw_tags: Vec<RawTag>,
+    pub embedded_thumbnail: Option<Vec<u8>>,
+}
+
+pub fn embedded_thumbnail_bytes(tags: &[Tag]) -> Option<Vec<u8>> {
+    for name in ["ThumbnailImage", "PreviewImage"] {
+        for tag in tags {
+            if tag.name == name {
+                if let Value::Binary(bytes) = &tag.raw_value {
+                    if is_jpeg_bytes(bytes) {
+                        return Some(bytes.clone());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn is_jpeg_bytes(bytes: &[u8]) -> bool {
+    bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8
+}
+
 pub struct MetadataService;
 
 impl MetadataService {
     pub fn read_meta(ctx: &MetadataContext) -> Result<(AssetMeta, Vec<RawTag>)> {
-        if std::env::var_os("MEMHG_TEST_READ_META_PANIC").is_some() {
-            std::env::remove_var("MEMHG_TEST_READ_META_PANIC");
-            panic!("read meta panic");
-        }
         let et = ExifTool::new();
         Self::read_meta_with(&et, ctx)
     }
 
     pub fn read_meta_with(et: &ExifTool, ctx: &MetadataContext) -> Result<(AssetMeta, Vec<RawTag>)> {
         let path = &ctx.media_path;
-        let embedded = et.extract_info(path.to_string_lossy().as_ref()).ok();
+        let embedded = et.extract_info(path).ok();
+        Self::meta_from_merged_tags(et, ctx, embedded)
+    }
 
-        let mut merged: Option<Vec<Tag>> = embedded;
+    pub fn read_meta_with_bytes(
+        et: &ExifTool,
+        ctx: &MetadataContext,
+        bytes: &[u8],
+    ) -> Result<(AssetMeta, Vec<RawTag>)> {
+        let embedded = et.extract_info_from_bytes(bytes, &ctx.media_path).ok();
+        Self::meta_from_merged_tags(et, ctx, embedded)
+    }
+
+    pub fn read_index_exif_with_bytes(
+        et: &ExifTool,
+        ctx: &MetadataContext,
+        asset_id: i64,
+        bytes: &[u8],
+    ) -> IndexExifData {
+        let embedded_tags = et.extract_info_from_bytes(bytes, &ctx.media_path).ok();
+        let embedded_thumbnail = embedded_tags
+            .as_ref()
+            .and_then(|tags| embedded_thumbnail_bytes(tags));
+        let (meta, raw_tags) = match Self::meta_from_merged_tags(et, ctx, embedded_tags) {
+            Ok((read, raw_tags)) => {
+                let meta = AssetMeta {
+                    asset_id,
+                    capture_at: read.capture_at,
+                    camera: read.camera,
+                    lens: read.lens,
+                    rating: read.rating,
+                    latitude: read.latitude,
+                    longitude: read.longitude,
+                    keywords_json: read.keywords_json,
+                    rotation: read.rotation,
+                };
+                (meta, raw_tags)
+            }
+            Err(_) => (
+                AssetMeta {
+                    asset_id,
+                    capture_at: None,
+                    camera: None,
+                    lens: None,
+                    rating: None,
+                    latitude: None,
+                    longitude: None,
+                    keywords_json: None,
+                    rotation: None,
+                },
+                Vec::new(),
+            ),
+        };
+        IndexExifData {
+            meta,
+            raw_tags,
+            embedded_thumbnail,
+        }
+    }
+
+    fn meta_from_merged_tags(
+        et: &ExifTool,
+        ctx: &MetadataContext,
+        embedded: Option<Vec<Tag>>,
+    ) -> Result<(AssetMeta, Vec<RawTag>)> {
+        let path = &ctx.media_path;
+        let mut merged = embedded;
 
         let colocated = ctx.colocated_sidecar_path();
         if colocated.is_file() {
             let colocated_tags = et
-                .extract_info(colocated.to_string_lossy().as_ref())
+                .extract_info(&colocated)
                 .map_err(|e| AppError::Metadata(e.to_string()))?;
             merged = Some(match merged {
                 Some(embedded) => merge_tags(embedded, colocated_tags),
@@ -54,7 +139,7 @@ impl MetadataService {
             let workspace_sidecar = ctx.write_sidecar_path();
             if workspace_sidecar.is_file() {
                 let workspace_tags = et
-                    .extract_info(workspace_sidecar.to_string_lossy().as_ref())
+                    .extract_info(&workspace_sidecar)
                     .map_err(|e| AppError::Metadata(e.to_string()))?;
                 merged = Some(match merged {
                     Some(existing) => merge_tags(existing, workspace_tags),
@@ -90,27 +175,42 @@ impl MetadataService {
             latitude: gps_coordinate(&tags, "GPSLatitude", "GPSLatitudeRef", 'S'),
             longitude: gps_coordinate(&tags, "GPSLongitude", "GPSLongitudeRef", 'W'),
             keywords_json: keywords_from_tags(&tags),
+            rotation: orientation_from_tags(&tags),
         };
 
         Ok((meta, raw_tags))
     }
 
     pub fn write_rating(ctx: &MetadataContext, rating: i64) -> Result<()> {
-        let (_, keywords) = existing_xmp_fields(ctx);
+        let (_, rotation, keywords) = existing_xmp_fields(ctx);
         let rating_str = rating.to_string();
         Self::write_tag(ctx, |et| {
             et.set_new_value("xmp:Rating", Some(&rating_str));
             apply_keywords(et, &keywords);
+            apply_orientation(et, rotation);
         })
     }
 
     pub fn write_keywords(ctx: &MetadataContext, keywords: &[String]) -> Result<()> {
-        let (rating, _) = existing_xmp_fields(ctx);
+        let (rating, rotation, _) = existing_xmp_fields(ctx);
         Self::write_tag(ctx, |et| {
             apply_keywords(et, keywords);
             if let Some(rating) = rating {
                 et.set_new_value("xmp:Rating", Some(&rating.to_string()));
             }
+            apply_orientation(et, rotation);
+        })
+    }
+
+    pub fn write_rotation(ctx: &MetadataContext, rotation: i64) -> Result<()> {
+        let (rating, _, keywords) = existing_xmp_fields(ctx);
+        let orientation = degrees_to_orientation(rotation).to_string();
+        Self::write_tag(ctx, |et| {
+            et.set_new_value("Orientation", Some(&orientation));
+            if let Some(rating) = rating {
+                et.set_new_value("xmp:Rating", Some(&rating.to_string()));
+            }
+            apply_keywords(et, &keywords);
         })
     }
 
@@ -181,7 +281,7 @@ fn ensure_sidecar_not_newer_than_media(
     }
 }
 
-fn existing_xmp_fields(ctx: &MetadataContext) -> (Option<i64>, Vec<String>) {
+fn existing_xmp_fields(ctx: &MetadataContext) -> (Option<i64>, Option<i64>, Vec<String>) {
     MetadataService::read_meta(ctx)
         .map(|(meta, _)| {
             let keywords = meta
@@ -189,9 +289,40 @@ fn existing_xmp_fields(ctx: &MetadataContext) -> (Option<i64>, Vec<String>) {
                 .as_deref()
                 .and_then(|json| serde_json::from_str::<Vec<String>>(json).ok())
                 .unwrap_or_default();
-            (meta.rating, keywords)
+            (meta.rating, meta.rotation, keywords)
         })
-        .unwrap_or((None, Vec::new()))
+        .unwrap_or((None, None, Vec::new()))
+}
+
+fn orientation_from_tags(tags: &[Tag]) -> Option<i64> {
+    first_tag_value(tags, "Orientation")
+        .and_then(|value| value.parse::<i64>().ok())
+        .map(orientation_to_degrees)
+}
+
+pub fn orientation_to_degrees(orientation: i64) -> i64 {
+    match orientation {
+        3 => 180,
+        6 => 90,
+        8 => 270,
+        _ => 0,
+    }
+}
+
+pub fn degrees_to_orientation(degrees: i64) -> i64 {
+    match degrees.rem_euclid(360) {
+        90 => 6,
+        180 => 3,
+        270 => 8,
+        _ => 1,
+    }
+}
+
+fn apply_orientation(et: &mut ExifTool, rotation: Option<i64>) {
+    if let Some(rotation) = rotation {
+        let orientation = degrees_to_orientation(rotation).to_string();
+        et.set_new_value("Orientation", Some(&orientation));
+    }
 }
 
 fn apply_keywords(et: &mut ExifTool, keywords: &[String]) {
@@ -315,6 +446,7 @@ fn parse_metadata_datetime(value: &str) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use exiftool_rs::tag::{TagGroup, TagId};
     use sidecar::{uses_xmp_sidecar_write, xmp_sidecar_path, MINIMAL_XMP};
     use std::path::Path;
     use tempfile::NamedTempFile;
@@ -329,12 +461,63 @@ mod tests {
     }
 
     #[test]
+    fn orientation_helpers_map_degrees() {
+        assert_eq!(orientation_to_degrees(6), 90);
+        assert_eq!(orientation_to_degrees(3), 180);
+        assert_eq!(orientation_to_degrees(8), 270);
+        assert_eq!(degrees_to_orientation(90), 6);
+        assert_eq!(degrees_to_orientation(180), 3);
+        assert_eq!(degrees_to_orientation(270), 8);
+        assert_eq!(degrees_to_orientation(0), 1);
+    }
+
+    #[test]
     fn read_meta_from_jpeg() {
         let file = NamedTempFile::new().unwrap();
         write_minimal_jpeg(file.path());
         let (meta, raw) = MetadataService::read_meta(&in_place_ctx(file.path())).unwrap();
         assert!(!raw.is_empty());
         assert!(meta.capture_at.is_some() || meta.camera.is_some() || !raw.is_empty());
+    }
+
+    fn test_thumbnail_tag(bytes: Vec<u8>) -> Tag {
+        Tag {
+            id: TagId::Text("ThumbnailImage".into()),
+            name: "ThumbnailImage".into(),
+            description: "Thumbnail Image".into(),
+            group: TagGroup::default(),
+            raw_value: Value::Binary(bytes),
+            print_value: String::new(),
+            priority: 0,
+        }
+    }
+
+    #[test]
+    fn embedded_thumbnail_bytes_reads_jpeg_binary_tag() {
+        let tags = vec![test_thumbnail_tag(vec![0xFF, 0xD8, 0xFF, 0xDB, 0x00])];
+        let thumb = embedded_thumbnail_bytes(&tags).expect("thumbnail bytes");
+        assert_eq!(thumb[0], 0xFF);
+        assert_eq!(thumb[1], 0xD8);
+    }
+
+    #[test]
+    fn embedded_thumbnail_bytes_ignores_non_jpeg_binary() {
+        let tags = vec![test_thumbnail_tag(vec![0x89, 0x50, 0x4E, 0x47])];
+        assert!(embedded_thumbnail_bytes(&tags).is_none());
+    }
+
+    #[test]
+    fn read_meta_with_bytes_matches_read_meta() {
+        let file = NamedTempFile::new().unwrap();
+        write_minimal_jpeg(file.path());
+        let ctx = in_place_ctx(file.path());
+        let bytes = std::fs::read(file.path()).unwrap();
+        let et = ExifTool::new();
+        let from_path = MetadataService::read_meta_with(&et, &ctx).unwrap();
+        let from_bytes = MetadataService::read_meta_with_bytes(&et, &ctx, &bytes).unwrap();
+        assert_eq!(from_path.0.capture_at, from_bytes.0.capture_at);
+        assert_eq!(from_path.0.camera, from_bytes.0.camera);
+        assert_eq!(from_path.1.len(), from_bytes.1.len());
     }
 
     #[test]

@@ -129,6 +129,7 @@ describe("createLibraryActions", () => {
     await actions.removeRoot(1);
     expect(api.removeRoot).toHaveBeenCalledWith(1);
     await actions.syncRoot(2);
+    expect(deps.setFocusScanRootId).toHaveBeenCalledWith(2);
     expect(api.startScan).toHaveBeenCalledWith(2);
   });
 
@@ -190,6 +191,87 @@ describe("createLibraryActions", () => {
     await actions.batchRate(3);
     expect(api.updateAssetMeta).toHaveBeenCalled();
     expect(api.batchUpdateAssetMeta).toHaveBeenCalled();
+  });
+
+  it("rotates the selected asset and compare assets", async () => {
+    vi.mocked(api.updateAssetMeta).mockResolvedValue({
+      ...sampleActionDetail,
+      meta: { ...sampleActionDetail.meta, rotation: 90 },
+    });
+    vi.mocked(api.queryAssets).mockResolvedValue({
+      items: [{ ...sampleActionItem, rotation: 90 }],
+      total: 1,
+    });
+
+    const deps = makeLibraryActionsDeps({
+      detail: {
+        ...sampleActionDetail,
+        meta: {
+          asset_id: 1,
+          capture_at: null,
+          camera: null,
+          lens: null,
+          rating: null,
+          latitude: null,
+          longitude: null,
+          keywords_json: null,
+          rotation: 0,
+        },
+      },
+    });
+    const actions = createLibraryActions(deps);
+    await actions.rotate("cw");
+    expect(api.updateAssetMeta).toHaveBeenCalledWith(1, { rotation: 90 });
+
+    const compareDeps = makeLibraryActionsDeps({
+      compareOpen: true,
+      compareItems: [
+        { ...sampleActionItem, id: 1, rotation: 90 },
+        { ...sampleActionItem2, id: 2, rotation: 0 },
+      ],
+    });
+    const compareActions = createLibraryActions(compareDeps);
+    await compareActions.rotateAsset(1, "ccw");
+    expect(api.queryAssets).toHaveBeenCalled();
+    const updater = vi.mocked(compareDeps.setCompareItems).mock.calls.at(-1)?.[0];
+    expect(typeof updater).toBe("function");
+    if (typeof updater === "function") {
+      expect(
+        updater([
+          { ...sampleActionItem, id: 1, rotation: 0 },
+          { ...sampleActionItem2, id: 2, rotation: 0 },
+        ]),
+      ).toEqual([
+        { ...sampleActionItem, id: 1, rotation: 90 },
+        { ...sampleActionItem2, id: 2, rotation: 0 },
+      ]);
+    }
+  });
+
+  it("skips compare item refresh when query returns no card", async () => {
+    vi.mocked(api.queryAssets).mockResolvedValue({ items: [], total: 0 });
+    const compareDeps = makeLibraryActionsDeps({
+      compareOpen: true,
+      compareItems: [sampleActionItem],
+    });
+    await createLibraryActions(compareDeps).rotateAsset(1, "cw");
+    expect(compareDeps.setCompareItems).not.toHaveBeenCalled();
+  });
+
+  it("rotates using card rotation when detail meta is missing", async () => {
+    vi.mocked(api.updateAssetMeta).mockResolvedValue(sampleActionDetail);
+    const deps = makeLibraryActionsDeps({
+      detail: { ...sampleActionDetail, meta: null },
+      items: [{ ...sampleActionItem, rotation: 180 }],
+    });
+    await createLibraryActions(deps).rotate("ccw");
+    expect(api.updateAssetMeta).toHaveBeenCalledWith(1, { rotation: 90 });
+  });
+
+  it("skips rotation when nothing is selected", async () => {
+    const deps = makeLibraryActionsDeps({ selectedId: null });
+    await createLibraryActions(deps).rotate("cw");
+    expect(api.updateAssetMeta).not.toHaveBeenCalled();
   });
 
   it("opens tag and album menus when selection exists", () => {

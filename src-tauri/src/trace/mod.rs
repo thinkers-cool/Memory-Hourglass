@@ -12,7 +12,7 @@ pub fn init(log_dir: &Path) -> Result<WorkerGuard> {
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| "memhg=info,tauri=warn,sqlx=warn".into());
+        .unwrap_or_else(|_| "memhg=debug,tauri=warn,sqlx=warn".into());
 
     tracing_subscriber::registry()
         .with(env_filter)

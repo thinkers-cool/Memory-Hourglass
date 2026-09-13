@@ -13,41 +13,28 @@ export const INTERVAL_OPTIONS: readonly SlideshowIntervalMs[] = [
 export const THEME_ORDER: readonly SlideshowTheme[] = [
   "dissolve",
   "ken-burns",
-  "push",
   "fade-zoom",
+  "push",
+  "dip-black",
 ];
 
 export function slideshowThemeLabel(theme: SlideshowTheme): string {
   const keyMap: Record<SlideshowTheme, string> = {
     dissolve: "library:slideshow.effectDissolve",
     "ken-burns": "library:slideshow.effectKenBurns",
-    push: "library:slideshow.effectPush",
     "fade-zoom": "library:slideshow.effectFadeZoom",
+    push: "library:slideshow.effectPush",
+    "dip-black": "library:slideshow.effectDipBlack",
   };
   return i18n.t(keyMap[theme]);
 }
 
 export const THEME_CONFIG: Record<SlideshowTheme, ThemeConfig> = {
-  dissolve: {
-    transitionMs: 500,
-    easing: "cubic-bezier(0.4, 0, 0.2, 1)",
-    kenBurns: false,
-  },
-  "ken-burns": {
-    transitionMs: 600,
-    easing: "cubic-bezier(0.4, 0, 0.2, 1)",
-    kenBurns: true,
-  },
-  push: {
-    transitionMs: 400,
-    easing: "cubic-bezier(0.25, 0.1, 0.25, 1)",
-    kenBurns: false,
-  },
-  "fade-zoom": {
-    transitionMs: 450,
-    easing: "cubic-bezier(0, 0, 0.2, 1)",
-    kenBurns: false,
-  },
+  dissolve: { transitionMs: 500 },
+  "ken-burns": { transitionMs: 600 },
+  "fade-zoom": { transitionMs: 450 },
+  push: { transitionMs: 400 },
+  "dip-black": { transitionMs: 700 },
 };
 
 export const VIDEO_END_PADDING_MS = 300;
@@ -74,6 +61,15 @@ export function coerceIntervalMs(value: unknown): SlideshowIntervalMs {
   return 3000;
 }
 
+const THEMES = new Set<string>(THEME_ORDER);
+
+export function coerceTheme(value: unknown): SlideshowTheme {
+  if (typeof value === "string" && THEMES.has(value)) {
+    return value as SlideshowTheme;
+  }
+  return "dissolve";
+}
+
 export function nextInterval(current: number): SlideshowIntervalMs {
   const idx = INTERVAL_OPTIONS.indexOf(current as SlideshowIntervalMs);
   const next = idx < 0 ? 0 : (idx + 1) % INTERVAL_OPTIONS.length;
@@ -88,4 +84,8 @@ export function nextTheme(current: SlideshowTheme): SlideshowTheme {
 
 export function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+export function easeInOutSine(t: number): number {
+  return -(Math.cos(Math.PI * t) - 1) / 2;
 }

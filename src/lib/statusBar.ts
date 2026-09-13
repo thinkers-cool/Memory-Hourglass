@@ -22,6 +22,9 @@ export type StatusDisplay = {
 export type StatusInput = {
   selectedCount: number;
   scanStatus: string;
+  scanStatusByRoot?: Record<number, string>;
+  focusScanRootId?: number | null;
+  activeRootId?: number;
   roots: RootStats[];
   exportActive: boolean;
   exportProgress: ExportProgress;
@@ -29,6 +32,36 @@ export type StatusInput = {
   busy: boolean;
   busyMessage?: string;
 };
+
+type ActiveScanEntry = { rootId: number; status: string };
+
+function rootDisplayName(path: string): string {
+  const normalized = path.replace(/[/\\]+$/, "");
+  const segments = normalized.split(/[/\\]/).filter(Boolean);
+  return segments[segments.length - 1] ?? path;
+}
+
+function listActiveScans(
+  scanStatusByRoot: Record<number, string> | undefined,
+): ActiveScanEntry[] {
+  return Object.entries(scanStatusByRoot ?? {})
+    .filter(([, status]) => isActiveScan(status))
+    .map(([rootId, status]) => ({ rootId: Number(rootId), status }));
+}
+
+function progressForScanEntry(
+  roots: RootStats[],
+  entry: ActiveScanEntry,
+): StatusProgress {
+  const root = roots.find((item) => item.id === entry.rootId);
+  const name = root ? rootDisplayName(root.path) : `#${entry.rootId}`;
+  return {
+    text: i18n.t("library:statusBar.scanningRoot", {
+      root: name,
+      progress: formatScanStatus(entry.status),
+    }),
+  };
+}
 
 export function isActiveScan(scanStatus: string): boolean {
   return (
@@ -63,32 +96,39 @@ export function formatScanStatus(scanStatus: string): string {
 export function isProgressActive({
   busy,
   scanStatus,
+  scanStatusByRoot,
   exportActive,
   exportProgress,
 }: {
   busy: boolean;
   scanStatus: string;
+  scanStatusByRoot?: Record<number, string>;
   exportActive: boolean;
   exportProgress: ExportProgress;
 }): boolean {
+  const hasActiveRootScans = Object.values(scanStatusByRoot ?? {}).some(
+    isActiveScan,
+  );
   return (
     busy ||
     isActiveScan(scanStatus) ||
+    hasActiveRootScans ||
     (exportActive && exportProgress !== null)
   );
 }
 
-function formatSourceHealth(roots: RootStats[]): string | null {
-  const scanning = roots.filter((root) => root.status === "scanning").length;
-  const offline = roots.filter((root) => root.status === "offline").length;
-  const missing = roots.reduce((sum, root) => sum + root.missing_count, 0);
+function formatSourceHealth(
+  roots: RootStats[],
+  activeRootId?: number,
+): string | null {
+  const scoped =
+    activeRootId != null
+      ? roots.filter((root) => root.id === activeRootId)
+      : roots;
+  const offline = scoped.filter((root) => root.status === "offline").length;
+  const missing = scoped.reduce((sum, root) => sum + root.missing_count, 0);
 
   const parts: string[] = [];
-  if (scanning > 0) {
-    parts.push(
-      i18n.t("library:statusBar.scanningSources", { count: scanning }),
-    );
-  }
   if (offline > 0) {
     parts.push(i18n.t("library:statusBar.offline", { count: offline }));
   }
@@ -127,6 +167,24 @@ export function resolveProgressStatus(
     };
   }
 
+  const activeScans = listActiveScans(input.scanStatusByRoot);
+  if (activeScans.length === 1) {
+    return progressForScanEntry(input.roots, activeScans[0]);
+  }
+  if (activeScans.length > 1) {
+    const focusId = input.focusScanRootId;
+    if (focusId != null) {
+      const focused = activeScans.find((entry) => entry.rootId === focusId);
+      if (focused) {
+        return progressForScanEntry(input.roots, focused);
+      }
+    }
+    return {
+      text: i18n.t("library:statusBar.scanningSources", {
+        count: activeScans.length,
+      }),
+    };
+  }
   if (isActiveScan(input.scanStatus)) {
     return { text: formatScanStatus(input.scanStatus) };
   }
@@ -143,7 +201,7 @@ export function resolveContextStatus(input: StatusInput): string {
     return i18n.t("library:statusBar.selected", { count: input.selectedCount });
   }
 
-  const sourceHealth = formatSourceHealth(input.roots);
+  const sourceHealth = formatSourceHealth(input.roots, input.activeRootId);
   if (sourceHealth) {
     return sourceHealth;
   }
@@ -165,6 +223,7 @@ export function resolveStatusDisplay(input: StatusInput): StatusDisplay {
   const showSpinner = isProgressActive({
     busy: input.busy,
     scanStatus: input.scanStatus,
+    scanStatusByRoot: input.scanStatusByRoot,
     exportActive: input.exportActive,
     exportProgress: input.exportProgress,
   });

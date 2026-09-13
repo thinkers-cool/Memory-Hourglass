@@ -211,6 +211,7 @@ pub(crate) struct Row {
     pub(crate) kind: String,
     pub(crate) capture_at: Option<i64>,
     pub(crate) rating: Option<i64>,
+    pub(crate) rotation: Option<i64>,
     pub(crate) sync_state: String,
     pub(crate) thumb_key: Option<String>,
     pub(crate) has_duplicate: i64,

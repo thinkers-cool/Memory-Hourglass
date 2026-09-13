@@ -5,7 +5,7 @@ import type { LibraryActionsDeps } from "../libraryActionsDeps";
 
 export function createCatalogActions(deps: LibraryActionsDeps) {
   const {
-    setScanStatus,
+    clearScanStatus,
     setNotification,
     refreshAll,
     withBusy,
@@ -32,7 +32,7 @@ export function createCatalogActions(deps: LibraryActionsDeps) {
     },
     cancelScan: async () => {
       await api.cancelScan();
-      setScanStatus("");
+      clearScanStatus();
       setNotification(
         infoNotification(i18n.t("library:notification.scanCancelled")),
       );

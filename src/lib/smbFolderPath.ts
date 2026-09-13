@@ -1,9 +1,13 @@
+function normalizeFolderPath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
 export function relativeFolderPath(
   rootPath: string,
   absolutePath: string,
 ): string {
-  const normalizedRoot = rootPath.replace(/\/+$/, "");
-  const normalizedAbsolute = absolutePath.replace(/\/+$/, "");
+  const normalizedRoot = normalizeFolderPath(rootPath);
+  const normalizedAbsolute = normalizeFolderPath(absolutePath);
   if (normalizedAbsolute === normalizedRoot) {
     return "";
   }
@@ -15,8 +19,11 @@ export function relativeFolderPath(
 }
 
 export function joinFolderPath(rootPath: string, relativePath: string): string {
-  const normalizedRoot = rootPath.replace(/\/+$/, "");
-  const trimmed = relativePath.replace(/^\/+/, "").replace(/\/+$/, "");
+  const normalizedRoot = normalizeFolderPath(rootPath);
+  const trimmed = relativePath
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
   if (!trimmed) {
     return normalizedRoot;
   }

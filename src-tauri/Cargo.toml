@@ -13,7 +13,6 @@ crate-type = ["lib", "cdylib", "staticlib"]
 name = "memhg"
 path = "src/main.rs"
 test = false
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

@@ -123,10 +123,11 @@ vi.mock("../hooks/useSlideshow", () => ({
     playing: true,
     setPlaying: vi.fn(),
     theme: "dissolve",
-    kenBurns: false,
     fromIndex: null,
     toIndex: 0,
     progress: 1,
+    incomingElapsedMs: 0,
+    outgoingElapsedMs: 0,
     goNext: vi.fn(),
     goPrev: vi.fn(),
     onVideoEnded: vi.fn(),
@@ -152,6 +153,7 @@ function createMockLibrary(overrides: Record<string, unknown> = {}) {
     busy: false,
     notification: null,
     scanStatus: "",
+    scanStatusByRoot: {},
     galleryIndex: null,
     setGalleryIndex: vi.fn(),
     fullView: false,
@@ -210,7 +212,7 @@ describe("LibraryApp", () => {
 
   it("renders nav rail and grid area", () => {
     useLibraryMock.mockReturnValue(createMockLibrary());
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(
       screen.getByRole("button", { name: "Library" }),
     ).toBeInTheDocument();
@@ -221,7 +223,7 @@ describe("LibraryApp", () => {
     const onCloseWorkspace = vi.fn();
     useLibraryMock.mockReturnValue(createMockLibrary());
     const user = userEvent.setup();
-    render(<LibraryApp onCloseWorkspace={onCloseWorkspace} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={onCloseWorkspace} />);
     await user.click(screen.getByRole("button", { name: "Close workspace" }));
     expect(onCloseWorkspace).toHaveBeenCalledTimes(1);
   });
@@ -243,7 +245,7 @@ describe("LibraryApp", () => {
         },
       }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(screen.getByText("Export files")).toBeInTheDocument();
   });
 
@@ -262,7 +264,7 @@ describe("LibraryApp", () => {
       }),
     );
     const user = userEvent.setup();
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "Confirm" }));
     expect(onConfirm).toHaveBeenCalled();
   });
@@ -275,13 +277,13 @@ describe("LibraryApp", () => {
         detail: sampleDetail,
       }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(screen.getByText("Purge file")).toBeInTheDocument();
   });
 
   it("shows smb connect dialog when open", () => {
     useLibraryMock.mockReturnValue(createMockLibrary({ smbDialogOpen: true }));
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(screen.getByText("Add network source")).toBeInTheDocument();
   });
 
@@ -289,7 +291,7 @@ describe("LibraryApp", () => {
     useLibraryMock.mockReturnValue(
       createMockLibrary({ collectionDialogOpen: true }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(
       screen.getByRole("heading", { name: "Save as Collection" }),
     ).toBeInTheDocument();
@@ -306,7 +308,7 @@ describe("LibraryApp", () => {
         },
       }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(screen.getByText("1 / 2 — photo.jpg")).toBeInTheDocument();
   });
 
@@ -319,7 +321,7 @@ describe("LibraryApp", () => {
         detail: sampleDetail,
       }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(screen.getAllByLabelText("Close").length).toBeGreaterThan(0);
   });
 
@@ -329,7 +331,7 @@ describe("LibraryApp", () => {
         galleryIndex: 0,
       }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(screen.getAllByLabelText("Close").length).toBeGreaterThan(0);
   });
 
@@ -341,7 +343,7 @@ describe("LibraryApp", () => {
         detail: sampleDetail,
       }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(
       screen.getByRole("button", { name: /Compare/i }),
     ).toBeInTheDocument();
@@ -355,7 +357,7 @@ describe("LibraryApp", () => {
         detail: null,
       }),
     );
-    const { container } = render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    const { container } = render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(container.querySelector(".loading-spinner")).toBeInTheDocument();
   });
 
@@ -367,7 +369,7 @@ describe("LibraryApp", () => {
         detail: sampleDetail,
       }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(screen.getAllByText("photo.jpg").length).toBeGreaterThan(0);
   });
 
@@ -380,7 +382,7 @@ describe("LibraryApp", () => {
         filterBar: { ...emptyFilterBar, deleteStatus: "deleted" },
       }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(
       screen.getByRole("button", { name: /^Restore/i }),
     ).toBeInTheDocument();
@@ -390,7 +392,7 @@ describe("LibraryApp", () => {
     const library = createMockLibrary();
     useLibraryMock.mockReturnValue(library);
     const user = userEvent.setup();
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "Export" }));
     expect(library.actions.openExport).toHaveBeenCalledWith([1, 2]);
   });
@@ -402,7 +404,7 @@ describe("LibraryApp", () => {
     });
     useLibraryMock.mockReturnValue(library);
     const user = userEvent.setup();
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "Export" }));
     expect(library.actions.openExport).toHaveBeenCalledWith([1]);
   });
@@ -419,7 +421,7 @@ describe("LibraryApp", () => {
       stampArmed: true,
     });
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     window.dispatchEvent(
       new KeyboardEvent("keydown", { key: " ", bubbles: true }),
     );
@@ -437,6 +439,24 @@ describe("LibraryApp", () => {
     expect(library.actions.deleteAsset).toHaveBeenCalledWith(1);
     await user.keyboard("{Escape}");
     expect(library.actions.closeCompare).toHaveBeenCalled();
+    await user.click(screen.getAllByLabelText("Rotate clockwise")[0]);
+    expect(library.actions.rotateAsset).toHaveBeenCalledWith(1, "cw");
+  });
+
+  it("wires full view rotation actions", async () => {
+    const user = userEvent.setup();
+    const library = createMockLibrary({
+      fullView: true,
+      selectedId: 1,
+      selectedIds: new Set([1]),
+      detail: sampleDetail,
+    });
+    useLibraryMock.mockReturnValue(library);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
+    await user.click(screen.getByLabelText("Rotate clockwise"));
+    expect(library.actions.rotate).toHaveBeenCalledWith("cw");
+    await user.click(screen.getByLabelText("Rotate counter-clockwise"));
+    expect(library.actions.rotate).toHaveBeenCalledWith("ccw");
   });
 
   it("wires full view navigation and inspector actions", async () => {
@@ -448,7 +468,7 @@ describe("LibraryApp", () => {
       detail: sampleDetail,
     });
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "×" }));
     expect(library.actions.closeInspector).toHaveBeenCalled();
   });
@@ -461,7 +481,7 @@ describe("LibraryApp", () => {
       detail: sampleDetail,
     });
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     const selectionBar = screen.getByRole("toolbar", {
       name: "Selection actions",
     });
@@ -486,7 +506,7 @@ describe("LibraryApp", () => {
       filterBar: { ...emptyFilterBar, deleteStatus: "deleted" },
     });
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     const selectionBar = screen.getByRole("toolbar", {
       name: "Selection actions",
     });
@@ -504,7 +524,7 @@ describe("LibraryApp", () => {
     const user = userEvent.setup();
     const library = createMockLibrary({ collectionDialogOpen: true });
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.type(screen.getByRole("textbox"), "Favorites");
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(library.actions.submitSaveCollection).toHaveBeenCalledWith(
@@ -520,7 +540,7 @@ describe("LibraryApp", () => {
       detail: sampleDetail,
     });
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.type(screen.getByRole("textbox"), "DELETE");
     await user.click(screen.getByRole("button", { name: "Purge" }));
     expect(library.actions.submitPurge).toHaveBeenCalled();
@@ -537,7 +557,7 @@ describe("LibraryApp", () => {
         purgeTargetIds: [1],
       }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} readOnly />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} readOnly />);
     expect(
       screen.queryByRole("button", { name: /^Purge/i }),
     ).not.toBeInTheDocument();
@@ -560,7 +580,7 @@ describe("LibraryApp", () => {
       },
     });
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     const exportDialog = screen.getByRole("dialog");
     await user.click(
       within(exportDialog).getByRole("button", { name: "Export" }),
@@ -572,30 +592,29 @@ describe("LibraryApp", () => {
     const user = userEvent.setup();
     const library = createMockLibrary({ galleryIndex: 0 });
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.keyboard("3");
     expect(library.actions.rateAsset).toHaveBeenCalledWith(1, 3);
   });
 
-  it("dismisses status alert", async () => {
-    const user = userEvent.setup();
-    const dismissToast = vi.fn();
+  it("shows error notification in status bar without dismiss control", () => {
     useLibraryMock.mockReturnValue(
       createMockLibrary({
         notification: { kind: "error", text: "disk full" },
-        dismissToast,
       }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
-    await user.click(screen.getByRole("button", { name: "Close" }));
-    expect(dismissToast).toHaveBeenCalled();
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
+    expect(screen.getByText("disk full")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Close" }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens slideshow from toolbar", async () => {
     const user = userEvent.setup();
     const library = createMockLibrary();
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "Slideshow" }));
     expect(library.actions.openGallery).toHaveBeenCalled();
   });
@@ -607,7 +626,7 @@ describe("LibraryApp", () => {
     });
     useLibraryMock.mockReturnValue(library);
     const user = userEvent.setup();
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "Export" }));
     expect(library.actions.openExport).toHaveBeenCalledWith([1]);
   });
@@ -632,7 +651,7 @@ describe("LibraryApp", () => {
     });
     useLibraryMock.mockReturnValue(library);
     const user = userEvent.setup();
-    const { container } = render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    const { container } = render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
 
     const splitRoot = container.querySelector(
       ".flex.min-h-0.min-w-0.flex-1",
@@ -688,7 +707,7 @@ describe("LibraryApp", () => {
     });
     useLibraryMock.mockReturnValue(library);
     const user = userEvent.setup();
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
@@ -708,14 +727,14 @@ describe("LibraryApp", () => {
         },
       }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(screen.getAllByText("photo.jpg").length).toBeGreaterThan(0);
   });
 
   it("selects grid asset and opens full view", () => {
     const library = createMockLibrary();
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     const gridButton = screen.getByRole("button", { name: "card" });
     fireEvent.click(gridButton);
     expect(library.actions.selectAsset).toHaveBeenCalledWith(
@@ -738,7 +757,7 @@ describe("LibraryApp", () => {
     });
     useLibraryMock.mockReturnValue(library);
     const user = userEvent.setup();
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getByLabelText("Close"));
     expect(library.actions.closeFullView).toHaveBeenCalled();
     await user.click(screen.getByLabelText("Next"));
@@ -753,7 +772,7 @@ describe("LibraryApp", () => {
     });
     useLibraryMock.mockReturnValue(library);
     const user = userEvent.setup();
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     const selectionBar = screen.getByRole("toolbar", {
       name: "Selection actions",
     });
@@ -802,7 +821,7 @@ describe("LibraryApp", () => {
       }),
     );
     const user = userEvent.setup();
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     const cancelButtons = screen.getAllByRole("button", { name: "Cancel" });
     for (const button of cancelButtons) {
       await user.click(button);
@@ -817,7 +836,7 @@ describe("LibraryApp", () => {
   it("switches nav rail tab", async () => {
     useLibraryMock.mockReturnValue(createMockLibrary());
     const user = userEvent.setup();
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "Collection" }));
     expect(
       screen.getByRole("button", { name: "Collection" }),
@@ -826,7 +845,7 @@ describe("LibraryApp", () => {
 
   it("resizes leading panel width", () => {
     useLibraryMock.mockReturnValue(createMockLibrary());
-    const { container } = render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    const { container } = render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     const splitRoot = container.querySelector(".flex.h-screen") as HTMLElement;
     splitRoot.getBoundingClientRect = () =>
       ({
@@ -854,7 +873,7 @@ describe("LibraryApp", () => {
   it("loads more grid items when scrolled near bottom", () => {
     const library = createMockLibrary({ hasMore: true });
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "grid" }));
     expect(library.actions.loadMore).toHaveBeenCalled();
   });
@@ -870,7 +889,7 @@ describe("LibraryApp", () => {
       },
     });
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.click(
       screen.getAllByRole("button", { name: /Rate 2 stars/i })[0],
     );
@@ -888,7 +907,7 @@ describe("LibraryApp", () => {
         detail: sampleDetail,
       }),
     );
-    const { container } = render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    const { container } = render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     const dividers = container.querySelectorAll(".cursor-col-resize");
     const divider = dividers[dividers.length - 1] as HTMLElement;
     divider.setPointerCapture = vi.fn();
@@ -909,7 +928,7 @@ describe("LibraryApp", () => {
       { name: "Photos", path: "/tmp/media/Photos" },
     ]);
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "Connect SMB" }));
     await user.type(
       screen.getByPlaceholderText("192.168.1.10 or smb://nas.local"),
@@ -934,7 +953,7 @@ describe("LibraryApp", () => {
     });
     pickFolder.mockResolvedValue("/Volumes/nas/photos");
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "Choose folder" }));
     expect(pickFolder).toHaveBeenCalled();
     expect(setSmbDialogOpen).toHaveBeenCalledWith(false);
@@ -951,7 +970,7 @@ describe("LibraryApp", () => {
         selectedIds: new Set<number>(),
       }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(screen.getByRole("button", { name: "card" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Next")).not.toBeInTheDocument();
   });
@@ -964,7 +983,7 @@ describe("LibraryApp", () => {
         detail: sampleDetail,
       }),
     );
-    const { container } = render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    const { container } = render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     const dividers = container.querySelectorAll(".cursor-col-resize");
     const divider = dividers[dividers.length - 1] as HTMLElement;
     divider.setPointerCapture = vi.fn();
@@ -995,7 +1014,7 @@ describe("LibraryApp", () => {
       ],
     });
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getAllByText("Tag")[0]);
     await user.click(screen.getAllByText("trip")[1].closest("button")!);
     expect(library.actions.toggleTagOnAsset).toHaveBeenCalledWith(1, 1, false);
@@ -1020,7 +1039,7 @@ describe("LibraryApp", () => {
       albums: [],
     });
     useLibraryMock.mockReturnValue(library);
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     await user.click(screen.getAllByText("Tag")[0]);
     await user.type(
       screen.getAllByPlaceholderText("New tag")[0],
@@ -1047,7 +1066,7 @@ describe("LibraryApp", () => {
         items: [sampleCard],
       }),
     );
-    render(<LibraryApp onCloseWorkspace={vi.fn()} />);
+    render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     expect(screen.getByRole("button", { name: "card" })).toBeInTheDocument();
   });
 });

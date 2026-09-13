@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { FilterBarState } from "./libraryActions";
 import type { Album, TagDto } from "../types";
 import {
+  FILTER_DISPLAY_ORDER,
   FILTER_IDS,
   applyLibraryFilterChange,
   assetFilterScope,
@@ -218,6 +219,7 @@ describe("libraryFilters", () => {
       },
     ];
     const defs = buildLibraryFilterDefs(tags, albums);
+    expect(defs.map((def) => def.id)).toEqual(FILTER_DISPLAY_ORDER);
     expect(
       defs.find((def) => def.id === FILTER_IDS.tag)?.statusOptions,
     ).toEqual(["1"]);

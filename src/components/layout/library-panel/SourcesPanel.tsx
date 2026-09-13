@@ -11,6 +11,12 @@ import {
   isAlbumSourceActive,
   isRootSourceActive,
 } from "../../../lib/libraryFilters";
+import {
+  orderAlbums,
+  orderRoots,
+  orderTagsForParent,
+} from "../../../lib/panelOrder";
+import { usePanelOrder } from "../../../hooks/usePanelOrder";
 import { FolderPlus, Network, Trash2 } from "lucide-react";
 import { PanelSection } from "../NavRail";
 import { AlbumAddRow } from "./AlbumAddRow";
@@ -18,14 +24,15 @@ import { AlbumEditRow } from "./AlbumEditRow";
 import { ItemCountSubtitle } from "./ItemCountSubtitle";
 import { PanelListRow, PanelRowActionButton } from "./PanelListRow";
 import { SectionAddButton } from "./SectionAddButton";
+import { SectionHeaderActions } from "./SectionHeaderActions";
 import { SourceRow } from "./SourceRow";
 import { TagAddRow } from "./TagAddRow";
 import { TagTreeList } from "./TagTreeList";
-import { tagRoots } from "../../../lib/tagHierarchy";
 import { IconTooltip } from "../../shared/Tooltip";
 import { iconButtonClass, iconClass, panelShellClass } from "./panelStyles";
 
 export function SourcesPanel({
+  workspaceId,
   roots,
   albums,
   tags,
@@ -34,9 +41,12 @@ export function SourcesPanel({
   deleteStatus,
   deletedCount,
   busy,
+  scanStatusByRoot,
   actions,
 }: {
+  workspaceId: string;
   roots: RootStats[];
+  scanStatusByRoot?: Record<number, string>;
   albums: Album[];
   tags: TagDto[];
   filterBar: FilterBarState;
@@ -53,7 +63,11 @@ export function SourcesPanel({
   const [albumAdding, setAlbumAdding] = useState(false);
   const [editingAlbumId, setEditingAlbumId] = useState<number | null>(null);
   const [editingTagId, setEditingTagId] = useState<number | null>(null);
-  const hasTags = tagRoots(tags).length > 0;
+  const panelOrder = usePanelOrder(workspaceId);
+  const orderedRoots = orderRoots(roots, panelOrder.store.roots);
+  const orderedAlbums = orderAlbums(albums, panelOrder.store.albums);
+  const hasTags =
+    orderTagsForParent(tags, null, panelOrder.store.tags).length > 0;
   const { t } = useTranslation(["library", "common"]);
 
   return (
@@ -61,39 +75,46 @@ export function SourcesPanel({
       <PanelSection
         title={t("panel.library")}
         action={
-          <div className="flex shrink-0 items-center">
-            <IconTooltip tip={t("panel.addFolder")} placement="bottom">
-              <button
-                type="button"
-                className={iconButtonClass}
-                aria-label={t("panel.addFolder")}
-                disabled={busy}
-                onClick={actions.addLocalRoot}
-              >
-                <FolderPlus className={iconClass} />
-              </button>
-            </IconTooltip>
-            <IconTooltip tip={t("panel.connectSmb")} placement="bottom">
-              <button
-                type="button"
-                className={iconButtonClass}
-                aria-label={t("panel.connectSmb")}
-                disabled={busy}
-                onClick={actions.openSmbConnect}
-              >
-                <Network className={iconClass} />
-              </button>
-            </IconTooltip>
-          </div>
+          <SectionHeaderActions
+            mode={panelOrder.store.roots}
+            busy={busy}
+            onToggle={() => panelOrder.toggleSection("roots")}
+          >
+            <div className="flex shrink-0 items-center">
+              <IconTooltip tip={t("panel.addFolder")} placement="bottom">
+                <button
+                  type="button"
+                  className={iconButtonClass}
+                  aria-label={t("panel.addFolder")}
+                  disabled={busy}
+                  onClick={actions.addLocalRoot}
+                >
+                  <FolderPlus className={iconClass} />
+                </button>
+              </IconTooltip>
+              <IconTooltip tip={t("panel.connectSmb")} placement="bottom">
+                <button
+                  type="button"
+                  className={iconButtonClass}
+                  aria-label={t("panel.connectSmb")}
+                  disabled={busy}
+                  onClick={actions.openSmbConnect}
+                >
+                  <Network className={iconClass} />
+                </button>
+              </IconTooltip>
+            </div>
+          </SectionHeaderActions>
         }
       >
         {roots.length === 0 ? (
           <p className="text-xs opacity-40 px-2">{t("panel.empty.sources")}</p>
         ) : (
-          roots.map((root) => (
+          orderedRoots.map((root) => (
             <SourceRow
               key={root.id}
               root={root}
+              scanStatus={scanStatusByRoot?.[root.id]}
               active={isRootSourceActive(root.id, filterBar, extraFilter)}
               onSelect={() => actions.selectRoot(root.id)}
               onSync={() => actions.syncRoot(root.id)}
@@ -107,12 +128,18 @@ export function SourcesPanel({
       <PanelSection
         title={t("panel.albums")}
         action={
-          <SectionAddButton
-            title={t("panel.newAlbum")}
+          <SectionHeaderActions
+            mode={panelOrder.store.albums}
             busy={busy}
-            active={albumAdding}
-            onClick={() => setAlbumAdding((prev) => !prev)}
-          />
+            onToggle={() => panelOrder.toggleSection("albums")}
+          >
+            <SectionAddButton
+              title={t("panel.newAlbum")}
+              busy={busy}
+              active={albumAdding}
+              onClick={() => setAlbumAdding((prev) => !prev)}
+            />
+          </SectionHeaderActions>
         }
       >
         {albumAdding && (
@@ -129,7 +156,7 @@ export function SourcesPanel({
         {albums.length === 0 && !albumAdding ? (
           <p className="text-xs opacity-40 px-2">{t("panel.empty.albums")}</p>
         ) : (
-          albums.map((album) =>
+          orderedAlbums.map((album) =>
             editingAlbumId === album.id ? (
               <AlbumEditRow
                 key={album.id}
@@ -172,15 +199,21 @@ export function SourcesPanel({
       <PanelSection
         title={t("panel.tags")}
         action={
-          <SectionAddButton
-            title={t("panel.newTag")}
+          <SectionHeaderActions
+            mode={panelOrder.store.tags}
             busy={busy}
-            active={tagAdding}
-            onClick={() => {
-              setAddingSubtagParentId(null);
-              setTagAdding((prev) => !prev);
-            }}
-          />
+            onToggle={() => panelOrder.toggleSection("tags")}
+          >
+            <SectionAddButton
+              title={t("panel.newTag")}
+              busy={busy}
+              active={tagAdding}
+              onClick={() => {
+                setAddingSubtagParentId(null);
+                setTagAdding((prev) => !prev);
+              }}
+            />
+          </SectionHeaderActions>
         }
       >
         {tagAdding && (
@@ -206,6 +239,7 @@ export function SourcesPanel({
             extraFilter={extraFilter}
             editingTagId={editingTagId}
             addingSubtagParentId={addingSubtagParentId}
+            tagOrderMode={panelOrder.store.tags}
             actions={actions}
             onEdit={setEditingTagId}
             onCancelEdit={() => setEditingTagId(null)}

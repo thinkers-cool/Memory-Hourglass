@@ -1,9 +1,11 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import {
-  acquireThumbLoadSlot,
-  releaseThumbLoadSlot,
-} from "../../lib/thumbLoad";
+  bindThumbIntersection,
+  loadThumbSrc,
+  settleThumbLoad,
+} from "../../lib/gridThumb";
+import { releaseThumbLoadSlot } from "../../lib/thumbLoad";
 
 export function GridThumb({
   thumbPath,
@@ -20,21 +22,7 @@ export function GridThumb({
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const host = hostRef.current;
-    if (!host) {
-      return;
-    }
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "240px" },
-    );
-    observer.observe(host);
-    return () => observer.disconnect();
+    return bindThumbIntersection(hostRef.current, () => setVisible(true));
   }, [thumbPath]);
 
   useEffect(() => {
@@ -47,14 +35,15 @@ export function GridThumb({
     }
     let cancelled = false;
     let slotGranted = false;
-    void acquireThumbLoadSlot().then(() => {
-      if (cancelled) {
-        releaseThumbLoadSlot();
-        return;
-      }
-      slotGranted = true;
-      setSrc(convertFileSrc(thumbPath));
-    });
+    void loadThumbSrc(thumbPath, convertFileSrc, () => cancelled).then(
+      (nextSrc) => {
+        if (nextSrc === null) {
+          return;
+        }
+        slotGranted = true;
+        setSrc(nextSrc);
+      },
+    );
     return () => {
       cancelled = true;
       if (slotGranted && !settledRef.current) {
@@ -63,14 +52,6 @@ export function GridThumb({
       }
     };
   }, [visible, src, thumbPath]);
-
-  const settleLoad = () => {
-    if (settledRef.current) {
-      return;
-    }
-    settledRef.current = true;
-    releaseThumbLoadSlot();
-  };
 
   return (
     <span ref={hostRef} className="block h-full w-full">
@@ -81,8 +62,8 @@ export function GridThumb({
           className={className}
           loading="lazy"
           decoding="async"
-          onLoad={settleLoad}
-          onError={settleLoad}
+          onLoad={() => settleThumbLoad(settledRef)}
+          onError={() => settleThumbLoad(settledRef)}
         />
       ) : (
         <span className={`block ${className} bg-surface-inset-strong`} aria-hidden />

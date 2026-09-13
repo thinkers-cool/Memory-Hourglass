@@ -128,6 +128,20 @@ export const FILTER_IDS = {
   duplicate: "duplicate",
 } as const;
 
+export const FILTER_DISPLAY_ORDER: (typeof FILTER_IDS)[keyof typeof FILTER_IDS][] =
+  [
+    FILTER_IDS.rating,
+    FILTER_IDS.album,
+    FILTER_IDS.tag,
+    FILTER_IDS.capture,
+    FILTER_IDS.camera,
+    FILTER_IDS.metadata,
+    FILTER_IDS.gps,
+    FILTER_IDS.sync,
+    FILTER_IDS.delete,
+    FILTER_IDS.duplicate,
+  ];
+
 export type DeleteFilterStatus = "" | "deleted";
 
 export function buildLibraryFilterDefs(
@@ -144,8 +158,8 @@ export function buildLibraryFilterDefs(
     tags.map((tag) => [String(tag.id), tag.name]),
   );
 
-  return [
-    {
+  const defsById: Record<string, FilterDef> = {
+    [FILTER_IDS.rating]: {
       id: FILTER_IDS.rating,
       label: i18n.t("library:filters.rating"),
       type: "status",
@@ -156,7 +170,46 @@ export function buildLibraryFilterDefs(
         "5": i18n.t("library:filters.ratingMin.5"),
       },
     },
-    {
+    [FILTER_IDS.album]: {
+      id: FILTER_IDS.album,
+      label: i18n.t("library:filters.album"),
+      type: "status",
+      multi: true,
+      statusOptions: albums.map((album) => String(album.id)),
+      statusOptionLabels: albumLabels,
+    },
+    [FILTER_IDS.tag]: {
+      id: FILTER_IDS.tag,
+      label: i18n.t("library:filters.tag"),
+      type: "status",
+      multi: true,
+      statusOptions: tags.map((tag) => String(tag.id)),
+      statusOptionLabels: tagLabels,
+    },
+    [FILTER_IDS.capture]: {
+      id: FILTER_IDS.capture,
+      label: i18n.t("library:filters.date"),
+      type: "date",
+    },
+    [FILTER_IDS.camera]: {
+      id: FILTER_IDS.camera,
+      label: i18n.t("library:filters.camera"),
+      type: "text",
+    },
+    [FILTER_IDS.metadata]: {
+      id: FILTER_IDS.metadata,
+      label: i18n.t("library:filters.metadata"),
+      type: "text",
+      debounceMs: 300,
+    },
+    [FILTER_IDS.gps]: {
+      id: FILTER_IDS.gps,
+      label: i18n.t("library:filters.gps"),
+      type: "status",
+      statusOptions: ["1"],
+      statusOptionLabels: { "1": i18n.t("library:filters.gpsHasLocation") },
+    },
+    [FILTER_IDS.sync]: {
       id: FILTER_IDS.sync,
       label: i18n.t("library:filters.sync"),
       type: "status",
@@ -169,7 +222,7 @@ export function buildLibraryFilterDefs(
         missing: i18n.t("library:filters.syncStatus.missing"),
       },
     },
-    {
+    [FILTER_IDS.delete]: {
       id: FILTER_IDS.delete,
       label: i18n.t("library:filters.delete"),
       type: "status",
@@ -178,53 +231,16 @@ export function buildLibraryFilterDefs(
         deleted: i18n.t("library:filters.deleteStatus.deleted"),
       },
     },
-    {
-      id: FILTER_IDS.camera,
-      label: i18n.t("library:filters.camera"),
-      type: "text",
-    },
-    {
-      id: FILTER_IDS.tag,
-      label: i18n.t("library:filters.tag"),
-      type: "status",
-      multi: true,
-      statusOptions: tags.map((tag) => String(tag.id)),
-      statusOptionLabels: tagLabels,
-    },
-    {
-      id: FILTER_IDS.album,
-      label: i18n.t("library:filters.album"),
-      type: "status",
-      multi: true,
-      statusOptions: albums.map((album) => String(album.id)),
-      statusOptionLabels: albumLabels,
-    },
-    {
-      id: FILTER_IDS.metadata,
-      label: i18n.t("library:filters.metadata"),
-      type: "text",
-      debounceMs: 300,
-    },
-    {
-      id: FILTER_IDS.capture,
-      label: i18n.t("library:filters.date"),
-      type: "date",
-    },
-    {
-      id: FILTER_IDS.gps,
-      label: i18n.t("library:filters.gps"),
-      type: "status",
-      statusOptions: ["1"],
-      statusOptionLabels: { "1": i18n.t("library:filters.gpsHasLocation") },
-    },
-    {
+    [FILTER_IDS.duplicate]: {
       id: FILTER_IDS.duplicate,
       label: i18n.t("library:filters.duplicate"),
       type: "status",
       statusOptions: ["1"],
       statusOptionLabels: { "1": i18n.t("library:filters.duplicateHas") },
     },
-  ];
+  };
+
+  return FILTER_DISPLAY_ORDER.map((id) => defsById[id]);
 }
 
 export function filterValuesFromBar(

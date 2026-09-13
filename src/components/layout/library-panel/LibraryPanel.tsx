@@ -16,6 +16,7 @@ import { SourcesPanel } from "./SourcesPanel";
 
 export function LibraryPanel({
   tab,
+  workspaceId,
   roots,
   albums,
   collections,
@@ -26,10 +27,13 @@ export function LibraryPanel({
   selectedCollectionId,
   deleteStatus,
   busy,
+  scanStatusByRoot,
   actions,
 }: {
   tab: LeftTab;
+  workspaceId: string;
   roots: RootStats[];
+  scanStatusByRoot: Record<number, string>;
   albums: Album[];
   collections: SmartCollection[];
   tags: TagDto[];
@@ -44,6 +48,7 @@ export function LibraryPanel({
   if (tab === "library") {
     return (
       <SourcesPanel
+        workspaceId={workspaceId}
         roots={roots}
         albums={albums}
         tags={tags}
@@ -52,6 +57,7 @@ export function LibraryPanel({
         deleteStatus={deleteStatus}
         deletedCount={deletedCount}
         busy={busy}
+        scanStatusByRoot={scanStatusByRoot}
         actions={actions}
       />
     );

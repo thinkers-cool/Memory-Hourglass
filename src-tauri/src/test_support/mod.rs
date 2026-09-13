@@ -37,11 +37,12 @@ impl TauriFixture {
 
 pub async fn wait_for_scan(
     state: tauri::State<'_, AppState>,
+    root_id: i64,
     timeout: Duration,
 ) -> crate::commands::scan::ScanProgressEvent {
     let deadline = tokio::time::Instant::now() + timeout;
     loop {
-        let status = crate::commands::scan::get_scan_status(state.clone())
+        let status = crate::commands::scan::get_scan_status(Some(root_id), state.clone())
             .await
             .expect("scan status");
         if status.stage == "done" || status.stage == "error" {
@@ -57,15 +58,15 @@ pub async fn wait_for_scan(
 pub async fn wait_for_jobs_idle(state: tauri::State<'_, AppState>, timeout: Duration) {
     let deadline = tokio::time::Instant::now() + timeout;
     loop {
-        let current = state
-            .with_active(|ws| async move { Ok(ws.jobs.current().await) })
+        let idle = state
+            .with_active(|ws| async move { Ok(ws.jobs.is_idle().await) })
             .await
             .expect("jobs status");
-        if current.is_none() {
+        if idle {
             return;
         }
         if tokio::time::Instant::now() >= deadline {
-            panic!("jobs timed out while running {}", current.unwrap());
+            panic!("jobs timed out while still active");
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
@@ -94,7 +95,7 @@ pub async fn seed_scanned_asset(
     crate::commands::scan::start_scan(root.id, handle, state.clone())
         .await
         .expect("start scan");
-    let status = wait_for_scan(state.clone(), Duration::from_secs(30)).await;
+    let status = wait_for_scan(state.clone(), root.id, Duration::from_secs(30)).await;
     assert_eq!(status.stage, "done");
     wait_for_jobs_idle(state.clone(), Duration::from_secs(30)).await;
 
@@ -109,9 +110,8 @@ pub async fn seed_scanned_asset(
     .expect("query assets");
     let asset_id = listed
         .items
-        .iter()
-        .find(|item| item.file_name == file_name)
+        .first()
         .map(|item| item.id)
-        .expect("seeded asset");
+        .expect("seed asset");
     (root.id, asset_id)
 }

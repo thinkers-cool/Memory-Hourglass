@@ -1,4 +1,5 @@
 use crate::catalog::models::{Asset, AssetScanState};
+use crate::catalog::pools::CatalogPools;
 use crate::error::{AppError, Result};
 use sqlx::SqlitePool;
 
@@ -14,12 +15,20 @@ pub struct UpsertAssetInput<'a> {
 }
 
 pub struct AssetRepo {
-    pub(crate) pool: SqlitePool,
+    pub(crate) pools: CatalogPools,
 }
 
 impl AssetRepo {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(pools: CatalogPools) -> Self {
+        Self { pools }
+    }
+
+    fn read(&self) -> &SqlitePool {
+        self.pools.read()
+    }
+
+    fn write(&self) -> &SqlitePool {
+        self.pools.write()
     }
 
     pub async fn upsert_asset(&self, input: UpsertAssetInput<'_>) -> Result<Asset> {
@@ -56,7 +65,7 @@ impl AssetRepo {
         .bind(size)
         .bind(mtime_ns)
         .bind(sync_state)
-        .fetch_one(&self.pool)
+        .fetch_one(self.write())
         .await?;
 
         self.get_asset(id).await
@@ -71,7 +80,7 @@ impl AssetRepo {
             return Ok(Vec::new());
         }
 
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.pools.write().begin().await?;
         let mut ids = Vec::with_capacity(inputs.len());
         for input in inputs {
             let id = sqlx::query_scalar::<_, i64>(
@@ -108,7 +117,7 @@ impl AssetRepo {
     pub async fn get_asset(&self, id: i64) -> Result<Asset> {
         sqlx::query_as::<_, Asset>("SELECT * FROM asset WHERE id = ? AND deleted_at IS NULL")
             .bind(id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(self.read())
             .await?
             .ok_or_else(|| AppError::NotFound(format!("asset {}", id)))
     }
@@ -126,7 +135,7 @@ impl AssetRepo {
         separated.push_unseparated(")");
         Ok(builder
             .build_query_as::<Asset>()
-            .fetch_all(&self.pool)
+            .fetch_all(self.read())
             .await?)
     }
 
@@ -136,7 +145,7 @@ impl AssetRepo {
         )
         .bind(root_id)
         .bind(rel_path)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.read())
         .await?)
     }
 
@@ -145,7 +154,7 @@ impl AssetRepo {
             "SELECT rel_path, mtime_ns, size FROM asset WHERE root_id = ? AND deleted_at IS NULL",
         )
         .bind(root_id)
-        .fetch_all(&self.pool)
+        .fetch_all(self.read())
         .await?;
         Ok(rows)
     }
@@ -159,6 +168,7 @@ impl AssetRepo {
                     size,
                     indexed_mtime_ns,
                     thumb_key,
+                    content_hash,
                     kind,
                     (
                         SELECT COUNT(*)
@@ -170,7 +180,7 @@ impl AssetRepo {
                 "#,
         )
         .bind(root_id)
-        .fetch_all(&self.pool)
+        .fetch_all(self.read())
         .await?)
     }
 
@@ -179,7 +189,7 @@ impl AssetRepo {
             "SELECT rel_path FROM asset WHERE root_id = ? AND deleted_at IS NOT NULL",
         )
         .bind(root_id)
-        .fetch_all(&self.pool)
+        .fetch_all(self.read())
         .await?)
     }
 
@@ -192,7 +202,7 @@ impl AssetRepo {
             sqlx::query_as::<_, Asset>("SELECT * FROM asset WHERE root_id = ? AND rel_path = ?")
                 .bind(root_id)
                 .bind(rel_path)
-                .fetch_optional(&self.pool)
+                .fetch_optional(self.read())
                 .await?,
         )
     }
@@ -202,13 +212,13 @@ impl AssetRepo {
             "SELECT COUNT(*) FROM asset WHERE root_id = ? AND deleted_at IS NULL",
         )
         .bind(root_id)
-        .fetch_one(&self.pool)
+        .fetch_one(self.write())
         .await?;
         let missing = sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM asset WHERE root_id = ? AND deleted_at IS NULL AND sync_state = 'missing'",
         )
         .bind(root_id)
-        .fetch_one(&self.pool)
+        .fetch_one(self.write())
         .await?;
         Ok((total, missing))
     }
@@ -228,7 +238,7 @@ impl AssetRepo {
             builder.push_bind(rel);
         }
         builder.push(")");
-        builder.build().execute(&self.pool).await?;
+        builder.build().execute(self.write()).await?;
         Ok(())
     }
 
@@ -236,7 +246,7 @@ impl AssetRepo {
         sqlx::query("UPDATE asset SET thumb_key = ? WHERE id = ?")
             .bind(thumb_key)
             .bind(asset_id)
-            .execute(&self.pool)
+            .execute(self.write())
             .await?;
         Ok(())
     }
@@ -246,7 +256,7 @@ impl AssetRepo {
             .bind(mtime_ns)
             .bind(size)
             .bind(asset_id)
-            .execute(&self.pool)
+            .execute(self.write())
             .await?;
         Ok(())
     }
@@ -257,7 +267,7 @@ impl AssetRepo {
         )
         .bind(mtime_ns)
         .bind(asset_id)
-        .execute(&self.pool)
+        .execute(self.write())
         .await?;
         Ok(())
     }
@@ -266,7 +276,7 @@ impl AssetRepo {
         sqlx::query("UPDATE asset SET sync_state = ? WHERE id = ? AND deleted_at IS NULL")
             .bind(sync_state)
             .bind(asset_id)
-            .execute(&self.pool)
+            .execute(self.write())
             .await?;
         Ok(())
     }
@@ -285,7 +295,7 @@ impl AssetRepo {
             builder.push_bind(*id);
         }
         builder.push(")");
-        let result = builder.build().execute(&self.pool).await?;
+        let result = builder.build().execute(self.write()).await?;
         Ok(result.rows_affected())
     }
 
@@ -308,7 +318,7 @@ impl AssetRepo {
         builder.push(")");
         let rows = builder
             .build_query_as::<(i64, i64)>()
-            .fetch_all(&self.pool)
+            .fetch_all(self.read())
             .await?;
         Ok(rows.into_iter().collect())
     }
@@ -327,7 +337,7 @@ impl AssetRepo {
             builder.push_bind(*id);
         }
         builder.push(")");
-        let result = builder.build().execute(&self.pool).await?;
+        let result = builder.build().execute(self.write()).await?;
         Ok(result.rows_affected())
     }
 }
@@ -341,8 +351,8 @@ mod tests {
     #[tokio::test]
     async fn upsert_asset_creates_and_updates() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -384,8 +394,8 @@ mod tests {
     #[tokio::test]
     async fn soft_delete_hides_asset() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -412,8 +422,8 @@ mod tests {
     #[tokio::test]
     async fn asset_not_found_and_empty_batch_helpers() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -435,8 +445,8 @@ mod tests {
     #[tokio::test]
     async fn mark_missing_updates_multiple_assets() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -467,8 +477,8 @@ mod tests {
     #[tokio::test]
     async fn soft_delete_and_restore_multiple_assets() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -499,8 +509,8 @@ mod tests {
     #[tokio::test]
     async fn upsert_asset_errors_when_path_soft_deleted() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -537,8 +547,8 @@ mod tests {
     #[tokio::test]
     async fn find_by_path_and_deleted_lookup_behaviors() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -578,8 +588,8 @@ mod tests {
     #[tokio::test]
     async fn list_paths_and_deleted_paths_filter_soft_deleted() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -622,8 +632,8 @@ mod tests {
     #[tokio::test]
     async fn count_for_root_and_mark_missing_unknown_paths() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -653,8 +663,8 @@ mod tests {
     #[tokio::test]
     async fn mutators_skip_soft_deleted_assets() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -689,8 +699,8 @@ mod tests {
     #[tokio::test]
     async fn set_thumb_key_and_batch_upsert_roundtrip() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -732,8 +742,8 @@ mod tests {
     #[tokio::test]
     async fn live_asset_mutators_and_find_by_path_success() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -769,9 +779,9 @@ mod tests {
     #[tokio::test]
     async fn asset_repo_errors_after_pool_close() {
         let (catalog, _dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -789,7 +799,7 @@ mod tests {
             })
             .await
             .unwrap();
-        pool.close().await;
+        pools.close().await;
         assert!(assets.get_asset(asset.id).await.is_err());
         assert!(assets.find_by_path(root.id, "a.jpg").await.is_err());
         assert!(assets.list_paths_for_root(root.id).await.is_err());
@@ -845,8 +855,8 @@ mod tests {
     #[tokio::test]
     async fn upsert_assets_batch_errors_when_path_soft_deleted() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -886,14 +896,14 @@ mod tests {
     #[tokio::test]
     async fn upsert_assets_batch_errors_under_exclusive_lock() {
         let (catalog, _dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
             .unwrap();
-        let mut locker = pool.acquire().await.unwrap();
+        let mut locker = pools.write().acquire().await.unwrap();
         sqlx::query("BEGIN EXCLUSIVE")
             .execute(&mut *locker)
             .await
@@ -920,8 +930,8 @@ mod tests {
     #[tokio::test]
     async fn count_for_root_includes_missing_assets() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -948,8 +958,8 @@ mod tests {
     #[tokio::test]
     async fn upsert_assets_batch_commits_multiple_rows() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await

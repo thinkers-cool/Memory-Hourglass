@@ -1,3 +1,4 @@
+use crate::catalog::pools::CatalogPools;
 use crate::error::{AppError, Result};
 use sqlx::SqlitePool;
 
@@ -27,12 +28,20 @@ COALESCE((
 "#;
 
 pub struct TagRepo {
-    pool: SqlitePool,
+    pools: CatalogPools,
 }
 
 impl TagRepo {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(pools: CatalogPools) -> Self {
+        Self { pools }
+    }
+
+    fn read(&self) -> &SqlitePool {
+        self.pools.read()
+    }
+
+    fn write(&self) -> &SqlitePool {
+        self.pools.write()
     }
 
     pub async fn list_ids_for_asset(&self, asset_id: i64) -> Result<Vec<i64>> {
@@ -45,7 +54,7 @@ impl TagRepo {
                 "#,
         )
         .bind(asset_id)
-        .fetch_all(&self.pool)
+        .fetch_all(self.read())
         .await?)
     }
 
@@ -59,14 +68,14 @@ impl TagRepo {
                 "#,
         )
         .bind(asset_id)
-        .fetch_all(&self.pool)
+        .fetch_all(self.read())
         .await?)
     }
 
     pub async fn list_all_names(&self) -> Result<Vec<String>> {
         Ok(
             sqlx::query_scalar::<_, String>("SELECT name FROM tag ORDER BY name")
-                .fetch_all(&self.pool)
+                .fetch_all(self.read())
                 .await?,
         )
     }
@@ -75,7 +84,7 @@ impl TagRepo {
         Ok(
             sqlx::query_scalar::<_, i64>("SELECT asset_id FROM asset_tag WHERE tag_id = ?")
                 .bind(tag_id)
-                .fetch_all(&self.pool)
+                .fetch_all(self.read())
                 .await?,
         )
     }
@@ -95,7 +104,7 @@ impl TagRepo {
             asset_count = TAG_ASSET_COUNT_SQL,
         );
         Ok(sqlx::query_as::<_, TagRow>(&sql)
-            .fetch_all(&self.pool)
+            .fetch_all(self.read())
             .await?)
     }
 
@@ -111,7 +120,7 @@ impl TagRepo {
                 "#,
         )
         .bind(tag_id)
-        .fetch_all(&self.pool)
+        .fetch_all(self.read())
         .await?)
     }
 
@@ -140,7 +149,7 @@ impl TagRepo {
                 sqlx::query("INSERT OR IGNORE INTO asset_tag (asset_id, tag_id) VALUES (?, ?)")
                     .bind(asset_id)
                     .bind(tag_id)
-                    .execute(&self.pool)
+                    .execute(self.write())
                     .await?;
             if result.rows_affected() > 0 {
                 updated += 1;
@@ -158,7 +167,7 @@ impl TagRepo {
             let result = sqlx::query("DELETE FROM asset_tag WHERE asset_id = ? AND tag_id = ?")
                 .bind(asset_id)
                 .bind(tag_id)
-                .execute(&self.pool)
+                .execute(self.write())
                 .await?;
             if result.rows_affected() > 0 {
                 updated += 1;
@@ -176,7 +185,7 @@ impl TagRepo {
         if let Some(parent_id) = parent_id {
             let exists = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM tag WHERE id = ?")
                 .bind(parent_id)
-                .fetch_one(&self.pool)
+                .fetch_one(self.write())
                 .await?;
             if exists == 0 {
                 return Err(AppError::NotFound(format!("parent tag {}", parent_id)));
@@ -187,18 +196,18 @@ impl TagRepo {
             .bind(name)
             .bind(parent_id)
             .bind(color)
-            .execute(&self.pool)
+            .execute(self.write())
             .await?;
         if color.is_some() {
             sqlx::query("UPDATE tag SET color = ? WHERE name = ?")
                 .bind(color)
                 .bind(name)
-                .execute(&self.pool)
+                .execute(self.write())
                 .await?;
         }
         sqlx::query_scalar::<_, i64>("SELECT id FROM tag WHERE name = ?")
             .bind(name)
-            .fetch_one(&self.pool)
+            .fetch_one(self.write())
             .await
             .map_err(|e| AppError::Catalog(e.to_string()))
     }
@@ -212,7 +221,7 @@ impl TagRepo {
             .bind(trimmed)
             .bind(color)
             .bind(id)
-            .execute(&self.pool)
+            .execute(self.write())
             .await?;
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound(format!("tag {}", id)));
@@ -224,7 +233,7 @@ impl TagRepo {
         let child_count =
             sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM tag WHERE parent_id = ?")
                 .bind(id)
-                .fetch_one(&self.pool)
+                .fetch_one(self.write())
                 .await?;
         if child_count > 0 {
             return Err(AppError::InvalidInput(
@@ -234,12 +243,12 @@ impl TagRepo {
 
         sqlx::query("DELETE FROM asset_tag WHERE tag_id = ?")
             .bind(id)
-            .execute(&self.pool)
+            .execute(self.write())
             .await?;
 
         let result = sqlx::query("DELETE FROM tag WHERE id = ?")
             .bind(id)
-            .execute(&self.pool)
+            .execute(self.write())
             .await?;
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound(format!("tag {}", id)));
@@ -263,7 +272,7 @@ impl TagRepo {
         );
         sqlx::query_as::<_, TagRow>(&sql)
             .bind(id)
-            .fetch_one(&self.pool)
+            .fetch_one(self.write())
             .await
             .map_err(|e| AppError::Catalog(e.to_string()))
     }
@@ -277,9 +286,9 @@ mod tests {
     #[tokio::test]
     async fn delete_tag_removes_asset_links() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
 
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
@@ -319,7 +328,7 @@ mod tests {
     #[tokio::test]
     async fn expand_tag_ids_includes_descendants() {
         let (catalog, _dir) = test_catalog().await;
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
 
         let parent_id = tag_repo.create_tag("travel", None, None).await.unwrap();
         let child_id = tag_repo
@@ -337,9 +346,9 @@ mod tests {
     #[tokio::test]
     async fn parent_tag_asset_count_includes_descendants() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
 
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
@@ -379,7 +388,7 @@ mod tests {
     #[tokio::test]
     async fn tag_repo_empty_inputs_and_validation_errors() {
         let (catalog, _dir) = test_catalog().await;
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
 
         assert!(tag_repo
             .expand_tag_ids_with_descendants(&[])
@@ -402,7 +411,7 @@ mod tests {
         assert!(err.to_string().contains("not found"));
 
         let parent_id = tag_repo.create_tag("parent", None, None).await.unwrap();
-        let _child_id = tag_repo
+        tag_repo
             .create_tag("child-tag", Some(parent_id), None)
             .await
             .unwrap();
@@ -416,9 +425,9 @@ mod tests {
     #[tokio::test]
     async fn tag_listings_remove_update_and_duplicate_append() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -482,7 +491,7 @@ mod tests {
     #[tokio::test]
     async fn create_tag_existing_name_reuses_id_and_sets_color() {
         let (catalog, _dir) = test_catalog().await;
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
         let first_id = tag_repo.create_tag("shared", None, None).await.unwrap();
         let second_id = tag_repo
             .create_tag("shared", None, Some("#aabbcc"))
@@ -497,9 +506,9 @@ mod tests {
     #[tokio::test]
     async fn remove_tag_id_from_assets_returns_zero_when_unassigned() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -530,10 +539,10 @@ mod tests {
     #[tokio::test]
     async fn update_tag_fetch_errors_when_asset_table_is_dropped() {
         let (catalog, _dir) = test_catalog().await;
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
         let tag_id = tag_repo.create_tag("rename", None, None).await.unwrap();
         sqlx::query("DROP TABLE asset")
-            .execute(catalog.pool())
+            .execute(catalog.write_pool())
             .await
             .unwrap();
         let err = tag_repo
@@ -546,11 +555,11 @@ mod tests {
     #[tokio::test]
     async fn tag_mutations_error_under_exclusive_lock() {
         let (catalog, _dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let tag_repo = TagRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let tag_repo = TagRepo::new(pools.clone());
         let parent_id = tag_repo.create_tag("parent", None, None).await.unwrap();
         let tag_id = tag_repo.create_tag("leaf", None, None).await.unwrap();
-        let mut locker = pool.acquire().await.unwrap();
+        let mut locker = pools.write().acquire().await.unwrap();
         sqlx::query("BEGIN EXCLUSIVE")
             .execute(&mut *locker)
             .await
@@ -566,10 +575,10 @@ mod tests {
     #[tokio::test]
     async fn tag_repo_errors_after_pool_close() {
         let (catalog, _dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
-        let tag_repo = TagRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
+        let tag_repo = TagRepo::new(pools.clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -592,7 +601,7 @@ mod tests {
             .append_tag_id_to_assets(&[asset.id], tag_id)
             .await
             .unwrap();
-        pool.close().await;
+        pools.close().await;
         assert!(tag_repo.list_ids_for_asset(asset.id).await.is_err());
         assert!(tag_repo.list_names_for_asset(asset.id).await.is_err());
         assert!(tag_repo.list_all_names().await.is_err());
@@ -619,7 +628,7 @@ mod tests {
     #[tokio::test]
     async fn create_tag_rejects_missing_parent() {
         let (catalog, _dir) = test_catalog().await;
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
         let err = tag_repo
             .create_tag("child", Some(999_999), None)
             .await
@@ -630,7 +639,7 @@ mod tests {
     #[tokio::test]
     async fn create_tag_updates_color_for_existing_name() {
         let (catalog, _dir) = test_catalog().await;
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
         let first = tag_repo
             .create_tag("colorful", None, Some("#111111"))
             .await
@@ -648,7 +657,7 @@ mod tests {
     #[tokio::test]
     async fn delete_tag_returns_not_found_for_missing_id() {
         let (catalog, _dir) = test_catalog().await;
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
         let err = tag_repo.delete_tag(999_999).await.unwrap_err();
         assert!(err.to_string().contains("tag"));
     }
@@ -656,9 +665,9 @@ mod tests {
     #[tokio::test]
     async fn create_tag_fetch_errors_under_exclusive_lock() {
         let (catalog, _dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let tag_repo = TagRepo::new(pool.clone());
-        let mut locker = pool.acquire().await.unwrap();
+        let pools = catalog.pools().clone();
+        let tag_repo = TagRepo::new(pools.clone());
+        let mut locker = pools.write().acquire().await.unwrap();
         sqlx::query("BEGIN EXCLUSIVE")
             .execute(&mut *locker)
             .await

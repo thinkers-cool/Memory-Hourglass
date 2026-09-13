@@ -24,23 +24,50 @@ impl ThumbService {
             return Ok(out.file_name().unwrap().to_string_lossy().to_string());
         }
 
-        if let Ok(bytes) = extract_embedded_preview(source) {
-            if let Ok(thumb_key) = self.write_webp_from_bytes(asset_id, &bytes) {
+        let bytes = std::fs::read(source)?;
+        self.ensure_thumbnail_from_bytes(asset_id, source, &bytes)
+    }
+
+    pub fn ensure_thumbnail_from_bytes(
+        &self,
+        asset_id: i64,
+        source: &Path,
+        bytes: &[u8],
+    ) -> Result<String> {
+        self.ensure_thumbnail_from_bytes_with_embedded(asset_id, source, bytes, None)
+    }
+
+    pub fn ensure_thumbnail_from_bytes_with_embedded(
+        &self,
+        asset_id: i64,
+        source: &Path,
+        bytes: &[u8],
+        embedded_exif_thumb: Option<&[u8]>,
+    ) -> Result<String> {
+        if self.thumb_path(asset_id).exists() {
+            return Ok(self
+                .thumb_path(asset_id)
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_string());
+        }
+        if let Some(exif_thumb) = embedded_exif_thumb {
+            if let Ok(thumb_key) = self.write_webp_from_bytes(asset_id, source, exif_thumb) {
                 return Ok(thumb_key);
             }
         }
-
-        self.write_webp_from_file(asset_id, source)
+        if let Ok(thumb_key) = self.write_webp_from_bytes(asset_id, source, bytes) {
+            return Ok(thumb_key);
+        }
+        if let Ok((preview_path, preview)) = load_embedded_preview(source) {
+            return self.write_webp_from_bytes(asset_id, &preview_path, &preview);
+        }
+        Err(AppError::Metadata("thumbnail generation failed".into()))
     }
 
-    fn write_webp_from_file(&self, asset_id: i64, source: &Path) -> Result<String> {
+    fn write_webp_from_bytes(&self, asset_id: i64, source: &Path, bytes: &[u8]) -> Result<String> {
         let _ = image_format_from_path(source)?;
-        let img = image::open(source)
-            .map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))?;
-        self.resize_and_save(asset_id, img)
-    }
-
-    fn write_webp_from_bytes(&self, asset_id: i64, bytes: &[u8]) -> Result<String> {
         let img = image::load_from_memory(bytes)
             .map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))?;
         self.resize_and_save(asset_id, img)
@@ -61,11 +88,10 @@ impl ThumbService {
 }
 
 fn image_format_from_path(path: &Path) -> Result<image::ImageFormat> {
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase())
-        .ok_or_else(|| AppError::Metadata("missing image extension".into()))?;
+    let ext = crate::path_util::os_extension(path).to_lowercase();
+    if ext.is_empty() {
+        return Err(AppError::Metadata("missing image extension".into()));
+    }
     match ext.as_str() {
         "jpg" | "jpeg" => Ok(image::ImageFormat::Jpeg),
         "png" => Ok(image::ImageFormat::Png),
@@ -80,21 +106,27 @@ fn image_format_from_path(path: &Path) -> Result<image::ImageFormat> {
     }
 }
 
-fn extract_embedded_preview(source: &Path) -> Result<Vec<u8>> {
-    let stem = source
-        .file_stem()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| AppError::Metadata("no embedded preview".into()))?;
+fn embedded_preview_path(source: &Path) -> Result<PathBuf> {
+    let stem = crate::path_util::os_file_stem(source);
+    if stem.is_empty() {
+        return Err(AppError::Metadata("no embedded preview".into()));
+    }
     let parent = source
         .parent()
         .ok_or_else(|| AppError::Metadata("no embedded preview".into()))?;
     for ext in ["jpg", "jpeg", "JPG", "JPEG"] {
         let candidate = parent.join(format!("{}.{}", stem, ext));
         if candidate.exists() {
-            return std::fs::read(&candidate).map_err(AppError::from);
+            return Ok(candidate);
         }
     }
     Err(AppError::Metadata("no embedded preview".into()))
+}
+
+fn load_embedded_preview(source: &Path) -> Result<(PathBuf, Vec<u8>)> {
+    let path = embedded_preview_path(source)?;
+    let bytes = std::fs::read(&path).map_err(AppError::from)?;
+    Ok((path, bytes))
 }
 
 #[cfg(test)]
@@ -147,7 +179,7 @@ mod tests {
         let preview = dir.path().join("DSC011.jpg");
         std::fs::write(&raw, b"raw").unwrap();
         std::fs::write(&preview, include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
-        let bytes = extract_embedded_preview(&raw).unwrap();
+        let (_, bytes) = load_embedded_preview(&raw).unwrap();
         assert!(!bytes.is_empty());
     }
 
@@ -190,7 +222,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let raw = dir.path().join("orphan.cr2");
         std::fs::write(&raw, b"raw").unwrap();
-        let err = extract_embedded_preview(&raw).unwrap_err();
+        let err = load_embedded_preview(&raw).unwrap_err();
         assert!(err.to_string().contains("no embedded preview"));
     }
 
@@ -200,12 +232,12 @@ mod tests {
         let raw = dir.path().join("photo.cr2");
         std::fs::write(&raw, b"raw").unwrap();
         std::fs::write(dir.path().join("photo.png"), b"png").unwrap();
-        assert!(extract_embedded_preview(&raw).is_err());
+        assert!(load_embedded_preview(&raw).is_err());
     }
 
     #[test]
     fn extract_embedded_preview_errors_for_relative_path_without_parent() {
-        let err = extract_embedded_preview(Path::new("orphan.cr2")).unwrap_err();
+        let err = load_embedded_preview(Path::new("orphan.cr2")).unwrap_err();
         assert!(err.to_string().contains("no embedded preview"));
     }
 
@@ -260,7 +292,7 @@ mod tests {
         let preview = dir.path().join("photo.JPEG");
         std::fs::write(&raw, b"raw").unwrap();
         std::fs::write(&preview, include_bytes!("../../tests/fixtures/minimal.jpg")).unwrap();
-        let bytes = extract_embedded_preview(&raw).unwrap();
+        let (_, bytes) = load_embedded_preview(&raw).unwrap();
         assert!(!bytes.is_empty());
     }
 
@@ -295,13 +327,13 @@ mod tests {
 
     #[test]
     fn extract_embedded_preview_errors_without_file_stem() {
-        let err = extract_embedded_preview(Path::new(".")).unwrap_err();
+        let err = load_embedded_preview(Path::new(".")).unwrap_err();
         assert!(err.to_string().contains("no embedded preview"));
     }
 
     #[test]
     fn extract_embedded_preview_errors_without_parent_directory() {
-        let err = extract_embedded_preview(Path::new("x")).unwrap_err();
+        let err = load_embedded_preview(Path::new("x")).unwrap_err();
         assert!(err.to_string().contains("no embedded preview"));
     }
 
@@ -309,6 +341,8 @@ mod tests {
     fn write_webp_from_bytes_errors_on_invalid_image_data() {
         let dir = tempdir().unwrap();
         let svc = ThumbService::new(dir.path().join("thumbs"));
-        assert!(svc.write_webp_from_bytes(7, b"not-an-image").is_err());
+        assert!(svc
+            .write_webp_from_bytes(7, &dir.path().join("bad.jpg"), b"not-an-image")
+            .is_err());
     }
 }

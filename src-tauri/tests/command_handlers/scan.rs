@@ -11,6 +11,6 @@ async fn scan_command_handles_missing_root() {
     let handle = fixture.handle();
 
     start_scan(999_999, handle, state.clone()).await.unwrap();
-    let status = wait_for_scan(state.clone(), Duration::from_secs(10)).await;
+    let status = wait_for_scan(state.clone(), 999_999, Duration::from_secs(10)).await;
     assert_eq!(status.stage, "error");
 }

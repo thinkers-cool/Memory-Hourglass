@@ -1,3 +1,4 @@
+import os from "node:os";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
@@ -8,7 +9,7 @@ export default defineConfig({
     environment: "happy-dom",
     setupFiles: ["src/test/setup.ts"],
     pool: "forks",
-    maxWorkers: 2,
+    maxWorkers: os.availableParallelism(),
     coverage: {
       provider: "v8",
       reportsDirectory: "./coverage",

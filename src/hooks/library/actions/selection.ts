@@ -9,6 +9,11 @@ import {
   clampGridColumnCount,
   GRID_COLUMN_COUNT_STEP,
 } from "../../../lib/gridSettings";
+import {
+  rotateClockwise,
+  rotateCounterClockwise,
+  resolveRotation,
+} from "../../../lib/imageRotation";
 import type { AssetCard } from "../../../types";
 import type { LibraryActionsDeps } from "../libraryActionsDeps";
 
@@ -23,6 +28,7 @@ export function createSelectionActions(deps: LibraryActionsDeps) {
     lastSelectedIndexRef,
     setSelectedId,
     setSelectedIds,
+    detail,
     setDetail,
     setFullView,
     setInspectorVisible,
@@ -107,6 +113,18 @@ export function createSelectionActions(deps: LibraryActionsDeps) {
     rate: async (rating: number) => {
       if (!selectedId) return;
       setDetail(await api.updateAssetMeta(selectedId, { rating }));
+      await refreshGrid();
+    },
+    rotate: async (direction: "cw" | "ccw") => {
+      if (!selectedId) return;
+      const current = resolveRotation(
+        detail?.meta?.rotation ?? items.find((item) => item.id === selectedId)?.rotation,
+      );
+      const rotation =
+        direction === "cw"
+          ? rotateClockwise(current)
+          : rotateCounterClockwise(current);
+      setDetail(await api.updateAssetMeta(selectedId, { rotation }));
       await refreshGrid();
     },
     batchRate: async (rating: number) => {

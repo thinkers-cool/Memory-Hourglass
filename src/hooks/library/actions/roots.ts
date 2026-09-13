@@ -17,6 +17,7 @@ export function createRootsActions(deps: LibraryActionsDeps) {
     setSmbDialogOpen,
     requestConfirm,
     addRootAndScan,
+    setFocusScanRootId,
   } = deps;
 
   return {
@@ -73,6 +74,7 @@ export function createRootsActions(deps: LibraryActionsDeps) {
       await refreshAll();
     },
     syncRoot: async (rootId: number) => {
+      setFocusScanRootId(rootId);
       setNotification(
         infoNotification(i18n.t("library:notification.scanning")),
       );

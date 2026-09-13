@@ -14,10 +14,11 @@ const slideshowState = vi.hoisted(() => ({
   },
   playing: true,
   theme: "dissolve" as const,
-  kenBurns: false,
   fromIndex: null as number | null,
   toIndex: 0,
   progress: 1,
+  incomingElapsedMs: 0,
+  outgoingElapsedMs: 0,
   goNext: vi.fn(),
   goPrev: vi.fn(),
   onVideoEnded: vi.fn(),
@@ -168,7 +169,7 @@ describe("GalleryPlayer", () => {
     slideshowState.playing = false;
     slideshowState.settings.loop = true;
     slideshowState.settings.intervalMs = 5000;
-    slideshowState.theme = "push";
+    slideshowState.theme = "ken-burns";
     render(
       <GalleryPlayer
         items={[sampleCard, { ...sampleCard, id: 2 }]}
@@ -228,29 +229,25 @@ describe("GalleryPlayer", () => {
     expect(screen.getByLabelText(/Effects disabled/i)).toBeDisabled();
   });
 
-  it("renders ken-burns and fade-zoom theme icons", () => {
-    slideshowState.theme = "ken-burns";
-    const { unmount } = render(
-      <GalleryPlayer
-        items={[sampleCard]}
-        index={0}
-        onClose={vi.fn()}
-        onNavigate={vi.fn()}
-      />,
-    );
-    expect(screen.getByLabelText(/Effect:/i)).toBeInTheDocument();
-    unmount();
-
-    slideshowState.theme = "fade-zoom";
-    render(
-      <GalleryPlayer
-        items={[sampleCard]}
-        index={0}
-        onClose={vi.fn()}
-        onNavigate={vi.fn()}
-      />,
-    );
-    expect(screen.getByLabelText(/Effect:/i)).toBeInTheDocument();
+  it("renders transition theme icons", () => {
+    for (const theme of [
+      "ken-burns",
+      "fade-zoom",
+      "push",
+      "dip-black",
+    ] as const) {
+      slideshowState.theme = theme;
+      const { unmount } = render(
+        <GalleryPlayer
+          items={[sampleCard]}
+          index={0}
+          onClose={vi.fn()}
+          onNavigate={vi.fn()}
+        />,
+      );
+      expect(screen.getByLabelText(/Effect:/i)).toBeInTheDocument();
+      unmount();
+    }
   });
 
   it("renders alternate interval icons", () => {

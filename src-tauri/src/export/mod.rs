@@ -2,7 +2,7 @@ use crate::catalog::models::ExportOptions;
 use crate::error::{AppError, Result};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
+use crate::catalog::pools::CatalogPools;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -21,14 +21,14 @@ pub struct ExportFailure {
 }
 
 pub struct ExportService {
-    pool: SqlitePool,
+    pools: CatalogPools,
 }
 
 pub type ExportProgressFn = Arc<dyn Fn(u64, u64, Option<&str>, &str) + Send + Sync>;
 
 impl ExportService {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(pools: CatalogPools) -> Self {
+        Self { pools }
     }
 
     pub async fn export_assets(
@@ -86,7 +86,7 @@ impl ExportService {
             );
             let row = sqlx::query_as::<_, ExportRow>(&sql)
                 .bind(id)
-                .fetch_optional(&self.pool)
+                .fetch_optional(self.pools.read())
                 .await?;
 
             match row {
@@ -175,9 +175,10 @@ impl ExportService {
             let processed_counter = Arc::new(AtomicU64::new(processed));
             let on_progress = on_progress.clone();
             let cancel = cancel.clone();
+            let export_parallel_panic =
+                crate::scan::test_hooks::take_flag("MEMHG_TEST_EXPORT_PARALLEL_PANIC");
             let parallel_results = tokio::task::spawn_blocking(move || {
-                if std::env::var_os("MEMHG_TEST_EXPORT_PARALLEL_PANIC").is_some() {
-                    std::env::remove_var("MEMHG_TEST_EXPORT_PARALLEL_PANIC");
+                if export_parallel_panic {
                     panic!("export parallel panic");
                 }
                 work_items
@@ -230,7 +231,7 @@ impl ExportService {
             .bind(status)
             .bind(serde_json::to_string(&manifest).unwrap())
             .bind(chrono::Utc::now().timestamp())
-            .execute(&self.pool)
+            .execute(self.pools.write())
             .await?;
 
         Ok(manifest)
@@ -240,7 +241,7 @@ impl ExportService {
         let row = sqlx::query_as::<_, JobRow>(
             "SELECT id, status, manifest_json, created_at FROM export_job ORDER BY id DESC LIMIT 1",
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pools.read())
         .await?;
 
         Ok(row.map(|r| {
@@ -258,7 +259,7 @@ impl ExportService {
         let rows = sqlx::query_as::<_, JobRow>(
             "SELECT id, status, manifest_json, created_at FROM export_job ORDER BY id DESC LIMIT 50",
         )
-        .fetch_all(&self.pool)
+        .fetch_all(self.pools.read())
         .await?;
 
         Ok(rows
@@ -364,14 +365,14 @@ fn resolve_export_name(
         Some(t) if t.trim().is_empty() => Ok(file_name.to_string()),
         Some(t) => {
             let path = PathBuf::from(file_name);
-            let stem = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .ok_or_else(|| "missing file stem".to_string())?;
-            let ext = path
-                .extension()
-                .and_then(|s| s.to_str())
-                .ok_or_else(|| "missing extension".to_string())?;
+            let stem = crate::path_util::os_file_stem(&path);
+            if stem.is_empty() {
+                return Err("missing file stem".into());
+            }
+            let ext = crate::path_util::os_extension(&path);
+            if ext.is_empty() {
+                return Err("missing extension".into());
+            }
 
             if t.contains("{date}") && capture_at.is_none() {
                 return Err("missing capture date for {date}".into());
@@ -387,9 +388,9 @@ fn resolve_export_name(
             let camera_name = camera.unwrap_or_default();
 
             let name = t
-                .replace("{name}", stem)
+                .replace("{name}", &stem)
                 .replace("{date}", &date)
-                .replace("{ext}", ext)
+                .replace("{ext}", &ext)
                 .replace("{camera}", camera_name);
             if name.contains('.') {
                 Ok(name)
@@ -522,25 +523,25 @@ mod tests {
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
 
-        ScanService::new(catalog.pool().clone(), thumb_dir)
+        ScanService::new(catalog.pools().clone(), thumb_dir)
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "export.jpg")
             .await
             .unwrap()
             .unwrap();
 
         let dest = dir.path().join("out");
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         let manifest = export
             .export_assets(
                 &[asset.id],
@@ -563,7 +564,7 @@ mod tests {
     async fn export_all_failures_record_failed_job_status() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         let dest = dir.path().join("all-fail-out");
         export
             .export_assets(
@@ -588,7 +589,7 @@ mod tests {
     async fn export_reports_empty_selection_and_missing_assets() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         let dest = dir.path().join("out");
         assert!(export
             .export_assets(
@@ -631,23 +632,23 @@ mod tests {
         .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "nested/export.jpg")
             .await
             .unwrap()
             .unwrap();
 
         let dest = dir.path().join("nested-out");
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         let manifest = export
             .export_assets(
                 &[asset.id],
@@ -694,21 +695,21 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "bad.jpg")
             .await
             .unwrap()
             .unwrap();
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         let manifest = export
             .export_assets(
                 &[asset.id],
@@ -792,22 +793,22 @@ mod tests {
         .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "convert.jpg")
             .await
             .unwrap()
             .unwrap();
 
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         for format in ["webp", "png", "jpeg"] {
             let dest = dir.path().join(format!("out-{}", format));
             let manifest = export
@@ -843,16 +844,16 @@ mod tests {
         std::fs::write(photos.join("nested/deep/three.jpg"), jpeg).unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let mut ids = Vec::new();
         for name in ["one.jpg", "two.jpg", "three.jpg"] {
             let asset = assets
@@ -863,7 +864,7 @@ mod tests {
             ids.push(asset.id);
         }
 
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         let cancel = Arc::new(AtomicBool::new(true));
         let cancelled = export
             .export_assets_with_progress(
@@ -900,7 +901,7 @@ mod tests {
         assert_eq!(partial.failed.len(), 1);
 
         std::fs::write(photos.join("nested/deep/corrupt.jpg"), b"not-an-image").unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
@@ -937,22 +938,22 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "nested/deep/photo.jpg")
             .await
             .unwrap()
             .unwrap();
         let destination = dir.path().join("nested-export");
-        let manifest = ExportService::new(catalog.pool().clone())
+        let manifest = ExportService::new(catalog.pools().clone())
             .export_assets(
                 &[asset.id],
                 &destination,
@@ -979,12 +980,12 @@ mod tests {
             std::fs::write(photos.join(format!("bulk-{index}.jpg")), jpeg).unwrap();
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
@@ -993,7 +994,7 @@ mod tests {
             .fetch_all(catalog.pool())
             .await
             .unwrap();
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         let cancel = Arc::new(AtomicBool::new(false));
         let cancel_flag = cancel.clone();
         export
@@ -1026,12 +1027,12 @@ mod tests {
             std::fs::write(photos.join(format!("bulk-{index}.jpg")), jpeg).unwrap();
         }
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
@@ -1040,7 +1041,7 @@ mod tests {
             .fetch_all(catalog.pool())
             .await
             .unwrap();
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         let cancel = Arc::new(AtomicBool::new(true));
         let manifest = export
             .export_assets_with_progress(
@@ -1068,10 +1069,10 @@ mod tests {
             .bind("completed")
             .bind("{bad-json")
             .bind(1_i64)
-            .execute(catalog.pool())
+            .execute(catalog.write_pool())
             .await
             .unwrap();
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         let latest = export.latest_job().await.unwrap().unwrap();
         assert_eq!(latest.1, "completed");
         assert!(latest.2.copied.is_empty());
@@ -1110,7 +1111,7 @@ mod tests {
     async fn export_latest_job_returns_none_when_no_jobs() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         assert!(export.latest_job().await.unwrap().is_none());
         assert!(export.list_jobs().await.unwrap().is_empty());
     }
@@ -1126,21 +1127,21 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "done.jpg")
             .await
             .unwrap()
             .unwrap();
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         export
             .export_assets(
                 &[asset.id],
@@ -1169,21 +1170,21 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "named.jpg")
             .await
             .unwrap()
             .unwrap();
-        AssetMetaRepo::new(catalog.pool().clone())
+        AssetMetaRepo::new(catalog.pools().clone())
             .upsert(&crate::catalog::models::AssetMeta {
                 asset_id: asset.id,
                 capture_at: Some(1_700_000_000),
@@ -1193,11 +1194,12 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             })
             .await
             .unwrap();
         let dest = dir.path().join("renamed-out");
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         let manifest = export
             .export_assets(
                 &[asset.id],
@@ -1226,21 +1228,21 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "phase.jpg")
             .await
             .unwrap()
             .unwrap();
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         let copied_phases = Arc::new(Mutex::new(Vec::new()));
         let copied_capture = copied_phases.clone();
         export
@@ -1315,16 +1317,16 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "blocked.jpg")
             .await
             .unwrap()
@@ -1332,7 +1334,7 @@ mod tests {
         let blocker = dir.path().join("dest-blocker");
         std::fs::write(&blocker, b"x").unwrap();
         std::fs::set_permissions(&blocker, std::fs::Permissions::from_mode(0o444)).unwrap();
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         let err = export
             .export_assets(
                 &[asset.id],
@@ -1380,22 +1382,22 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "panic.jpg")
             .await
             .unwrap()
             .unwrap();
-        std::env::set_var("MEMHG_TEST_EXPORT_PARALLEL_PANIC", "1");
-        let export = ExportService::new(catalog.pool().clone());
+        crate::scan::test_hooks::set_flag("MEMHG_TEST_EXPORT_PARALLEL_PANIC");
+        let export = ExportService::new(catalog.pools().clone());
         let err = export
             .export_assets(
                 &[asset.id],
@@ -1409,7 +1411,6 @@ mod tests {
             )
             .await
             .unwrap_err();
-        std::env::remove_var("MEMHG_TEST_EXPORT_PARALLEL_PANIC");
         assert!(!err.to_string().is_empty());
     }
 
@@ -1424,23 +1425,23 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), dir.path().join("thumbs"))
+        ScanService::new(pools.clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(pool.clone())
+        let asset = AssetRepo::new(pools.clone())
             .find_by_path(root.id, "db.jpg")
             .await
             .unwrap()
             .unwrap();
-        pool.close().await;
-        let export = ExportService::new(pool);
+        pools.close().await;
+        let export = ExportService::new(pools);
         assert!(export
             .export_assets(
                 &[asset.id],
@@ -1469,21 +1470,21 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(catalog.pool().clone(), dir.path().join("thumbs"))
+        ScanService::new(catalog.pools().clone(), dir.path().join("thumbs"))
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
-        let asset = AssetRepo::new(catalog.pool().clone())
+        let asset = AssetRepo::new(catalog.pools().clone())
             .find_by_path(root.id, "nested/photo.jpg")
             .await
             .unwrap()
             .unwrap();
-        let export = ExportService::new(catalog.pool().clone());
+        let export = ExportService::new(catalog.pools().clone());
         let manifest = export
             .export_assets(
                 &[asset.id],

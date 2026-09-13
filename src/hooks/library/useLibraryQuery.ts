@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { pickActiveScanStatus } from "../../lib/scanStatusSelection";
 import * as api from "../../api/client";
 import { mergeLibraryFilter } from "../../lib/libraryFilters";
 import type { FilterBarState } from "../../lib/libraryActions";
@@ -60,7 +61,15 @@ export function useLibraryQuery(
   >(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const [scanStatus, setScanStatus] = useState("");
+  const [scanStatusByRoot, setScanStatusByRoot] = useState<
+    Record<number, string>
+  >({});
+  const [focusScanRootId, setFocusScanRootId] = useState<number | null>(null);
+
+  const scanStatus = useMemo(
+    () => pickActiveScanStatus(scanStatusByRoot),
+    [scanStatusByRoot],
+  );
 
   const offsetRef = useRef(0);
   const filterRef = useRef<AssetFilter>({});
@@ -127,7 +136,9 @@ export function useLibraryQuery(
   }, []);
 
   useEffect(() => {
-    void refreshMeta();
+    void refreshMeta().then(() => {
+      void api.resumePendingScans().catch(console.error);
+    });
   }, [refreshMeta]);
 
   useEffect(() => {
@@ -150,12 +161,21 @@ export function useLibraryQuery(
           now - lastStatusUpdate >= 500
         ) {
           lastStatusUpdate = now;
-          setScanStatus(
-            `${progress.stage}: ${progress.indexed}/${progress.scanned}`,
-          );
+          setScanStatusByRoot((prev) => ({
+            ...prev,
+            [progress.root_id]: `${progress.stage}: ${progress.indexed}/${progress.scanned}`,
+          }));
         }
 
         if (progress.stage === "done" || progress.stage === "error") {
+          setFocusScanRootId((prev) =>
+            prev === progress.root_id ? null : prev,
+          );
+          setScanStatusByRoot((prev) => {
+            const next = { ...prev };
+            delete next[progress.root_id];
+            return next;
+          });
           window.clearTimeout(metaRefreshTimer);
           window.clearTimeout(gridRefreshTimer);
           void refreshAll();
@@ -212,6 +232,10 @@ export function useLibraryQuery(
     setDetail,
   ]);
 
+  const clearScanStatus = useCallback(() => {
+    setScanStatusByRoot({});
+  }, []);
+
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
@@ -256,7 +280,10 @@ export function useLibraryQuery(
     loadingMore,
     hasMore,
     scanStatus,
-    setScanStatus,
+    scanStatusByRoot,
+    focusScanRootId,
+    setFocusScanRootId,
+    clearScanStatus,
     filterRef,
     sortParam,
     refreshMeta,

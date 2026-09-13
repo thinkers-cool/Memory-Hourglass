@@ -76,7 +76,7 @@ describe("saveSlideshowSettings", () => {
 
   it("persists settings as json", () => {
     saveSlideshowSettings({
-      theme: "push",
+      theme: "ken-burns",
       intervalMs: 2000,
       loop: false,
       shuffle: true,
@@ -85,11 +85,19 @@ describe("saveSlideshowSettings", () => {
     expect(
       JSON.parse(localStorage.getItem("memhg.slideshow.settings")!),
     ).toEqual({
-      theme: "push",
+      theme: "ken-burns",
       intervalMs: 2000,
       loop: false,
       shuffle: true,
       muteVideos: false,
     });
+  });
+
+  it("coerces unknown stored themes to dissolve", () => {
+    localStorage.setItem(
+      "memhg.slideshow.settings",
+      JSON.stringify({ theme: "wipe" }),
+    );
+    expect(loadSlideshowSettings().theme).toBe("dissolve");
   });
 });

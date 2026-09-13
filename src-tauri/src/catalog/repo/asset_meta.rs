@@ -1,21 +1,21 @@
 use crate::catalog::models::AssetMeta;
+use crate::catalog::pools::CatalogPools;
 use crate::error::Result;
-use sqlx::SqlitePool;
 
 pub struct AssetMetaRepo {
-    pool: SqlitePool,
+    pools: CatalogPools,
 }
 
 impl AssetMetaRepo {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(pools: CatalogPools) -> Self {
+        Self { pools }
     }
 
     pub async fn upsert(&self, meta: &AssetMeta) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO asset_meta (asset_id, capture_at, camera, lens, rating, latitude, longitude, keywords_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO asset_meta (asset_id, capture_at, camera, lens, rating, latitude, longitude, keywords_json, rotation)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(asset_id) DO UPDATE SET
                 capture_at = excluded.capture_at,
                 camera = excluded.camera,
@@ -23,7 +23,8 @@ impl AssetMetaRepo {
                 rating = excluded.rating,
                 latitude = excluded.latitude,
                 longitude = excluded.longitude,
-                keywords_json = excluded.keywords_json
+                keywords_json = excluded.keywords_json,
+                rotation = excluded.rotation
             "#,
         )
         .bind(meta.asset_id)
@@ -34,7 +35,8 @@ impl AssetMetaRepo {
         .bind(meta.latitude)
         .bind(meta.longitude)
         .bind(&meta.keywords_json)
-        .execute(&self.pool)
+        .bind(meta.rotation)
+        .execute(self.pools.write())
         .await?;
         Ok(())
     }
@@ -43,7 +45,7 @@ impl AssetMetaRepo {
         Ok(
             sqlx::query_as::<_, AssetMeta>("SELECT * FROM asset_meta WHERE asset_id = ?")
                 .bind(asset_id)
-                .fetch_optional(&self.pool)
+                .fetch_optional(self.pools.read())
                 .await?,
         )
     }
@@ -56,7 +58,7 @@ impl AssetMetaRepo {
             return Ok(std::collections::HashMap::new());
         }
         let mut builder = sqlx::QueryBuilder::new(
-            "SELECT asset_id, capture_at, camera, lens, rating, latitude, longitude, keywords_json FROM asset_meta WHERE asset_id IN (",
+            "SELECT asset_id, capture_at, camera, lens, rating, latitude, longitude, keywords_json, rotation FROM asset_meta WHERE asset_id IN (",
         );
         let mut separated = builder.separated(", ");
         for asset_id in asset_ids {
@@ -65,7 +67,7 @@ impl AssetMetaRepo {
         separated.push_unseparated(")");
         let rows = builder
             .build_query_as::<AssetMeta>()
-            .fetch_all(&self.pool)
+            .fetch_all(self.pools.read())
             .await?;
         Ok(rows.into_iter().map(|meta| (meta.asset_id, meta)).collect())
     }
@@ -81,10 +83,10 @@ mod tests {
     #[tokio::test]
     async fn meta_and_tags_roundtrip() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
-        let meta_repo = AssetMetaRepo::new(catalog.pool().clone());
-        let tag_repo = TagRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
+        let meta_repo = AssetMetaRepo::new(catalog.pools().clone());
+        let tag_repo = TagRepo::new(catalog.pools().clone());
 
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
@@ -114,6 +116,7 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: Some(r#"["travel"]"#.into()),
+                rotation: None,
             })
             .await
             .unwrap();
@@ -138,9 +141,9 @@ mod tests {
     #[tokio::test]
     async fn asset_meta_get_and_upsert_update() {
         let (catalog, _dir) = test_catalog().await;
-        let roots = SourceRootRepo::new(catalog.pool().clone());
-        let assets = AssetRepo::new(catalog.pool().clone());
-        let meta_repo = AssetMetaRepo::new(catalog.pool().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
+        let meta_repo = AssetMetaRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -169,6 +172,7 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             })
             .await
             .unwrap();
@@ -182,6 +186,7 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             })
             .await
             .unwrap();
@@ -194,10 +199,10 @@ mod tests {
     #[tokio::test]
     async fn meta_repo_errors_after_pool_close() {
         let (catalog, _dir) = test_catalog().await;
-        let pool = catalog.pool().clone();
-        let roots = SourceRootRepo::new(pool.clone());
-        let assets = AssetRepo::new(pool.clone());
-        let meta_repo = AssetMetaRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let roots = SourceRootRepo::new(pools.clone());
+        let assets = AssetRepo::new(pools.clone());
+        let meta_repo = AssetMetaRepo::new(pools.clone());
         let root = roots
             .insert_root("/tmp/p", "local", "watch", None)
             .await
@@ -215,7 +220,7 @@ mod tests {
             })
             .await
             .unwrap();
-        pool.close().await;
+        pools.close().await;
         assert!(meta_repo
             .upsert(&AssetMeta {
                 asset_id: asset.id,
@@ -226,6 +231,7 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             })
             .await
             .is_err());

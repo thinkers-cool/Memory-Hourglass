@@ -1,6 +1,6 @@
 use crate::activity::record::{record_tags_added, record_tags_removed};
 use crate::catalog::repo::TagRepo;
-use crate::commands::context::trace_command;
+use crate::commands::context::{trace_command, trace_command_with_id};
 use crate::error::Result;
 use crate::message::{emit_message, MessageEnvelope};
 use crate::query::tag_keywords::sync_assets_tag_keywords;
@@ -20,10 +20,10 @@ pub struct TagDto {
 
 #[tauri::command]
 pub async fn list_tags(state: State<'_, AppState>) -> Result<Vec<TagDto>> {
-    trace_command("list_tags", |_correlation_id| async move {
+    trace_command("list_tags", || async move {
         state
             .with_active(|ws| async move {
-                let rows = TagRepo::new(ws.catalog.pool().clone())
+                let rows = TagRepo::new(ws.catalog.pools().clone())
                     .list_tag_rows()
                     .await?;
                 Ok(rows
@@ -49,10 +49,10 @@ pub async fn create_tag(
     color: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<TagDto> {
-    trace_command("create_tag", |_correlation_id| async move {
+    trace_command("create_tag", || async move {
         state
             .with_active(|ws| async move {
-                let repo = TagRepo::new(ws.catalog.pool().clone());
+                let repo = TagRepo::new(ws.catalog.pools().clone());
                 let id = repo.create_tag(&name, parent_id, color.as_deref()).await?;
                 Ok(TagDto {
                     id,
@@ -74,14 +74,14 @@ pub async fn update_tag(
     color: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<TagDto> {
-    trace_command("update_tag", |_correlation_id| async move {
+    trace_command("update_tag", || async move {
         state
             .with_active(|ws| async move {
-                let pool = ws.catalog.pool().clone();
-                let repo = TagRepo::new(pool.clone());
+                let pools = ws.catalog.pools().clone();
+                let repo = TagRepo::new(pools.clone());
                 let asset_ids = repo.list_asset_ids_for_tag(id).await?;
                 let row = repo.update_tag(id, &name, color.as_deref()).await?;
-                sync_assets_tag_keywords(&pool, &asset_ids, &ws.media_settings).await?;
+                sync_assets_tag_keywords(&pools, &asset_ids, &ws.media_settings).await?;
                 Ok(TagDto {
                     id: row.id,
                     name: row.name,
@@ -97,14 +97,14 @@ pub async fn update_tag(
 
 #[tauri::command]
 pub async fn delete_tag(id: i64, state: State<'_, AppState>) -> Result<()> {
-    trace_command("delete_tag", |_correlation_id| async move {
+    trace_command("delete_tag", || async move {
         state
             .with_active(|ws| async move {
-                let pool = ws.catalog.pool().clone();
-                let repo = TagRepo::new(pool.clone());
+                let pools = ws.catalog.pools().clone();
+                let repo = TagRepo::new(pools.clone());
                 let asset_ids = repo.list_asset_ids_for_tag(id).await?;
                 repo.delete_tag(id).await?;
-                sync_assets_tag_keywords(&pool, &asset_ids, &ws.media_settings).await?;
+                sync_assets_tag_keywords(&pools, &asset_ids, &ws.media_settings).await?;
                 Ok(())
             })
             .await
@@ -119,7 +119,7 @@ pub async fn batch_append_tags<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AppState>,
 ) -> Result<u64> {
-    trace_command("batch_append_tags", |correlation_id| async move {
+    trace_command_with_id("batch_append_tags", |correlation_id| async move {
         let correlation_for_ws = correlation_id.clone();
         let count = state
             .with_active(|ws| async move {
@@ -155,7 +155,7 @@ pub async fn batch_remove_tags<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AppState>,
 ) -> Result<u64> {
-    trace_command("batch_remove_tags", |correlation_id| async move {
+    trace_command_with_id("batch_remove_tags", |correlation_id| async move {
         let correlation_for_ws = correlation_id.clone();
         let count = state
             .with_active(|ws| async move {

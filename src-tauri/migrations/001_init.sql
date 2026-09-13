@@ -38,7 +38,8 @@ CREATE TABLE asset_meta (
     rating        INTEGER,
     latitude      REAL,
     longitude     REAL,
-    keywords_json TEXT
+    keywords_json TEXT,
+    rotation      INTEGER
 );
 
 CREATE TABLE tag (

@@ -19,6 +19,12 @@ Mount dirs: `{app_data}/mounts/{ws-id}/_browse/` (browse), `_shares/` (library).
 
 Files: `src-tauri/src/library/`, `src-tauri/src/smb/`, `src/components/layout/SmbConnectDialog.tsx`.
 
+## Remove Source Root
+
+`remove_root(id)` cancels any running scan for that root, drops it from the pending scan queue, clears scan status, waits for the job slot to release, then deletes the `source_root` row (assets cascade). Notifies `roots_refresh` so the watcher rebuilds without the removed root.
+
+Files: `src-tauri/src/commands/library.rs`, `src-tauri/src/jobs/mod.rs`, `src-tauri/src/state.rs`.
+
 ## Scan Pipeline
 
 Triggered by `start_scan(root_id)` or background watcher.
@@ -27,11 +33,15 @@ Triggered by `start_scan(root_id)` or background watcher.
 Discovery (WalkDir)
   → Inventory upsert (batch 250)
   → Mark missing paths
-  → Index queue (batch 32; thumbs parallel capped, metadata via shared ExifTool)
-  → Link pass (RAW↔JPEG, hashes, duplicates)
+  → Index queue (chunks of 8; pipelined index + DB commit; one file read → hash + EXIF + embedded-thumb WebP; ExifTool reused per thread)
+  → Link pass (RAW↔JPEG, duplicates)
 ```
 
-Sync states: `new`, `modified`, `ok`. Indexing: thumbnails first (parallel, capped), then metadata (shared ExifTool per batch) → `asset_meta`, `asset_raw_tag`, `thumb_key`. Progress: `scan://progress`; per-batch thumb paths: `scan://thumbs`. Frontend patches grid thumbs incrementally and debounces grid refresh during indexing. Controls: `cancel_scan`, `get_scan_status` (UI); `pause_scan`, `resume_scan` (backend IPC, no UI yet).
+Sync states: `new`, `modified`, `ok`. Indexing: single read per file → SHA-256, one ExifTool pass (metadata + embedded `ThumbnailImage`/`PreviewImage`), WebP thumb from embedded JPEG when present (full decode fallback), → `asset_meta`, `asset_raw_tag`, `thumb_key`, `content_hash` (one write transaction per index chunk; next chunk indexes while prior chunk commits). `IoProfile::Network` (UNC, SMB, or mapped network drive) caps index parallelism at 2 threads. Progress: `scan://progress` (includes `root_id`); per-chunk thumb paths: `scan://thumbs`. Up to 2 scan jobs run in parallel (`JobPool`); additional roots queue until a slot frees. `resume_pending_scans` on library load rescans roots with `last_scan_at IS NULL` or incomplete indexing. Frontend maps progress per root in the source panel. Controls: `cancel_scan(root_id?)`, `get_scan_status(root_id?)`, `list_scan_statuses`; `pause_scan`, `resume_scan` (backend IPC, no UI yet). Export/rebuild use an exclusive job slot (blocks while scans run).
+
+**Scan logging:** Rotating log at `{app_data}/logs/memhg.log` (default `memhg=debug`). Scan phases emit `info` lines: `scan job start/complete`, `scan discovery complete`, `scan catalog complete`, `scan index start/chunk/complete`, `index batch on disk`. Per-file breakdown (`read_ms`, `hash_ms`, `exif_ms`, `thumb_ms`, `used_exif_thumb`) at `debug`. Override with `RUST_LOG` (e.g. `memhg=info` to reduce noise).
+
+**Catalog DB pools:** `CatalogPools` opens a read pool (5 connections, read-only) and a write pool (1 connection). Repos and services use the read pool for `SELECT` queries and the write pool for mutations. Activity logging and index-batch applies always go through the write pool.
 
 Files: `src-tauri/src/scan/`, `src-tauri/src/commands/scan.rs`.
 

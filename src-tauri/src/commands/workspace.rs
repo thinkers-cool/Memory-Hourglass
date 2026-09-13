@@ -12,7 +12,7 @@ pub async fn create_workspace(
     read_only: bool,
     state: State<'_, AppState>,
 ) -> Result<WorkspaceInfo> {
-    trace_command("create_workspace", |_correlation_id| async move {
+    trace_command("create_workspace", || async move {
         let info = {
             let mut workspaces = state.workspaces.write().await;
             workspaces.create(std::path::Path::new(&path), read_only)?
@@ -27,7 +27,7 @@ pub async fn create_workspace(
 
 #[tauri::command]
 pub async fn open_workspace(path: String, state: State<'_, AppState>) -> Result<WorkspaceInfo> {
-    trace_command("open_workspace", |_correlation_id| async move {
+    trace_command("open_workspace", || async move {
         state.open_workspace(std::path::Path::new(&path)).await
     })
     .await
@@ -35,7 +35,7 @@ pub async fn open_workspace(path: String, state: State<'_, AppState>) -> Result<
 
 #[tauri::command]
 pub async fn close_workspace(state: State<'_, AppState>) -> Result<()> {
-    trace_command("close_workspace", |_correlation_id| async move {
+    trace_command("close_workspace", || async move {
         state.close_workspace().await
     })
     .await
@@ -43,7 +43,7 @@ pub async fn close_workspace(state: State<'_, AppState>) -> Result<()> {
 
 #[tauri::command]
 pub async fn get_active_workspace(state: State<'_, AppState>) -> Result<Option<WorkspaceInfo>> {
-    trace_command("get_active_workspace", |_correlation_id| async move {
+    trace_command("get_active_workspace", || async move {
         Ok(state.active_workspace_info().await)
     })
     .await
@@ -51,7 +51,7 @@ pub async fn get_active_workspace(state: State<'_, AppState>) -> Result<Option<W
 
 #[tauri::command]
 pub async fn list_recent_workspaces(state: State<'_, AppState>) -> Result<Vec<RecentWorkspace>> {
-    trace_command("list_recent_workspaces", |_correlation_id| async move {
+    trace_command("list_recent_workspaces", || async move {
         let workspaces = state.workspaces.read().await;
         let entries = workspaces.list_recent();
         let mut recent = Vec::with_capacity(entries.len());
@@ -65,7 +65,7 @@ pub async fn list_recent_workspaces(state: State<'_, AppState>) -> Result<Vec<Re
 
 #[tauri::command]
 pub async fn remove_recent_workspace(path: String, state: State<'_, AppState>) -> Result<()> {
-    trace_command("remove_recent_workspace", |_correlation_id| async move {
+    trace_command("remove_recent_workspace", || async move {
         let mut workspaces = state.workspaces.write().await;
         workspaces.remove_recent(&path)
     })
@@ -74,7 +74,7 @@ pub async fn remove_recent_workspace(path: String, state: State<'_, AppState>) -
 
 #[tauri::command]
 pub async fn try_open_last_workspace(state: State<'_, AppState>) -> Result<Option<WorkspaceInfo>> {
-    trace_command("try_open_last_workspace", |_correlation_id| async move {
+    trace_command("try_open_last_workspace", || async move {
         state.try_open_last_workspace().await
     })
     .await

@@ -11,6 +11,27 @@ export type ImageViewerZoomActions = {
   resetTransform: () => void;
 };
 
+export type ImageViewerRotateActions = {
+  rotateClockwise: () => void;
+  rotateCounterClockwise: () => void;
+};
+
+export function handleImageViewerRotateKey(
+  event: Pick<KeyboardEvent, "key" | "shiftKey" | "preventDefault">,
+  actions: ImageViewerRotateActions,
+): boolean {
+  if (event.key !== "r" && event.key !== "R") {
+    return false;
+  }
+  event.preventDefault();
+  if (event.shiftKey) {
+    actions.rotateCounterClockwise();
+  } else {
+    actions.rotateClockwise();
+  }
+  return true;
+}
+
 export function handleImageViewerZoomKey(
   event: Pick<KeyboardEvent, "key" | "preventDefault">,
   actions: ImageViewerZoomActions,

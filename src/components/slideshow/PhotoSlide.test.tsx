@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { PhotoSlide } from "./PhotoSlide";
 import type { AssetCard } from "../../types";
 
@@ -17,54 +17,24 @@ const card: AssetCard = {
 };
 
 describe("PhotoSlide", () => {
-  it("renders progressive image", () => {
-    render(
-      <PhotoSlide
-        card={card}
-        kenBurns={false}
-        kenBurnsVariant="zoom-in"
-        dwellMs={3000}
-        animate={false}
-      />,
-    );
-    expect(screen.getByAltText("photo.jpg")).toHaveAttribute(
-      "src",
-      "asset:///tmp/1.webp",
-    );
-  });
+  it("renders full image after decode", async () => {
+    class MockImage {
+      onload: (() => void) | null = null;
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.());
+      }
+      decode = vi.fn().mockResolvedValue(undefined);
+    }
+    vi.stubGlobal("Image", MockImage as unknown as typeof Image);
 
-  it.each([
-    ["zoom-in", "animate-ken-burns-in"],
-    ["zoom-out", "animate-ken-burns-out"],
-    ["pan-left", "animate-ken-burns-left"],
-    ["pan-right", "animate-ken-burns-right"],
-  ] as const)("applies ken burns variant %s", (variant, className) => {
-    render(
-      <PhotoSlide
-        card={card}
-        kenBurns
-        kenBurnsVariant={variant}
-        dwellMs={5000}
-        animate
-      />,
-    );
+    render(<PhotoSlide card={card} />);
     const img = screen.getByAltText("photo.jpg");
-    expect(img.className).toContain(className);
-    expect(img.style.animationDuration).toBe("5000ms");
-  });
-
-  it("omits motion class when ken burns disabled", () => {
-    render(
-      <PhotoSlide
-        card={card}
-        kenBurns={false}
-        kenBurnsVariant="zoom-in"
-        dwellMs={3000}
-        animate
-      />,
-    );
-    expect(screen.getByAltText("photo.jpg").className).not.toContain(
-      "animate-ken-burns",
-    );
+    expect(img).toHaveAttribute("src", "asset:///tmp/1.jpg");
+    expect(img.className).toContain("invisible");
+    await waitFor(() => {
+      expect(img.className).not.toContain("invisible");
+    });
+    expect(img.className).toContain("object-cover");
+    vi.unstubAllGlobals();
   });
 });

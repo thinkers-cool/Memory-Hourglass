@@ -137,14 +137,125 @@ describe("resolveSystemStatus", () => {
     ).toBe("1 offline · 2 missing");
   });
 
-  it("shows scanning and plural source counts", () => {
+  it("scopes source health to the active root filter", () => {
     expect(
       resolveSystemStatus({
         selectedCount: 0,
         scanStatus: "",
+        activeRootId: 1,
         roots: [
-          { ...roots[0], status: "scanning" },
-          { ...roots[0], id: 2, status: "scanning" },
+          { ...roots[0], missing_count: 0 },
+          { ...roots[0], id: 2, path: "/archive", missing_count: 579 },
+        ],
+        exportActive: false,
+        exportProgress: null,
+        notification: null,
+        busy: false,
+      }),
+    ).toBe("Ready");
+  });
+
+  it("shows per-root scan progress from scan events", () => {
+    expect(
+      resolveSystemStatus({
+        selectedCount: 0,
+        scanStatus: "",
+        scanStatusByRoot: { 1: "indexing: 4/10" },
+        roots,
+        exportActive: false,
+        exportProgress: null,
+        notification: null,
+        busy: false,
+      }),
+    ).toBe("photos: Generating previews 4/10");
+  });
+
+  it("prefers focused root when multiple scans are active", () => {
+    expect(
+      resolveSystemStatus({
+        selectedCount: 0,
+        scanStatus: "",
+        scanStatusByRoot: {
+          1: "scanning: 1/10",
+          2: "cataloging: 3/8",
+        },
+        focusScanRootId: 2,
+        roots: [
+          roots[0],
+          { ...roots[0], id: 2, path: "/archive" },
+        ],
+        exportActive: false,
+        exportProgress: null,
+        notification: null,
+        busy: false,
+      }),
+    ).toBe("archive: Cataloging 3/8");
+  });
+
+  it("falls back to the raw path when the root label is empty", () => {
+    expect(
+      resolveSystemStatus({
+        selectedCount: 0,
+        scanStatus: "",
+        scanStatusByRoot: { 1: "indexing: 1/2" },
+        roots: [{ ...roots[0], path: "/" }],
+        exportActive: false,
+        exportProgress: null,
+        notification: null,
+        busy: false,
+      }),
+    ).toBe("/: Generating previews 1/2");
+  });
+
+  it("uses the root id when the scanning root is unknown", () => {
+    expect(
+      resolveSystemStatus({
+        selectedCount: 0,
+        scanStatus: "",
+        scanStatusByRoot: { 99: "indexing: 1/2" },
+        roots,
+        exportActive: false,
+        exportProgress: null,
+        notification: null,
+        busy: false,
+      }),
+    ).toBe("#99: Generating previews 1/2");
+  });
+
+  it("shows plural scan summary when multiple scans are active", () => {
+    expect(
+      resolveSystemStatus({
+        selectedCount: 0,
+        scanStatus: "",
+        scanStatusByRoot: {
+          1: "scanning: 1/10",
+          2: "cataloging: 3/8",
+        },
+        roots: [
+          roots[0],
+          { ...roots[0], id: 2, path: "/archive" },
+        ],
+        exportActive: false,
+        exportProgress: null,
+        notification: null,
+        busy: false,
+      }),
+    ).toBe("Scanning 2 sources");
+  });
+
+  it("falls back to plural scan summary when focus does not match", () => {
+    expect(
+      resolveSystemStatus({
+        selectedCount: 0,
+        scanStatus: "",
+        scanStatusByRoot: {
+          1: "scanning: 1/10",
+          2: "cataloging: 3/8",
+        },
+        focusScanRootId: 99,
+        roots: [
+          roots[0],
+          { ...roots[0], id: 2, path: "/archive" },
         ],
         exportActive: false,
         exportProgress: null,

@@ -29,7 +29,12 @@ async fn workspace_create_open_and_scope_libraries() {
                 .await
                 .unwrap();
             assert_eq!(ws.library.list_roots().await.unwrap().len(), 1);
-            assert_eq!(root.path, photos.canonicalize().unwrap().to_string_lossy());
+            assert_eq!(
+                root.path,
+                memhg_lib::path_util::path_to_string(
+                    &memhg_lib::path_util::canonicalize(&photos).unwrap(),
+                ),
+            );
             Ok(())
         })
         .await
@@ -161,7 +166,7 @@ async fn read_only_workspace_keeps_media_bytes_on_metadata_write() {
     state
         .with_active(|ws| async move {
             ws.query_service()
-                .apply_meta_patch(asset_id, AssetMetaPatch { rating: Some(4) })
+                .apply_meta_patch(asset_id, AssetMetaPatch { rating: Some(4), ..Default::default() })
                 .await
                 .unwrap();
             Ok(())

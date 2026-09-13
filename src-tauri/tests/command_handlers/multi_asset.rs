@@ -21,7 +21,7 @@ async fn multi_asset_batch_metadata_sort_and_album_filter() {
 
     update_asset_meta(
         first_id,
-        AssetMetaPatch { rating: Some(5) },
+        AssetMetaPatch { rating: Some(5), ..Default::default() },
         handle.clone(),
         state.clone(),
     )
@@ -29,7 +29,7 @@ async fn multi_asset_batch_metadata_sort_and_album_filter() {
     .unwrap();
     let batch_count = batch_update_asset_meta(
         vec![second_id, third_id],
-        AssetMetaPatch { rating: Some(3) },
+        AssetMetaPatch { rating: Some(3), ..Default::default() },
         handle.clone(),
         state.clone(),
     )

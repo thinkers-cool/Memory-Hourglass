@@ -1,8 +1,13 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
 import type { AssetCard } from "../../types";
 
-export function BlurredBackdrop({ card }: { card: AssetCard }) {
+export function BlurredBackdrop({
+  card,
+  opacity = 0.35,
+}: {
+  card: AssetCard;
+  opacity?: number;
+}) {
   const src = card.thumb_path
     ? convertFileSrc(card.thumb_path)
     : convertFileSrc(card.abs_path);
@@ -12,33 +17,9 @@ export function BlurredBackdrop({ card }: { card: AssetCard }) {
       src={src}
       alt=""
       aria-hidden
-      className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-35 blur-3xl"
+      className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-3xl"
+      style={{ opacity }}
       draggable={false}
     />
   );
-}
-
-export function useProgressiveImage(card: AssetCard) {
-  const fullSrc = convertFileSrc(card.abs_path);
-  const previewSrc = card.thumb_path
-    ? convertFileSrc(card.thumb_path)
-    : fullSrc;
-  const [src, setSrc] = useState(previewSrc);
-
-  useEffect(() => {
-    setSrc(previewSrc);
-    if (previewSrc === fullSrc) return;
-    const img = new Image();
-    img.src = fullSrc;
-    const apply = () => setSrc(fullSrc);
-    img.onload = apply;
-    if (img.decode) {
-      void img.decode().then(apply).catch(apply);
-    }
-    return () => {
-      img.onload = null;
-    };
-  }, [card.id, fullSrc, previewSrc]);
-
-  return src;
 }

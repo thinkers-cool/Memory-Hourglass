@@ -1,12 +1,14 @@
 use crate::catalog::repo::SourceRootRepo;
-use crate::jobs::JobQueue;
+use crate::jobs::JobPool;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use crate::scan::{ScanControl, ScanService};
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
-use sqlx::SqlitePool;
+use crate::catalog::pools::CatalogPools;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
@@ -45,14 +47,14 @@ async fn smb_poller_await_shutdown_or_timeout(shutdown: &mut watch::Receiver<boo
 }
 
 async fn run_smb_poller_loop(
-    pool: SqlitePool,
+    pools: CatalogPools,
     thumb_dir: PathBuf,
     media_settings: crate::workspace::WorkspaceMediaSettings,
-    jobs: JobQueue,
+    jobs: JobPool,
     mut shutdown: watch::Receiver<bool>,
 ) {
     while !*shutdown.borrow() {
-        poll_smb_roots_once(&pool, &thumb_dir, &media_settings, &jobs).await;
+        poll_smb_roots_once(&pools, &thumb_dir, &media_settings, &jobs).await;
         if smb_poller_await_shutdown_or_timeout(&mut shutdown).await {
             break;
         }
@@ -66,7 +68,7 @@ pub fn smb_scan_due(last_scan_at: Option<i64>, poll_secs: Option<i64>, now: i64)
 }
 
 pub struct WatcherService {
-    pool: SqlitePool,
+    pools: CatalogPools,
     thumb_dir: PathBuf,
     media_settings: crate::workspace::WorkspaceMediaSettings,
     debounce: Arc<Mutex<HashMap<i64, std::time::Instant>>>,
@@ -74,12 +76,12 @@ pub struct WatcherService {
 
 impl WatcherService {
     pub fn new(
-        pool: SqlitePool,
+        pools: CatalogPools,
         thumb_dir: PathBuf,
         media_settings: crate::workspace::WorkspaceMediaSettings,
     ) -> Self {
         Self {
-            pool,
+            pools,
             thumb_dir,
             media_settings,
             debounce: Arc::new(Mutex::new(HashMap::new())),
@@ -88,11 +90,11 @@ impl WatcherService {
 
     pub fn spawn_dynamic_local_watcher(
         &self,
-        jobs: JobQueue,
+        jobs: JobPool,
         mut shutdown: watch::Receiver<bool>,
         mut roots_refresh: watch::Receiver<u64>,
     ) {
-        let pool = self.pool.clone();
+        let pools = self.pools.clone();
         let thumb_dir = self.thumb_dir.clone();
         let media_settings = self.media_settings.clone();
         let debounce = self.debounce.clone();
@@ -113,7 +115,7 @@ impl WatcherService {
                 let mut generation = *roots_refresh.borrow();
 
                 while !*shutdown.borrow() {
-                    let roots = SourceRootRepo::new(pool.clone())
+                    let roots = SourceRootRepo::new(pools.clone())
                         .list_roots()
                         .await
                         .unwrap_or_default();
@@ -179,20 +181,28 @@ impl WatcherService {
                                 if !should_scan {
                                     continue;
                                 }
-                                if jobs.try_start("background-scan").await.is_err() {
-                                    continue;
-                                }
+                                let cancel = match jobs.try_start_scan(root.id).await {
+                                    Ok(cancel) => cancel,
+                                    Err(_) => {
+                                        jobs.enqueue_scan(root.id).await;
+                                        continue;
+                                    }
+                                };
+                                let ctrl = ScanControl::new(
+                                    Arc::new(AtomicBool::new(false)),
+                                    cancel,
+                                );
                                 let scanner = ScanService::with_media_settings(
-                                    pool.clone(),
+                                    pools.clone(),
                                     thumb_dir.clone(),
                                     media_settings.clone(),
                                 );
                                 if let Err(error) =
-                                    scanner.scan_root(root.id, &ScanControl::noop()).await
+                                    scanner.scan_root(root.id, &ctrl).await
                                 {
                                     log_background_scan_failure(root.id, &error);
                                 }
-                                jobs.finish().await;
+                                jobs.finish_scan(root.id).await;
                             }
                         }
                     }
@@ -206,13 +216,13 @@ impl WatcherService {
         });
     }
 
-    pub fn spawn_smb_poller(&self, jobs: JobQueue, shutdown: watch::Receiver<bool>) {
-        let pool = self.pool.clone();
+    pub fn spawn_smb_poller(&self, jobs: JobPool, shutdown: watch::Receiver<bool>) {
+        let pools = self.pools.clone();
         let thumb_dir = self.thumb_dir.clone();
         let media_settings = self.media_settings.clone();
 
         tokio::spawn(run_smb_poller_loop(
-            pool,
+            pools,
             thumb_dir,
             media_settings,
             jobs,
@@ -222,12 +232,12 @@ impl WatcherService {
 }
 
 pub(crate) async fn poll_smb_roots_once(
-    pool: &SqlitePool,
+    pools: &CatalogPools,
     thumb_dir: &Path,
     media_settings: &crate::workspace::WorkspaceMediaSettings,
-    jobs: &JobQueue,
+    jobs: &JobPool,
 ) {
-    let roots = SourceRootRepo::new(pool.clone())
+    let roots = SourceRootRepo::new(pools.clone())
         .list_roots()
         .await
         .unwrap_or_default();
@@ -236,18 +246,23 @@ pub(crate) async fn poll_smb_roots_once(
         if !smb_scan_due(root.last_scan_at, root.poll_secs, now) {
             continue;
         }
-        if jobs.try_start("background-scan").await.is_err() {
-            continue;
-        }
+        let cancel = match jobs.try_start_scan(root.id).await {
+            Ok(cancel) => cancel,
+            Err(_) => {
+                jobs.enqueue_scan(root.id).await;
+                continue;
+            }
+        };
+        let ctrl = ScanControl::new(Arc::new(AtomicBool::new(false)), cancel);
         let scanner = ScanService::with_media_settings(
-            pool.clone(),
+            pools.clone(),
             thumb_dir.to_path_buf(),
             media_settings.clone(),
         );
-        if let Err(error) = scanner.scan_root(root.id, &ScanControl::noop()).await {
+        if let Err(error) = scanner.scan_root(root.id, &ctrl).await {
             tracing::warn!("SMB background scan failed for root {}: {}", root.id, error);
         }
-        jobs.finish().await;
+        jobs.finish_scan(root.id).await;
     }
 }
 
@@ -308,8 +323,8 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        SourceRootRepo::new(pool.clone())
+        let pools = catalog.pools().clone();
+        SourceRootRepo::new(pools.clone())
             .insert_root(photos.to_str().unwrap(), "smb", "poll", Some(30))
             .await
             .unwrap();
@@ -318,8 +333,8 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        let jobs = JobQueue::new();
-        poll_smb_roots_once(&pool, &dir.path().join("thumbs"), &media_settings, &jobs).await;
+        let jobs = JobPool::new();
+        poll_smb_roots_once(&pools, &dir.path().join("thumbs"), &media_settings, &jobs).await;
     }
 
     #[tokio::test]
@@ -329,14 +344,14 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let media_settings = crate::workspace::WorkspaceMediaSettings {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        let watcher = WatcherService::new(pool, dir.path().join("thumbs"), media_settings);
+        let watcher = WatcherService::new(pools, dir.path().join("thumbs"), media_settings);
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
-        let jobs = JobQueue::new();
+        let jobs = JobPool::new();
         watcher.spawn_smb_poller(jobs, shutdown_rx);
         shutdown_tx.send(true).expect("shutdown");
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -350,14 +365,14 @@ mod tests {
         std::env::set_var("MEMHG_TEST_SMB_POLLER_SELECT_SECS", "2");
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let media_settings = crate::workspace::WorkspaceMediaSettings {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        let watcher = WatcherService::new(pool, dir.path().join("thumbs"), media_settings);
+        let watcher = WatcherService::new(pools, dir.path().join("thumbs"), media_settings);
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
-        let jobs = JobQueue::new();
+        let jobs = JobPool::new();
         watcher.spawn_smb_poller(jobs, shutdown_rx);
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         shutdown_tx.send(true).expect("shutdown");
@@ -389,23 +404,23 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        SourceRootRepo::new(pool.clone())
+        let pools = catalog.pools().clone();
+        SourceRootRepo::new(pools.clone())
             .insert_root(dir.path().to_str().unwrap(), "smb", "poll", Some(300))
             .await
             .unwrap();
         sqlx::query("UPDATE source_root SET last_scan_at = ? WHERE kind = 'smb'")
             .bind(chrono::Utc::now().timestamp())
-            .execute(&pool)
+            .execute(pools.write())
             .await
             .unwrap();
         let media_settings = crate::workspace::WorkspaceMediaSettings {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        let jobs = JobQueue::new();
-        poll_smb_roots_once(&pool, &dir.path().join("thumbs"), &media_settings, &jobs).await;
-        assert!(jobs.current().await.is_none());
+        let jobs = JobPool::new();
+        poll_smb_roots_once(&pools, &dir.path().join("thumbs"), &media_settings, &jobs).await;
+        assert!(jobs.is_idle().await);
     }
 
     #[tokio::test]
@@ -416,8 +431,8 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        SourceRootRepo::new(pool.clone())
+        let pools = catalog.pools().clone();
+        SourceRootRepo::new(pools.clone())
             .insert_root(dir.path().to_str().unwrap(), "smb", "poll", Some(30))
             .await
             .unwrap();
@@ -425,23 +440,29 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        let jobs = JobQueue::new();
-        jobs.try_start("background-scan").await.unwrap();
-        poll_smb_roots_once(&pool, &dir.path().join("thumbs"), &media_settings, &jobs).await;
-        assert_eq!(jobs.current().await.as_deref(), Some("background-scan"));
-        jobs.finish().await;
+        let root = SourceRootRepo::new(pools.clone())
+            .list_roots()
+            .await
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap();
+        let jobs = JobPool::new();
+        jobs.try_start_scan(root.id).await.unwrap();
+        poll_smb_roots_once(&pools, &dir.path().join("thumbs"), &media_settings, &jobs).await;
+        assert_eq!(jobs.active_scan_count().await, 1);
+        jobs.finish_scan(root.id).await;
     }
 
     #[tokio::test]
     async fn poll_smb_roots_once_handles_scan_errors() {
         use crate::catalog::repo::SourceRootRepo;
         use crate::catalog::Catalog;
-        use crate::scan::test_hooks::{reset as reset_scan_hooks, FINALIZE_SCAN_LINKS_FAIL};
-        use std::sync::atomic::Ordering;
+        use crate::scan::test_hooks::{reset as reset_scan_hooks, set_finalize_scan_links_fail};
         use tempfile::tempdir;
 
         reset_scan_hooks();
-        FINALIZE_SCAN_LINKS_FAIL.store(true, Ordering::SeqCst);
+        set_finalize_scan_links_fail(true);
         let dir = tempdir().unwrap();
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
@@ -451,8 +472,8 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        SourceRootRepo::new(pool.clone())
+        let pools = catalog.pools().clone();
+        SourceRootRepo::new(pools.clone())
             .insert_root(photos.to_str().unwrap(), "smb", "poll", Some(30))
             .await
             .unwrap();
@@ -460,9 +481,9 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        let jobs = JobQueue::new();
-        poll_smb_roots_once(&pool, &dir.path().join("thumbs"), &media_settings, &jobs).await;
-        assert!(jobs.current().await.is_none());
+        let jobs = JobPool::new();
+        poll_smb_roots_once(&pools, &dir.path().join("thumbs"), &media_settings, &jobs).await;
+        assert!(jobs.is_idle().await);
         reset_scan_hooks();
     }
 
@@ -473,14 +494,14 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let media_settings = crate::workspace::WorkspaceMediaSettings {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        let watcher = WatcherService::new(pool, dir.path().join("thumbs"), media_settings);
+        let watcher = WatcherService::new(pools, dir.path().join("thumbs"), media_settings);
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
-        let jobs = JobQueue::new();
+        let jobs = JobPool::new();
         watcher.spawn_smb_poller(jobs, shutdown_rx);
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         shutdown_tx.send(true).expect("shutdown");
@@ -491,12 +512,11 @@ mod tests {
     async fn local_watcher_logs_background_scan_errors() {
         use crate::catalog::repo::SourceRootRepo;
         use crate::catalog::Catalog;
-        use crate::scan::test_hooks::{reset as reset_scan_hooks, FINALIZE_SCAN_LINKS_FAIL};
-        use std::sync::atomic::Ordering;
+        use crate::scan::test_hooks::{reset as reset_scan_hooks, set_finalize_scan_links_fail};
         use tempfile::tempdir;
 
         reset_scan_hooks();
-        FINALIZE_SCAN_LINKS_FAIL.store(true, Ordering::SeqCst);
+        set_finalize_scan_links_fail(true);
         let dir = tempdir().unwrap();
         let photos = dir.path().join("photos");
         std::fs::create_dir_all(&photos).unwrap();
@@ -506,8 +526,8 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        SourceRootRepo::new(pool.clone())
+        let pools = catalog.pools().clone();
+        SourceRootRepo::new(pools.clone())
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
@@ -515,10 +535,10 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        let watcher = WatcherService::new(pool, dir.path().join("thumbs"), media_settings);
+        let watcher = WatcherService::new(pools, dir.path().join("thumbs"), media_settings);
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
         let (refresh_tx, refresh_rx) = tokio::sync::watch::channel(0u64);
-        let jobs = JobQueue::new();
+        let jobs = JobPool::new();
         watcher.spawn_dynamic_local_watcher(jobs.clone(), shutdown_rx, refresh_rx);
         std::fs::write(
             photos.join("watch-2.jpg"),
@@ -526,7 +546,7 @@ mod tests {
         )
         .unwrap();
         for _ in 0..50 {
-            if jobs.current().await.is_some() {
+            if jobs.active_scan_count().await > 0 {
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -544,15 +564,15 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let media_settings = crate::workspace::WorkspaceMediaSettings {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        let watcher = WatcherService::new(pool, dir.path().join("thumbs"), media_settings);
+        let watcher = WatcherService::new(pools, dir.path().join("thumbs"), media_settings);
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
         let (refresh_tx, refresh_rx) = tokio::sync::watch::channel(0u64);
-        let jobs = JobQueue::new();
+        let jobs = JobPool::new();
         watcher.spawn_dynamic_local_watcher(jobs, shutdown_rx, refresh_rx);
         shutdown_tx.send(true).expect("shutdown");
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -567,19 +587,19 @@ mod tests {
         std::env::set_var("MEMHG_TEST_SMB_POLLER_SELECT_SECS", "0");
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let media_settings = crate::workspace::WorkspaceMediaSettings {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
-        let jobs = JobQueue::new();
+        let jobs = JobPool::new();
         let notifier = tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(150)).await;
             shutdown_tx.send(true).expect("shutdown");
         });
         let poller = tokio::spawn(run_smb_poller_loop(
-            pool,
+            pools,
             dir.path().join("thumbs"),
             media_settings,
             jobs,
@@ -601,19 +621,19 @@ mod tests {
         std::env::set_var("MEMHG_TEST_SMB_POLLER_SELECT_SECS", "30");
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let media_settings = crate::workspace::WorkspaceMediaSettings {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
-        let jobs = JobQueue::new();
+        let jobs = JobPool::new();
         let notifier = tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
             shutdown_tx.send(true).expect("shutdown");
         });
         run_smb_poller_loop(
-            pool,
+            pools,
             dir.path().join("thumbs"),
             media_settings,
             jobs,
@@ -657,8 +677,8 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        SourceRootRepo::new(pool.clone())
+        let pools = catalog.pools().clone();
+        SourceRootRepo::new(pools.clone())
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
@@ -666,11 +686,18 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        let watcher = WatcherService::new(pool, dir.path().join("thumbs"), media_settings);
+        let watcher = WatcherService::new(pools.clone(), dir.path().join("thumbs"), media_settings);
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
         let (refresh_tx, refresh_rx) = tokio::sync::watch::channel(0u64);
-        let jobs = JobQueue::new();
-        jobs.try_start("background-scan").await.unwrap();
+        let root = SourceRootRepo::new(pools.clone())
+            .list_roots()
+            .await
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap();
+        let jobs = JobPool::new();
+        jobs.try_start_scan(root.id).await.unwrap();
         watcher.spawn_dynamic_local_watcher(jobs.clone(), shutdown_rx, refresh_rx);
         std::fs::write(
             photos.join("busy.jpg"),
@@ -678,8 +705,8 @@ mod tests {
         )
         .unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        assert_eq!(jobs.current().await.as_deref(), Some("background-scan"));
-        jobs.finish().await;
+        assert_eq!(jobs.active_scan_count().await, 1);
+        jobs.finish_scan(root.id).await;
         shutdown_tx.send(true).expect("shutdown");
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         let _ = refresh_tx;
@@ -700,8 +727,8 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        SourceRootRepo::new(pool.clone())
+        let pools = catalog.pools().clone();
+        SourceRootRepo::new(pools.clone())
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
@@ -709,10 +736,10 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        let watcher = WatcherService::new(pool, dir.path().join("thumbs"), media_settings);
+        let watcher = WatcherService::new(pools, dir.path().join("thumbs"), media_settings);
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
         let (refresh_tx, refresh_rx) = tokio::sync::watch::channel(0u64);
-        let jobs = JobQueue::new();
+        let jobs = JobPool::new();
         watcher.spawn_dynamic_local_watcher(jobs, shutdown_rx, refresh_rx);
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         refresh_tx.send(1).expect("refresh");
@@ -736,8 +763,8 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        SourceRootRepo::new(pool.clone())
+        let pools = catalog.pools().clone();
+        SourceRootRepo::new(pools.clone())
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
@@ -745,10 +772,10 @@ mod tests {
             read_only: false,
             workspace_xmp_dir: dir.path().join("xmp"),
         };
-        let watcher = WatcherService::new(pool, dir.path().join("thumbs"), media_settings);
+        let watcher = WatcherService::new(pools, dir.path().join("thumbs"), media_settings);
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
         let (refresh_tx, refresh_rx) = tokio::sync::watch::channel(0u64);
-        let jobs = JobQueue::new();
+        let jobs = JobPool::new();
         watcher.spawn_dynamic_local_watcher(jobs.clone(), shutdown_rx, refresh_rx);
         for index in 0..5 {
             std::fs::write(
@@ -756,7 +783,7 @@ mod tests {
                 include_bytes!("../../tests/fixtures/minimal.jpg"),
             )
             .unwrap();
-            if jobs.current().await.is_some() {
+            if jobs.active_scan_count().await > 0 {
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;

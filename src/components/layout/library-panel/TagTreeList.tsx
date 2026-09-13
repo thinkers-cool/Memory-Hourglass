@@ -6,7 +6,8 @@ import type {
   LibraryActions,
 } from "../../../lib/libraryActions";
 import { isTagSourceActive } from "../../../lib/libraryFilters";
-import { tagChildren, tagRoots } from "../../../lib/tagHierarchy";
+import type { PanelOrderMode } from "../../../lib/panelOrder";
+import { orderTagsForParent } from "../../../lib/panelOrder";
 import { TagColorDot } from "../../shared/TagColorDot";
 import { ItemCountSubtitle } from "./ItemCountSubtitle";
 import { PanelListRow, PanelRowActionButton } from "./PanelListRow";
@@ -47,6 +48,7 @@ export function TagTreeList({
   extraFilter,
   editingTagId,
   addingSubtagParentId,
+  tagOrderMode,
   actions,
   onEdit,
   onCancelEdit,
@@ -61,6 +63,7 @@ export function TagTreeList({
   extraFilter: AssetFilter;
   editingTagId: number | null;
   addingSubtagParentId: number | null;
+  tagOrderMode: PanelOrderMode;
   actions: LibraryActions;
   onEdit: (tagId: number) => void;
   onCancelEdit: () => void;
@@ -68,8 +71,7 @@ export function TagTreeList({
   onCancelAddSubtag: () => void;
 }) {
   const { t } = useTranslation("library");
-  const items =
-    parentId === null ? tagRoots(tags) : tagChildren(tags, parentId);
+  const items = orderTagsForParent(tags, parentId, tagOrderMode);
 
   return items.map((tag) => (
     <div key={tag.id}>
@@ -124,6 +126,7 @@ export function TagTreeList({
         extraFilter={extraFilter}
         editingTagId={editingTagId}
         addingSubtagParentId={addingSubtagParentId}
+        tagOrderMode={tagOrderMode}
         actions={actions}
         onEdit={onEdit}
         onCancelEdit={onCancelEdit}

@@ -11,7 +11,7 @@ Rust + Tauri 2 + SQLx SQLite. Specs: [docs/spec/](../docs/spec/README.md).
 | `src/state.rs` | `AppState`, `ActiveWorkspace` |
 | `src/error.rs` | `AppError`, `ErrorCode`, `ErrorPayload` |
 | `src/commands/` | Thin Tauri handlers (one file per domain) |
-| `src/catalog/` | SQLite repos, models, rebuild |
+| `src/catalog/` | SQLite repos, models, rebuild, `pools.rs` |
 | `src/scan/` | Discovery, indexing pipeline |
 | `src/watcher/` | Filesystem notify + SMB poll |
 | `src/library/` | Source roots, relink |
@@ -26,6 +26,7 @@ Rust + Tauri 2 + SQLx SQLite. Specs: [docs/spec/](../docs/spec/README.md).
 | `src/trace/` | Rotating log files, correlation IDs |
 | `src/activity/` | Activity log, undo |
 | `src/message/` | `message://notify` envelopes |
+| `src/path_util.rs` | Unicode-safe path canonicalize, join, compare |
 | `migrations/` | SQLx migrations |
 | `tests/` | Integration tests |
 
@@ -58,7 +59,7 @@ AppState
 
 ActiveWorkspace
 ├── catalog, library, collection, link
-├── jobs: JobQueue
+├── jobs: JobPool
 ├── scan_status, shutdown_tx, roots_refresh
 ```
 
@@ -69,6 +70,7 @@ One workspace open at a time. Close sends `shutdown_tx` to stop watcher/poller.
 - Schema: `migrations/001_init.sql` (edit in place; no incremental migrations)
 - Applied via `sqlx::migrate!` in `catalog/mod.rs`
 - Location: `{workspace}/catalog.db` (WAL, FK enabled)
+- `CatalogPools`: read pool (5 connections, read-only) + write pool (1 connection); repos use read for `SELECT`, write for mutations
 - Detail: [DATA_MODEL.md](../docs/spec/DATA_MODEL.md)
 
 ## Services
@@ -104,11 +106,19 @@ One workspace open at a time. Close sends `shutdown_tx` to stop watcher/poller.
 
 Unit tests in `#[cfg(test)]` modules. Helpers: `AppState::test_with_fresh_workspace()`, `test_support.rs`. Scan/SMB tests use `MEMHG_TEST_*` env vars — reset hooks between tests. Coverage policy: [CONVENTIONS.md](../docs/spec/CONVENTIONS.md).
 
+## Paths
+
+- Use `path_util` for canonicalize, storage strings, joins, and comparisons.
+- Store paths with `path_for_storage`; compare with `paths_equal`.
+- Use `os_file_name`, `os_file_stem`, `os_extension` instead of `to_str()` on `OsStr`.
+- Relative paths use `/` in the DB; `normalize_rel_path` accepts `\` on input.
+- On Windows, `canonicalize` uses `\\?\` / `\\?\UNC\` for long and UNC paths.
+
 ## Patterns
 
 - Thin handlers — logic in services/repos.
-- `JobQueue::try_start(name)` — single concurrent background job.
-- Batch constants: `SCAN_BATCH_SIZE=250`, `INDEX_BATCH_SIZE=32`.
+- `JobPool` — up to 2 parallel scan jobs; pending scan queue; exclusive slot for export/rebuild.
+- Batch constants: `SCAN_BATCH_SIZE=250`, `INDEX_CHUNK_SIZE=8`.
 - SMB creds via keyring (never in DB).
 - `purge_delete` requires `confirm_token == "DELETE"`.
 - Sort strings: `field:dir` parsed in `sort.rs`.
@@ -118,5 +128,5 @@ Unit tests in `#[cfg(test)]` modules. Helpers: `AppState::test_with_fresh_worksp
 - Add commands without registering in `lib.rs` invoke_handler.
 - Skip `AppState::with_active` for workspace-scoped operations.
 - Store credentials in SQLite or logs.
-- Run multiple scan/export jobs concurrently.
+- Run export/rebuild while scan jobs are active (exclusive slot conflicts).
 - Clear `source_root` during catalog rebuild.

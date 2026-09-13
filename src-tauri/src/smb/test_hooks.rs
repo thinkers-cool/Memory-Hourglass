@@ -1,9 +1,9 @@
 use super::TEST_MOUNT_MARKER;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Output};
-use std::sync::{LazyLock, Mutex};
 
 const TOOL_ENV: &str = "MEMHG_TEST_TOOL";
 
@@ -32,32 +32,46 @@ enum StubEntry {
     Queue(Vec<Stub>),
 }
 
-static STUBS: LazyLock<Mutex<HashMap<String, StubEntry>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+thread_local! {
+    static STUBS: RefCell<HashMap<String, StubEntry>> = RefCell::new(HashMap::new());
+    static MOUNT_PANIC: Cell<bool> = const { Cell::new(false) };
+}
+
+pub fn set_mount_panic(active: bool) {
+    MOUNT_PANIC.set(active);
+}
+
+pub fn take_mount_panic() -> bool {
+    let active = MOUNT_PANIC.get();
+    if active {
+        MOUNT_PANIC.set(false);
+    }
+    active
+}
 
 pub fn set(tool: &str, stub: Stub) {
-    STUBS
-        .lock()
-        .expect("subprocess test hooks lock")
-        .insert(tool.to_string(), StubEntry::Fixed(stub));
+    STUBS.with_borrow_mut(|stubs| {
+        stubs.insert(tool.to_string(), StubEntry::Fixed(stub));
+    });
 }
 
 pub fn set_queue(tool: &str, stubs: Vec<Stub>) {
-    STUBS
-        .lock()
-        .expect("subprocess test hooks lock")
-        .insert(tool.to_string(), StubEntry::Queue(stubs));
+    STUBS.with_borrow_mut(|map| {
+        map.insert(tool.to_string(), StubEntry::Queue(stubs));
+    });
 }
 
 pub fn remove(tool: &str) {
-    STUBS
-        .lock()
-        .expect("subprocess test hooks lock")
-        .remove(tool);
+    STUBS.with_borrow_mut(|stubs| {
+        stubs.remove(tool);
+    });
 }
 
 pub fn reset() {
-    STUBS.lock().expect("subprocess test hooks lock").clear();
+    STUBS.with_borrow_mut(|stubs| {
+        stubs.clear();
+    });
+    MOUNT_PANIC.set(false);
 }
 
 pub fn command(tool: &str) -> Command {
@@ -90,8 +104,7 @@ pub fn try_execute(command: &Command) -> Option<Result<Output, std::io::Error>> 
 }
 
 fn take_stub(tool: &str) -> Option<Stub> {
-    let mut stubs = STUBS.lock().expect("subprocess test hooks lock");
-    match stubs.get_mut(tool)? {
+    STUBS.with_borrow_mut(|stubs| match stubs.get_mut(tool)? {
         StubEntry::Fixed(stub) => Some(stub.clone()),
         StubEntry::Queue(queue) => {
             if queue.is_empty() {
@@ -103,7 +116,7 @@ fn take_stub(tool: &str) -> Option<Stub> {
                 Some(queue.remove(0))
             }
         }
-    }
+    })
 }
 
 fn tool_name(command: &Command) -> Option<String> {

@@ -1,4 +1,5 @@
 use crate::catalog::models::{Album, SmartCollection, SmartCollectionRow};
+use crate::catalog::pools::CatalogPools;
 use crate::error::{AppError, Result};
 use crate::query::AssetFilter;
 use crate::sort::SortSpec;
@@ -14,12 +15,20 @@ COALESCE((
 "#;
 
 pub struct CollectionRepo {
-    pool: SqlitePool,
+    pools: CatalogPools,
 }
 
 impl CollectionRepo {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(pools: CatalogPools) -> Self {
+        Self { pools }
+    }
+
+    fn read(&self) -> &SqlitePool {
+        self.pools.read()
+    }
+
+    fn write(&self) -> &SqlitePool {
+        self.pools.write()
     }
 
     fn row_to_smart_collection(row: SmartCollectionRow) -> Result<SmartCollection> {
@@ -38,7 +47,7 @@ impl CollectionRepo {
         let rows = sqlx::query_as::<_, SmartCollectionRow>(
             "SELECT id, name, filter_json FROM smart_collection ORDER BY name",
         )
-        .fetch_all(&self.pool)
+        .fetch_all(self.read())
         .await?;
 
         rows.into_iter()
@@ -51,7 +60,7 @@ impl CollectionRepo {
             "SELECT id, name, filter_json FROM smart_collection WHERE id = ?",
         )
         .bind(id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.read())
         .await?
         .ok_or_else(|| AppError::NotFound(format!("smart collection {}", id)))?;
         Self::row_to_smart_collection(row)
@@ -72,20 +81,20 @@ impl CollectionRepo {
         let existing =
             sqlx::query_scalar::<_, i64>("SELECT id FROM smart_collection WHERE name = ?")
                 .bind(trimmed)
-                .fetch_optional(&self.pool)
+                .fetch_optional(self.read())
                 .await?;
 
         if let Some(id) = existing {
             sqlx::query("UPDATE smart_collection SET filter_json = ? WHERE id = ?")
                 .bind(&filter_json)
                 .bind(id)
-                .execute(&self.pool)
+                .execute(self.write())
                 .await?;
         } else {
             sqlx::query("INSERT INTO smart_collection (name, filter_json) VALUES (?, ?)")
                 .bind(trimmed)
                 .bind(&filter_json)
-                .execute(&self.pool)
+                .execute(self.write())
                 .await?;
         }
 
@@ -93,7 +102,7 @@ impl CollectionRepo {
             "SELECT id, name, filter_json FROM smart_collection WHERE name = ?",
         )
         .bind(trimmed)
-        .fetch_one(&self.pool)
+        .fetch_one(self.read())
         .await
         .map_err(|e| AppError::Catalog(e.to_string()))?;
         Self::row_to_smart_collection(row)
@@ -102,7 +111,7 @@ impl CollectionRepo {
     pub async fn delete_smart_collection(&self, id: i64) -> Result<()> {
         let r = sqlx::query("DELETE FROM smart_collection WHERE id = ?")
             .bind(id)
-            .execute(&self.pool)
+            .execute(self.write())
             .await?;
         if r.rows_affected() == 0 {
             return Err(AppError::NotFound(format!("smart collection {}", id)));
@@ -115,7 +124,7 @@ impl CollectionRepo {
             "SELECT a.id, a.name, a.sort_mode, a.emoji, {ALBUM_ASSET_COUNT_SQL} FROM album a ORDER BY a.name"
         );
         Ok(sqlx::query_as::<_, Album>(&sql)
-            .fetch_all(&self.pool)
+            .fetch_all(self.read())
             .await?)
     }
 
@@ -125,7 +134,7 @@ impl CollectionRepo {
         );
         sqlx::query_as::<_, Album>(&sql)
             .bind(id)
-            .fetch_one(&self.pool)
+            .fetch_one(self.read())
             .await
             .map_err(|e| AppError::Catalog(e.to_string()))
     }
@@ -148,7 +157,7 @@ impl CollectionRepo {
         .bind(trimmed)
         .bind(sort_mode)
         .bind(emoji)
-        .fetch_one(&self.pool)
+        .fetch_one(self.write())
         .await?;
 
         self.fetch_album(id).await
@@ -157,7 +166,7 @@ impl CollectionRepo {
     pub async fn delete_album(&self, id: i64) -> Result<()> {
         let r = sqlx::query("DELETE FROM album WHERE id = ?")
             .bind(id)
-            .execute(&self.pool)
+            .execute(self.write())
             .await?;
         if r.rows_affected() == 0 {
             return Err(AppError::NotFound(format!("album {}", id)));
@@ -168,7 +177,7 @@ impl CollectionRepo {
     pub async fn set_album_items(&self, album_id: i64, asset_ids: &[i64]) -> Result<()> {
         sqlx::query("DELETE FROM album_item WHERE album_id = ?")
             .bind(album_id)
-            .execute(&self.pool)
+            .execute(self.write())
             .await?;
         if asset_ids.is_empty() {
             return Ok(());
@@ -180,7 +189,7 @@ impl CollectionRepo {
                 .push_bind(*asset_id)
                 .push_bind(pos as i64);
         });
-        builder.build().execute(&self.pool).await?;
+        builder.build().execute(self.write()).await?;
         Ok(())
     }
 
@@ -231,7 +240,7 @@ impl CollectionRepo {
     pub async fn album_asset_ids(&self, album_id: i64) -> Result<Vec<i64>> {
         let sort_mode = sqlx::query_scalar::<_, String>("SELECT sort_mode FROM album WHERE id = ?")
             .bind(album_id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(self.read())
             .await?
             .ok_or_else(|| AppError::NotFound(format!("album {}", album_id)))?;
 
@@ -251,7 +260,7 @@ impl CollectionRepo {
 
         Ok(sqlx::query_scalar::<_, i64>(&sql)
             .bind(album_id)
-            .fetch_all(&self.pool)
+            .fetch_all(self.read())
             .await?)
     }
     pub async fn list_album_ids_for_asset(&self, asset_id: i64) -> Result<Vec<i64>> {
@@ -259,7 +268,7 @@ impl CollectionRepo {
             "SELECT album_id FROM album_item WHERE asset_id = ? ORDER BY album_id",
         )
         .bind(asset_id)
-        .fetch_all(&self.pool)
+        .fetch_all(self.read())
         .await?)
     }
 
@@ -272,7 +281,7 @@ impl CollectionRepo {
             .bind(trimmed)
             .bind(emoji)
             .bind(id)
-            .execute(&self.pool)
+            .execute(self.write())
             .await?;
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound(format!("album {}", id)));
@@ -305,7 +314,7 @@ mod tests {
     async fn smart_collection_roundtrip_and_validation() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let filter = AssetFilter {
             rating_min: Some(3),
             ..Default::default()
@@ -323,7 +332,7 @@ mod tests {
     async fn smart_collection_rejects_invalid_filters() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let err = repo
             .save_smart_collection(
                 "bad",
@@ -343,13 +352,13 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let one = assets
             .upsert_asset(UpsertAssetInput {
                 root_id: root.id,
@@ -425,7 +434,7 @@ mod tests {
     async fn smart_collection_updates_existing_and_validates_name() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let first = repo
             .save_smart_collection(
                 "rated",
@@ -459,7 +468,7 @@ mod tests {
     async fn smart_collection_rejects_deleted_only_filter() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let err = repo
             .save_smart_collection(
                 "trash",
@@ -479,13 +488,13 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let one = assets
             .upsert_asset(UpsertAssetInput {
                 root_id: root.id,
@@ -525,7 +534,7 @@ mod tests {
     async fn create_album_rejects_invalid_sort_mode() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let err = repo
             .create_album("Trip", "bad:sort", None)
             .await
@@ -537,11 +546,11 @@ mod tests {
     async fn smart_collection_rejects_corrupt_filter_json() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         sqlx::query("INSERT INTO smart_collection (name, filter_json) VALUES (?, ?)")
             .bind("bad")
             .bind("{not-json")
-            .execute(catalog.pool())
+            .execute(catalog.write_pool())
             .await
             .unwrap();
         let err = repo.list_smart_collections().await.unwrap_err();
@@ -552,7 +561,7 @@ mod tests {
     async fn album_asset_ids_requires_existing_album() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let err = repo.album_asset_ids(999).await.unwrap_err();
         assert!(err.to_string().contains("album"));
     }
@@ -563,13 +572,13 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .upsert_asset(UpsertAssetInput {
                 root_id: root.id,
@@ -601,7 +610,7 @@ mod tests {
     async fn update_album_rejects_empty_name() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let album = repo.create_album("Trip", "date:desc", None).await.unwrap();
         assert!(repo.update_album(album.id, "  ", None).await.is_err());
     }
@@ -610,7 +619,7 @@ mod tests {
     async fn get_smart_collection_not_found_before_insert() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         assert!(repo.get_smart_collection(999).await.is_err());
     }
 
@@ -620,13 +629,13 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .upsert_asset(UpsertAssetInput {
                 root_id: root.id,
@@ -652,13 +661,13 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
         let asset = assets
             .upsert_asset(UpsertAssetInput {
                 root_id: root.id,
@@ -695,13 +704,13 @@ mod tests {
     async fn get_smart_collection_rejects_corrupt_filter_json() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let id = sqlx::query_scalar::<_, i64>(
             "INSERT INTO smart_collection (name, filter_json) VALUES (?, ?) RETURNING id",
         )
         .bind("broken")
         .bind("{not-json")
-        .fetch_one(catalog.pool())
+        .fetch_one(catalog.write_pool())
         .await
         .unwrap();
         let err = repo.get_smart_collection(id).await.unwrap_err();
@@ -712,11 +721,11 @@ mod tests {
     async fn smart_collection_list_rejects_invalid_filter_json() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         sqlx::query("INSERT INTO smart_collection (name, filter_json) VALUES (?, ?)")
             .bind("asset-ids")
             .bind(r#"{"asset_ids":[1]}"#)
-            .execute(catalog.pool())
+            .execute(catalog.write_pool())
             .await
             .unwrap();
         let err = repo.list_smart_collections().await.unwrap_err();
@@ -729,14 +738,14 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let repo = CollectionRepo::new(pool.clone());
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let repo = CollectionRepo::new(pools.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(pool.clone());
+        let assets = AssetRepo::new(pools.clone());
         let asset = assets
             .upsert_asset(UpsertAssetInput {
                 root_id: root.id,
@@ -757,7 +766,7 @@ mod tests {
         let saved = repo.save_smart_collection("rated", &filter).await.unwrap();
         let album = repo.create_album("Trip", "date:desc", None).await.unwrap();
         repo.set_album_items(album.id, &[asset.id]).await.unwrap();
-        pool.close().await;
+        pools.close().await;
         assert!(repo.list_smart_collections().await.is_err());
         assert!(repo.get_smart_collection(saved.id).await.is_err());
         assert!(repo.save_smart_collection("rated", &filter).await.is_err());
@@ -780,7 +789,7 @@ mod tests {
     async fn set_album_items_rejects_unknown_asset_ids() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let album = repo.create_album("Trip", "date:desc", None).await.unwrap();
         let err = repo
             .set_album_items(album.id, &[999_999])
@@ -793,7 +802,7 @@ mod tests {
     async fn add_album_items_propagates_set_errors() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let album = repo.create_album("Trip", "date:desc", None).await.unwrap();
         let err = repo
             .add_album_items(album.id, &[999_999])
@@ -808,14 +817,14 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let repo = CollectionRepo::new(pool.clone());
-        let roots = SourceRootRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let repo = CollectionRepo::new(pools.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(pool.clone());
+        let assets = AssetRepo::new(pools.clone());
         let first = assets
             .upsert_asset(UpsertAssetInput {
                 root_id: root.id,
@@ -846,7 +855,7 @@ mod tests {
         repo.set_album_items(album.id, &[first.id, second.id])
             .await
             .unwrap();
-        let mut locker = pool.acquire().await.unwrap();
+        let mut locker = pools.write().acquire().await.unwrap();
         sqlx::query("BEGIN EXCLUSIVE")
             .execute(&mut *locker)
             .await
@@ -863,10 +872,10 @@ mod tests {
     async fn update_album_errors_when_album_table_is_dropped() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let album = repo.create_album("Trip", "date:desc", None).await.unwrap();
         sqlx::query("DROP TABLE album")
-            .execute(catalog.pool())
+            .execute(catalog.write_pool())
             .await
             .unwrap();
         let err = repo
@@ -880,10 +889,10 @@ mod tests {
     async fn update_album_fetch_errors_when_asset_table_is_dropped() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let album = repo.create_album("Trip", "date:desc", None).await.unwrap();
         sqlx::query("DROP TABLE asset")
-            .execute(catalog.pool())
+            .execute(catalog.write_pool())
             .await
             .unwrap();
         let err = repo
@@ -897,14 +906,14 @@ mod tests {
     async fn save_smart_collection_errors_under_exclusive_lock() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let repo = CollectionRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let repo = CollectionRepo::new(pools.clone());
         let filter = AssetFilter {
             rating_min: Some(3),
             ..Default::default()
         };
         repo.save_smart_collection("rated", &filter).await.unwrap();
-        let mut locker = pool.acquire().await.unwrap();
+        let mut locker = pools.write().acquire().await.unwrap();
         sqlx::query("BEGIN EXCLUSIVE")
             .execute(&mut *locker)
             .await
@@ -937,7 +946,7 @@ mod tests {
     async fn delete_album_removes_only_target_album() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let keep = repo.create_album("Keep", "date:desc", None).await.unwrap();
         let remove = repo
             .create_album("Remove", "date:desc", None)
@@ -953,7 +962,7 @@ mod tests {
     async fn save_smart_collection_rejects_asset_id_filter() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let err = repo
             .save_smart_collection(
                 "blocked",
@@ -971,14 +980,14 @@ mod tests {
     async fn save_smart_collection_fetch_errors_under_exclusive_lock() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
-        let repo = CollectionRepo::new(pool.clone());
+        let pools = catalog.pools().clone();
+        let repo = CollectionRepo::new(pools.clone());
         let filter = AssetFilter {
             rating_min: Some(3),
             ..Default::default()
         };
         repo.save_smart_collection("rated", &filter).await.unwrap();
-        let mut locker = pool.acquire().await.unwrap();
+        let mut locker = pools.write().acquire().await.unwrap();
         sqlx::query("BEGIN EXCLUSIVE")
             .execute(&mut *locker)
             .await
@@ -1004,10 +1013,10 @@ mod tests {
         sqlx::query("INSERT INTO smart_collection (name, filter_json) VALUES (?, ?)")
             .bind("broken")
             .bind("{not-json")
-            .execute(catalog.pool())
+            .execute(catalog.write_pool())
             .await
             .unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         assert!(repo.list_smart_collections().await.is_err());
     }
 
@@ -1015,10 +1024,10 @@ mod tests {
     async fn album_asset_ids_errors_when_items_table_missing() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let album = repo.create_album("Trip", "date:desc", None).await.unwrap();
         sqlx::query("DROP TABLE album_item")
-            .execute(catalog.pool())
+            .execute(catalog.write_pool())
             .await
             .unwrap();
         let err = repo.album_asset_ids(album.id).await.unwrap_err();
@@ -1029,12 +1038,12 @@ mod tests {
     async fn album_asset_ids_rejects_invalid_sort_mode() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
         let album = repo.create_album("Trip", "date:desc", None).await.unwrap();
         sqlx::query("UPDATE album SET sort_mode = ? WHERE id = ?")
             .bind("bad:sort")
             .bind(album.id)
-            .execute(catalog.pool())
+            .execute(catalog.write_pool())
             .await
             .unwrap();
         let err = repo.album_asset_ids(album.id).await.unwrap_err();
@@ -1048,14 +1057,14 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let repo = CollectionRepo::new(catalog.pool().clone());
-        let roots = SourceRootRepo::new(catalog.pool().clone());
+        let repo = CollectionRepo::new(catalog.pools().clone());
+        let roots = SourceRootRepo::new(catalog.pools().clone());
         let root = roots
             .insert_root(dir.path().to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        let assets = AssetRepo::new(catalog.pool().clone());
-        let meta_repo = AssetMetaRepo::new(catalog.pool().clone());
+        let assets = AssetRepo::new(catalog.pools().clone());
+        let meta_repo = AssetMetaRepo::new(catalog.pools().clone());
         let low = assets
             .upsert_asset(UpsertAssetInput {
                 root_id: root.id,
@@ -1092,6 +1101,7 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             })
             .await
             .unwrap();
@@ -1105,6 +1115,7 @@ mod tests {
                 latitude: None,
                 longitude: None,
                 keywords_json: None,
+                rotation: None,
             })
             .await
             .unwrap();

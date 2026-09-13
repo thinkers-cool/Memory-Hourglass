@@ -29,4 +29,13 @@ describe("smbFolderPath", () => {
       "/mnt/share/Photos/2024",
     );
   });
+
+  it("normalizes Windows-style separators", () => {
+    expect(
+      relativeFolderPath("\\\\server\\share", "\\\\server\\share\\相册\\2024"),
+    ).toBe("相册/2024");
+    expect(joinFolderPath("C:\\Photos", "相册\\2024")).toBe(
+      "C:/Photos/相册/2024",
+    );
+  });
 });

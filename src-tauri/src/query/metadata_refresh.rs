@@ -4,20 +4,20 @@ use crate::error::{AppError, Result};
 use crate::link::LinkService;
 use crate::metadata::{MetadataContext, MetadataService};
 use crate::scan::file_mtime_ns;
-use sqlx::SqlitePool;
+use crate::catalog::pools::CatalogPools;
 use std::path::Path;
 
 pub async fn refresh_asset_after_metadata_write(
-    pool: &SqlitePool,
+    pools: &CatalogPools,
     asset_id: i64,
     abs_path: &Path,
     metadata_ctx: &MetadataContext,
     read_only: bool,
 ) -> Result<()> {
-    let assets = AssetRepo::new(pool.clone());
-    let meta_repo = AssetMetaRepo::new(pool.clone());
-    let raw_tag_repo = RawTagRepo::new(pool.clone());
-    let link = LinkService::new(pool.clone());
+    let assets = AssetRepo::new(pools.clone());
+    let meta_repo = AssetMetaRepo::new(pools.clone());
+    let raw_tag_repo = RawTagRepo::new(pools.clone());
+    let link = LinkService::new(pools.clone());
 
     let file_meta = std::fs::metadata(abs_path)?;
     let mtime_ns = file_mtime_ns(&file_meta)
@@ -29,8 +29,14 @@ pub async fn refresh_asset_after_metadata_write(
     }
 
     let ctx = metadata_ctx.clone();
+    let read_meta_panic = crate::scan::test_hooks::take_flag("MEMHG_TEST_READ_META_PANIC");
     let (read_meta, raw_tags) =
-        tokio::task::spawn_blocking(move || MetadataService::read_meta(&ctx))
+        tokio::task::spawn_blocking(move || {
+            if read_meta_panic {
+                panic!("read meta panic");
+            }
+            MetadataService::read_meta(&ctx)
+        })
             .await
             .map_err(|error| AppError::Metadata(error.to_string()))??;
 
@@ -44,6 +50,7 @@ pub async fn refresh_asset_after_metadata_write(
             latitude: read_meta.latitude,
             longitude: read_meta.longitude,
             keywords_json: read_meta.keywords_json,
+            rotation: read_meta.rotation,
         })
         .await?;
     raw_tag_repo.replace_for_asset(asset_id, &raw_tags).await?;
@@ -77,31 +84,31 @@ mod tests {
         .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(pool.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), thumb_dir)
+        ScanService::new(pools.clone(), thumb_dir)
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
         let asset_id: i64 = sqlx::query_scalar("SELECT id FROM asset WHERE root_id = ? LIMIT 1")
             .bind(root.id)
-            .fetch_one(&pool)
+            .fetch_one(pools.read())
             .await
             .unwrap();
         let ctx = MetadataContext::in_place(file_path.clone());
         MetadataService::write_rating(&ctx, 4).unwrap();
 
-        refresh_asset_after_metadata_write(&pool, asset_id, &file_path, &ctx, false)
+        refresh_asset_after_metadata_write(&pools, asset_id, &file_path, &ctx, false)
             .await
             .unwrap();
 
-        let meta = AssetMetaRepo::new(pool.clone())
+        let meta = AssetMetaRepo::new(pools.clone())
             .get(asset_id)
             .await
             .unwrap()
@@ -111,7 +118,7 @@ mod tests {
         let tags =
             sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM asset_raw_tag WHERE asset_id = ?")
                 .bind(asset_id)
-                .fetch_one(&pool)
+                .fetch_one(pools.read())
                 .await
                 .unwrap();
         assert!(tags > 0);
@@ -119,12 +126,12 @@ mod tests {
         let hash: Option<String> =
             sqlx::query_scalar("SELECT content_hash FROM asset WHERE id = ?")
                 .bind(asset_id)
-                .fetch_one(&pool)
+                .fetch_one(pools.read())
                 .await
                 .unwrap();
         assert!(hash.is_some());
 
-        let assets = AssetRepo::new(pool.clone());
+        let assets = AssetRepo::new(pools.clone());
         let asset = assets.get_asset(asset_id).await.unwrap();
         assert_eq!(asset.sync_state, "ok");
     }
@@ -142,40 +149,40 @@ mod tests {
         .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(pool.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), thumb_dir)
+        ScanService::new(pools.clone(), thumb_dir)
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
         let asset_id: i64 = sqlx::query_scalar("SELECT id FROM asset WHERE root_id = ? LIMIT 1")
             .bind(root.id)
-            .fetch_one(&pool)
+            .fetch_one(pools.read())
             .await
             .unwrap();
         sqlx::query("UPDATE asset SET content_hash = ? WHERE id = ?")
             .bind("seed-hash")
             .bind(asset_id)
-            .execute(&pool)
+            .execute(pools.write())
             .await
             .unwrap();
 
         let ctx = MetadataContext::in_place(file_path.clone());
         MetadataService::write_rating(&ctx, 2).unwrap();
 
-        refresh_asset_after_metadata_write(&pool, asset_id, &file_path, &ctx, true)
+        refresh_asset_after_metadata_write(&pools, asset_id, &file_path, &ctx, true)
             .await
             .unwrap();
 
         let hash: String = sqlx::query_scalar("SELECT content_hash FROM asset WHERE id = ?")
             .bind(asset_id)
-            .fetch_one(&pool)
+            .fetch_one(pools.read())
             .await
             .unwrap();
         assert_eq!(hash, "seed-hash");
@@ -185,10 +192,10 @@ mod tests {
     async fn refresh_asset_errors_when_file_missing() {
         let dir = tempdir().unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let ctx = MetadataContext::in_place(dir.path().join("missing.jpg"));
         let err = refresh_asset_after_metadata_write(
-            &pool,
+            &pools,
             1,
             &dir.path().join("missing.jpg"),
             &ctx,
@@ -212,26 +219,26 @@ mod tests {
         .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(pool.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), thumb_dir)
+        ScanService::new(pools.clone(), thumb_dir)
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
         let asset_id: i64 = sqlx::query_scalar("SELECT id FROM asset WHERE root_id = ? LIMIT 1")
             .bind(root.id)
-            .fetch_one(&pool)
+            .fetch_one(pools.read())
             .await
             .unwrap();
         let before_size: i64 = sqlx::query_scalar("SELECT size FROM asset WHERE id = ?")
             .bind(asset_id)
-            .fetch_one(&pool)
+            .fetch_one(pools.read())
             .await
             .unwrap();
         std::fs::write(
@@ -242,20 +249,20 @@ mod tests {
         let ctx = MetadataContext::in_place(file_path.clone());
         MetadataService::write_rating(&ctx, 1).unwrap();
 
-        refresh_asset_after_metadata_write(&pool, asset_id, &file_path, &ctx, false)
+        refresh_asset_after_metadata_write(&pools, asset_id, &file_path, &ctx, false)
             .await
             .unwrap();
 
         let after_size: i64 = sqlx::query_scalar("SELECT size FROM asset WHERE id = ?")
             .bind(asset_id)
-            .fetch_one(&pool)
+            .fetch_one(pools.read())
             .await
             .unwrap();
         assert!(after_size >= before_size);
         let raw_tags: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM asset_raw_tag WHERE asset_id = ?")
                 .bind(asset_id)
-                .fetch_one(&pool)
+                .fetch_one(pools.read())
                 .await
                 .unwrap();
         assert!(raw_tags > 0);
@@ -274,14 +281,14 @@ mod tests {
         .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let ctx = MetadataContext::in_place(file_path.clone());
-        std::env::set_var("MEMHG_TEST_NULL_MTIME", "1");
-        let err = refresh_asset_after_metadata_write(&pool, 1, &file_path, &ctx, false)
+        crate::scan::test_hooks::set_flag("MEMHG_TEST_NULL_MTIME");
+        let err = refresh_asset_after_metadata_write(&pools, 1, &file_path, &ctx, false)
             .await
             .unwrap_err();
         assert!(err.to_string().contains("mtime"));
-        std::env::remove_var("MEMHG_TEST_NULL_MTIME");
+        crate::scan::test_hooks::clear_flag("MEMHG_TEST_NULL_MTIME");
     }
 
     #[tokio::test]
@@ -296,25 +303,25 @@ mod tests {
         )
         .unwrap();
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(pool.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), thumb_dir)
+        ScanService::new(pools.clone(), thumb_dir)
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
         let asset_id: i64 = sqlx::query_scalar("SELECT id FROM asset WHERE root_id = ? LIMIT 1")
             .bind(root.id)
-            .fetch_one(&pool)
+            .fetch_one(pools.read())
             .await
             .unwrap();
         let ctx = MetadataContext::in_place(file_path.clone());
-        std::env::set_var("MEMHG_TEST_READ_META_PANIC", "1");
-        let err = refresh_asset_after_metadata_write(&pool, asset_id, &file_path, &ctx, false)
+        crate::scan::test_hooks::set_flag("MEMHG_TEST_READ_META_PANIC");
+        let err = refresh_asset_after_metadata_write(&pools, asset_id, &file_path, &ctx, false)
             .await
             .unwrap_err();
         assert!(err.to_string().contains("read meta panic"));
@@ -333,28 +340,28 @@ mod tests {
         .unwrap();
 
         let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-        let pool = catalog.pool().clone();
+        let pools = catalog.pools().clone();
         let thumb_dir = dir.path().join("thumbs");
-        let roots = SourceRootRepo::new(pool.clone());
+        let roots = SourceRootRepo::new(pools.clone());
         let root = roots
             .insert_root(photos.to_str().unwrap(), "local", "watch", None)
             .await
             .unwrap();
-        ScanService::new(pool.clone(), thumb_dir)
+        ScanService::new(pools.clone(), thumb_dir)
             .scan_root(root.id, &ScanControl::noop())
             .await
             .unwrap();
 
         let asset_id: i64 = sqlx::query_scalar("SELECT id FROM asset WHERE root_id = ? LIMIT 1")
             .bind(root.id)
-            .fetch_one(&pool)
+            .fetch_one(pools.read())
             .await
             .unwrap();
         let ctx = MetadataContext::in_place(file_path.clone());
         MetadataService::write_rating(&ctx, 3).unwrap();
-        pool.close().await;
+        pools.close().await;
         assert!(
-            refresh_asset_after_metadata_write(&pool, asset_id, &file_path, &ctx, false)
+            refresh_asset_after_metadata_write(&pools, asset_id, &file_path, &ctx, false)
                 .await
                 .is_err()
         );

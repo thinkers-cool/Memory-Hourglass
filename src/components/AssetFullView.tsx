@@ -2,7 +2,12 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useZoomableMedia } from "../hooks/useZoomableMedia";
-import { handleImageViewerZoomKey } from "../lib/imageViewerZoom";
+import {
+  handleImageViewerRotateKey,
+  handleImageViewerZoomKey,
+} from "../lib/imageViewerZoom";
+import { imageRotationStyle, resolveRotation } from "../lib/imageRotation";
+import { ImageViewerRotateControls } from "./shared/ImageViewerRotateControls";
 import { ImageViewerZoomControls } from "./shared/ImageViewerZoomControls";
 import { IconTooltip } from "./shared/Tooltip";
 import { ZoomableMedia } from "./shared/ZoomableMedia";
@@ -38,17 +43,28 @@ export function AssetFullView({
   card,
   index,
   total,
+  rotation,
   onClose,
   onNavigateRelative,
+  onRotateClockwise,
+  onRotateCounterClockwise,
 }: {
   card: AssetCard;
   index: number;
   total: number;
+  rotation?: number | null;
   onClose: () => void;
   onNavigateRelative: (delta: number) => void;
+  onRotateClockwise?: () => void;
+  onRotateCounterClockwise?: () => void;
 }) {
   const { t } = useTranslation(["library", "common"]);
   const zoom = useZoomableMedia();
+  const canRotate =
+    card.kind === "image" &&
+    onRotateClockwise !== undefined &&
+    onRotateCounterClockwise !== undefined;
+  const displayRotation = resolveRotation(rotation ?? card.rotation);
 
   const goPrev = useCallback(
     () => onNavigateRelative(-1),
@@ -58,11 +74,28 @@ export function AssetFullView({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (
+        canRotate &&
+        handleImageViewerRotateKey(event, {
+          rotateClockwise: onRotateClockwise!,
+          rotateCounterClockwise: onRotateCounterClockwise!,
+        })
+      ) {
+        return;
+      }
       handleImageViewerZoomKey(event, zoom);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [zoom, zoom.zoomIn, zoom.zoomOut, zoom.resetTransform]);
+  }, [
+    canRotate,
+    onRotateClockwise,
+    onRotateCounterClockwise,
+    zoom,
+    zoom.zoomIn,
+    zoom.zoomOut,
+    zoom.resetTransform,
+  ]);
 
   const mediaSrc = convertFileSrc(card.abs_path);
 
@@ -79,6 +112,12 @@ export function AssetFullView({
           </span>
         </div>
         <div className="navbar-end gap-1">
+          {canRotate ? (
+            <ImageViewerRotateControls
+              onRotateClockwise={onRotateClockwise!}
+              onRotateCounterClockwise={onRotateCounterClockwise!}
+            />
+          ) : null}
           <ImageViewerZoomControls
             zoom={zoom.scale}
             onZoomIn={zoom.zoomIn}
@@ -115,6 +154,7 @@ export function AssetFullView({
                 src={mediaSrc}
                 alt={card.file_name}
                 className="max-h-[calc(100vh-12rem)] max-w-full object-contain"
+                style={imageRotationStyle(displayRotation)}
                 draggable={false}
               />
             )}

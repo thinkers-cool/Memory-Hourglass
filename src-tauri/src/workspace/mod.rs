@@ -1,6 +1,7 @@
 mod registry;
 
 use crate::error::{AppError, Result};
+use crate::path_util::{canonicalize, os_file_name, path_to_string};
 use chrono::Utc;
 use registry::WorkspaceRegistry;
 use serde::{Deserialize, Serialize};
@@ -94,11 +95,12 @@ pub fn workspace_mounts_dir(app_data_dir: &Path, workspace_id: &str) -> PathBuf 
 }
 
 pub fn workspace_display_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .map(|name| name.to_string())
-        .unwrap_or_else(|| "workspace".to_string())
+    let name = os_file_name(path);
+    if name.is_empty() {
+        "workspace".to_string()
+    } else {
+        name
+    }
 }
 
 fn directory_is_empty(path: &Path) -> Result<bool> {
@@ -116,7 +118,7 @@ pub fn init_workspace_at(path: &Path, read_only: bool) -> Result<WorkspaceInfo> 
         )));
     }
 
-    let canonical = std::fs::canonicalize(path).map_err(|_| {
+    let canonical = canonicalize(path).map_err(|_| {
         AppError::Workspace(format!("workspace path not found: {}", path.display()))
     })?;
     if !canonical.is_dir() {
@@ -184,12 +186,12 @@ pub fn read_manifest(path: &Path) -> Result<WorkspaceManifest> {
 }
 
 pub fn workspace_info(path: &Path) -> Result<WorkspaceInfo> {
-    let canonical = std::fs::canonicalize(path).map_err(|_| {
+    let canonical = canonicalize(path).map_err(|_| {
         AppError::Workspace(format!("workspace path not found: {}", path.display()))
     })?;
     let manifest = read_manifest(&canonical)?;
     Ok(WorkspaceInfo {
-        path: canonical.to_string_lossy().to_string(),
+        path: path_to_string(&canonical),
         name: manifest.name,
         id: manifest.id,
         read_only: manifest.read_only,
@@ -254,7 +256,7 @@ impl WorkspaceService {
     }
 
     pub fn validate_open(&self, path: &Path) -> Result<WorkspaceInfo> {
-        let canonical = std::fs::canonicalize(path).map_err(|_| {
+        let canonical = canonicalize(path).map_err(|_| {
             AppError::Workspace(format!("workspace path not found: {}", path.display()))
         })?;
         if !canonical.is_dir() {
@@ -536,15 +538,15 @@ mod tests {
             "INSERT INTO source_root (path, kind, scan_policy, status) VALUES (?, 'local', 'manual', 'idle')",
         )
         .bind("/photos")
-        .execute(catalog.pool())
+        .execute(catalog.write_pool())
         .await
         .unwrap();
         sqlx::query("INSERT INTO album (name, sort_mode) VALUES ('Trip', 'date:desc')")
-            .execute(catalog.pool())
+            .execute(catalog.write_pool())
             .await
             .unwrap();
         sqlx::query("INSERT INTO tag (name) VALUES ('family')")
-            .execute(catalog.pool())
+            .execute(catalog.write_pool())
             .await
             .unwrap();
 
@@ -637,7 +639,7 @@ mod tests {
             "INSERT INTO source_root (path, kind, scan_policy, status) VALUES (?, 'local', 'manual', 'idle')",
         )
         .bind("/photos")
-        .execute(catalog.pool())
+        .execute(catalog.write_pool())
         .await
         .unwrap();
 
@@ -670,7 +672,7 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         init_workspace_at(&root, false).unwrap();
         let catalog = Catalog::open(&root.join(CATALOG_DB)).await.unwrap();
-        catalog.pool().close().await;
+        catalog.pools().close().await;
         std::fs::remove_file(root.join(CATALOG_DB)).unwrap();
         let counts = read_workspace_summary_counts(&root).await;
         assert_eq!(counts.album_count, 0);

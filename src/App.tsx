@@ -56,6 +56,7 @@ export function App() {
   return (
     <Suspense fallback={<AppLoadingSpinner />}>
       <LibraryApp
+        workspaceId={workspace.id}
         onCloseWorkspace={() => void closeWorkspace()}
         readOnly={workspace.read_only}
       />

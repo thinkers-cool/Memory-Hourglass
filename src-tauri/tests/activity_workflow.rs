@@ -18,32 +18,32 @@ async fn activity_log_records_metadata_and_undo_restores_rating() {
     std::fs::write(photos.join("rated.jpg"), jpeg).unwrap();
 
     let catalog = Catalog::open(&dir.path().join("catalog.db")).await.unwrap();
-    let pool = catalog.pool().clone();
+    let pools = catalog.pools().clone();
     let thumb_dir = dir.path().join("thumbs");
 
-    let library = LibraryService::new(pool.clone(), dir.path().to_path_buf());
+    let library = LibraryService::new(pools.clone(), dir.path().to_path_buf());
     let root = library
         .add_local_root(photos.to_str().unwrap())
         .await
         .unwrap();
-    ScanService::new(pool.clone(), thumb_dir.clone())
+    ScanService::new(pools.clone(), thumb_dir.clone())
         .scan_root(root.id, &ScanControl::noop())
         .await
         .unwrap();
 
-    let query = QueryService::new(pool.clone(), thumb_dir.clone());
+    let query = QueryService::new(pools.clone(), thumb_dir.clone());
     let listed = query
         .query(&AssetFilter::default(), "date:desc", 0, 10)
         .await
         .unwrap();
     let asset_id = listed.items.first().expect("asset").id;
-    let asset = AssetRepo::new(pool.clone())
+    let asset = AssetRepo::new(pools.clone())
         .get_asset(asset_id)
         .await
         .unwrap();
 
-    let before = AssetMetaPatch { rating: Some(3) };
-    let after = AssetMetaPatch { rating: Some(4) };
+    let before = AssetMetaPatch { rating: Some(3), ..Default::default() };
+    let after = AssetMetaPatch { rating: Some(4), ..Default::default() };
     query
         .apply_meta_patch(asset_id, before.clone())
         .await
@@ -53,7 +53,7 @@ async fn activity_log_records_metadata_and_undo_restores_rating() {
         .await
         .unwrap();
 
-    let recorder = ActivityRecorder::new(pool.clone());
+    let recorder = ActivityRecorder::new(pools.clone());
     let activity_id = record_metadata_changed(
         &recorder,
         Some("corr-rate"),
@@ -77,7 +77,7 @@ async fn activity_log_records_metadata_and_undo_restores_rating() {
     assert_eq!(entries[0].correlation_id.as_deref(), Some("corr-rate"));
 
     let undo_ctx = UndoContext {
-        pool: pool.clone(),
+        pools: pools.clone(),
         thumb_dir: thumb_dir.clone(),
         read_only: false,
         correlation_id: Some("corr-undo".into()),
@@ -85,7 +85,7 @@ async fn activity_log_records_metadata_and_undo_restores_rating() {
     let undo_id = undo_activity(&undo_ctx, activity_id).await.unwrap();
     assert!(undo_id > activity_id);
 
-    let meta = AssetMetaRepo::new(pool.clone())
+    let meta = AssetMetaRepo::new(pools.clone())
         .get(asset_id)
         .await
         .unwrap();

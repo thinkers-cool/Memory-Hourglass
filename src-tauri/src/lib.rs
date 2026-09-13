@@ -11,6 +11,7 @@ pub mod library;
 pub mod link;
 pub mod message;
 pub mod metadata;
+pub mod path_util;
 pub mod query;
 pub mod scan;
 pub mod smb;
@@ -30,7 +31,8 @@ use tauri::Manager;
 use tracing_appender::non_blocking::WorkerGuard;
 
 struct TraceGuard {
-    _guard: WorkerGuard,
+    #[allow(dead_code)]
+    guard: WorkerGuard,
 }
 
 pub fn bootstrap_app<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> crate::error::Result<()> {
@@ -40,7 +42,7 @@ pub fn bootstrap_app<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> crate::err
         .map_err(|error| crate::error::AppError::Library(error.to_string()))?;
     let log_dir = data_dir.join("logs");
     let guard = trace::init(&log_dir)?;
-    app.manage(TraceGuard { _guard: guard });
+    app.manage(TraceGuard { guard });
     let state = state::AppState::new(data_dir)?;
     app.manage(state);
     Ok(())
@@ -74,6 +76,8 @@ pub fn configure_builder<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri
             commands::scan::resume_scan,
             commands::scan::cancel_scan,
             commands::scan::get_scan_status,
+            commands::scan::list_scan_statuses,
+            commands::scan::resume_pending_scans,
             commands::asset::get_asset,
             commands::asset::update_asset_meta,
             commands::asset::batch_update_asset_meta,

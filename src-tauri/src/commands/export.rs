@@ -4,7 +4,7 @@ use crate::catalog::models::ExportOptions;
 use crate::commands::context::trace_command;
 use crate::error::Result;
 use crate::export::{ExportManifest, ExportService};
-use crate::jobs::JobQueue;
+use crate::jobs::JobPool;
 use crate::state::AppState;
 use serde::Serialize;
 use std::path::Path;
@@ -54,9 +54,9 @@ pub(crate) struct ExportJobParams<R: Runtime> {
     pub job_id: i64,
     pub app: AppHandle<R>,
     pub export: ExportService,
-    pub jobs: JobQueue,
+    pub jobs: JobPool,
     pub cancel: Arc<AtomicBool>,
-    pub activity_pool: sqlx::SqlitePool,
+    pub activity_pools: crate::catalog::pools::CatalogPools,
 }
 
 pub(crate) async fn run_export_job<R: Runtime>(params: ExportJobParams<R>) {
@@ -69,7 +69,7 @@ pub(crate) async fn run_export_job<R: Runtime>(params: ExportJobParams<R>) {
         export,
         jobs,
         cancel,
-        activity_pool,
+        activity_pools,
     } = params;
     let total = asset_ids.len() as u64;
 
@@ -110,7 +110,7 @@ pub(crate) async fn run_export_job<R: Runtime>(params: ExportJobParams<R>) {
         .await;
 
     if let Ok(manifest) = &result {
-        let recorder = ActivityRecorder::new(activity_pool.clone());
+        let recorder = ActivityRecorder::new(activity_pools.clone());
         let _ =
             record_export_completed(&recorder, None, job_id, asset_ids.len(), &destination).await;
         let (phase, message) = if manifest.failed.is_empty() {
@@ -156,7 +156,7 @@ pub(crate) async fn run_export_job<R: Runtime>(params: ExportJobParams<R>) {
         );
     }
 
-    jobs.finish().await;
+    jobs.finish_exclusive().await;
 }
 
 #[tauri::command]
@@ -168,15 +168,15 @@ pub async fn start_export<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AppState>,
 ) -> Result<i64> {
-    trace_command("start_export", |_correlation_id| async move {
-        let (export, jobs, cancel, activity_pool) = state
+    trace_command("start_export", || async move {
+        let (export, jobs, cancel, activity_pools) = state
             .with_active(|ws| async move {
-                ws.jobs.try_start("export").await?;
+                let cancel = ws.jobs.try_start_exclusive("export").await?;
                 Ok((
                     ws.export_service(),
                     ws.jobs.clone(),
-                    ws.jobs.cancel_flag(),
-                    ws.catalog.pool().clone(),
+                    cancel,
+                    ws.catalog.pools().clone(),
                 ))
             })
             .await?;
@@ -195,7 +195,7 @@ pub async fn start_export<R: Runtime>(
             export,
             jobs,
             cancel,
-            activity_pool,
+            activity_pools,
         }));
 
         Ok(job_id)
@@ -205,10 +205,10 @@ pub async fn start_export<R: Runtime>(
 
 #[tauri::command]
 pub async fn cancel_export(state: State<'_, AppState>) -> Result<()> {
-    trace_command("cancel_export", |_correlation_id| async move {
+    trace_command("cancel_export", || async move {
         state
             .with_active(|ws| async move {
-                ws.jobs.request_cancel();
+                ws.jobs.request_cancel_exclusive().await;
                 Ok(())
             })
             .await
@@ -218,7 +218,7 @@ pub async fn cancel_export(state: State<'_, AppState>) -> Result<()> {
 
 #[tauri::command]
 pub async fn get_export_status(state: State<'_, AppState>) -> Result<ExportStatus> {
-    trace_command("get_export_status", |_correlation_id| async move {
+    trace_command("get_export_status", || async move {
         state
             .with_active(|ws| async move {
                 let latest = ws.export_service().latest_job().await?;
@@ -242,7 +242,7 @@ pub async fn get_export_status(state: State<'_, AppState>) -> Result<ExportStatu
 
 #[tauri::command]
 pub async fn list_export_jobs(state: State<'_, AppState>) -> Result<Vec<ExportJobSummary>> {
-    trace_command("list_export_jobs", |_correlation_id| async move {
+    trace_command("list_export_jobs", || async move {
         state
             .with_active(|ws| async move {
                 let rows = ws.export_service().list_jobs().await?;
@@ -276,7 +276,7 @@ mod tests {
         state
             .with_active(|ws| async move {
                 let jobs = ws.jobs.clone();
-                jobs.try_start("export").await.unwrap();
+                let cancel = jobs.try_start_exclusive("export").await.unwrap();
                 run_export_job(ExportJobParams {
                     asset_ids: vec![999_999],
                     destination: dest.to_string_lossy().to_string(),
@@ -289,8 +289,8 @@ mod tests {
                     app: handle,
                     export: ws.export_service(),
                     jobs,
-                    cancel: ws.jobs.cancel_flag(),
-                    activity_pool: ws.catalog.pool().clone(),
+                    cancel,
+                    activity_pools: ws.catalog.pools().clone(),
                 })
                 .await;
                 Ok(())
@@ -309,7 +309,7 @@ mod tests {
         state
             .with_active(|ws| async move {
                 let jobs = ws.jobs.clone();
-                jobs.try_start("export").await.unwrap();
+                let cancel = jobs.try_start_exclusive("export").await.unwrap();
                 run_export_job(ExportJobParams {
                     asset_ids: vec![1],
                     destination: blocker.to_string_lossy().to_string(),
@@ -322,8 +322,8 @@ mod tests {
                     app: handle,
                     export: ws.export_service(),
                     jobs,
-                    cancel: ws.jobs.cancel_flag(),
-                    activity_pool: ws.catalog.pool().clone(),
+                    cancel,
+                    activity_pools: ws.catalog.pools().clone(),
                 })
                 .await;
                 Ok(())

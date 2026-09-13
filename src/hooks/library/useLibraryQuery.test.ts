@@ -11,6 +11,7 @@ vi.mock("../../api/client", () => ({
   onScanProgress: vi.fn(() => Promise.resolve(() => undefined)),
   onScanThumbs: vi.fn(() => Promise.resolve(() => undefined)),
   getAsset: vi.fn(),
+  resumePendingScans: vi.fn(() => Promise.resolve()),
 }));
 
 import * as api from "../../api/client";

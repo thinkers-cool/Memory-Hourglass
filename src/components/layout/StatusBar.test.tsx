@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { errorNotification, successNotification } from "../../lib/notification";
 import { StatusBar } from "./StatusBar";
 
@@ -40,26 +39,6 @@ describe("StatusBar", () => {
     expect(screen.getByText("disk full")).toBeInTheDocument();
   });
 
-  it("calls onDismissAlert when error dismiss is clicked", async () => {
-    const user = userEvent.setup();
-    const onDismissAlert = vi.fn();
-    render(
-      <StatusBar
-        total={0}
-        selectedCount={0}
-        scanStatus=""
-        roots={[]}
-        exportActive={false}
-        exportProgress={null}
-        notification={errorNotification("disk full")}
-        busy={false}
-        onDismissAlert={onDismissAlert}
-      />,
-    );
-    await user.click(screen.getByRole("button", { name: "Close" }));
-    expect(onDismissAlert).toHaveBeenCalledOnce();
-  });
-
   it("shows success styling for flash notifications", () => {
     render(
       <StatusBar
@@ -94,7 +73,7 @@ describe("StatusBar", () => {
     expect(document.querySelector(".loading-spinner")).toBeInTheDocument();
   });
 
-  it("omits dismiss button without onDismissAlert", () => {
+  it("does not show dismiss button for errors", () => {
     render(
       <StatusBar
         total={0}

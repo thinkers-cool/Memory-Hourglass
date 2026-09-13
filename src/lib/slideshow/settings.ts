@@ -1,5 +1,5 @@
 import type { SlideshowSettings } from "./types";
-import { coerceIntervalMs } from "./timing";
+import { coerceIntervalMs, coerceTheme } from "./timing";
 import { loadStoredJson } from "../storage";
 
 const STORAGE_KEY = "memhg.slideshow.settings";
@@ -21,7 +21,8 @@ function validateSlideshowSettings(value: unknown): SlideshowSettings | null {
     parsed.intervalMs !== undefined
       ? coerceIntervalMs(parsed.intervalMs)
       : DEFAULT_SLIDESHOW_SETTINGS.intervalMs;
-  return { ...DEFAULT_SLIDESHOW_SETTINGS, ...parsed, intervalMs };
+  const theme = coerceTheme(parsed.theme);
+  return { ...DEFAULT_SLIDESHOW_SETTINGS, ...parsed, intervalMs, theme };
 }
 
 export function loadSlideshowSettings(): SlideshowSettings {
