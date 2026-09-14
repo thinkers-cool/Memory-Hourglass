@@ -46,6 +46,11 @@
       "trash": "Trash"
     },
     "offline": "Offline",
+    "scanPhase": {
+      "scanning": "Scanning",
+      "cataloging": "Catalog",
+      "indexing": "Previews"
+    },
     "items_one": "{{count}} item",
     "items_other": "{{count}} items",
     "empty": {
@@ -113,8 +118,8 @@
     "selected_one": "{{count}} selected",
     "selected_other": "{{count}} selected",
     "scanning": "Scanning {{counts}}",
-    "cataloging": "Cataloging {{counts}}",
-    "generatingPreviews": "Generating previews {{counts}}",
+    "cataloging": "Catalog {{counts}}",
+    "generatingPreviews": "Previews {{counts}}",
     "exportProgress": "Export {{done}}/{{total}}",
     "exportFileProgress": "Export {{message}}: {{fileName}} {{done}}/{{total}}",
     "scanningRoot": "{{root}}: {{progress}}",

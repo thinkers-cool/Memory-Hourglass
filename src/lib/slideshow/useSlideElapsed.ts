@@ -6,7 +6,7 @@ export function useSlideElapsed(
   elapsedRef?: MutableRefObject<number>,
 ): number {
   const anchorRef = useRef({
-    startedAt: performance.now(),
+    startedAt: 0,
     pausedTotal: 0,
     pauseAt: 0,
   });

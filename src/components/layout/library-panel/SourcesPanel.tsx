@@ -25,6 +25,7 @@ import { ItemCountSubtitle } from "./ItemCountSubtitle";
 import { PanelListRow, PanelRowActionButton } from "./PanelListRow";
 import { SectionAddButton } from "./SectionAddButton";
 import { SectionHeaderActions } from "./SectionHeaderActions";
+import { resolveRootScanProgress } from "../../../lib/scanStatus";
 import { SourceRow } from "./SourceRow";
 import { TagAddRow } from "./TagAddRow";
 import { TagTreeList } from "./TagTreeList";
@@ -114,7 +115,7 @@ export function SourcesPanel({
             <SourceRow
               key={root.id}
               root={root}
-              scanStatus={scanStatusByRoot?.[root.id]}
+              scanProgress={resolveRootScanProgress(scanStatusByRoot?.[root.id])}
               active={isRootSourceActive(root.id, filterBar, extraFilter)}
               onSelect={() => actions.selectRoot(root.id)}
               onSync={() => actions.syncRoot(root.id)}

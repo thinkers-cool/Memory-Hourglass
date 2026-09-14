@@ -120,7 +120,7 @@ describe("resolveSystemStatus", () => {
         notification: null,
         busy: false,
       }),
-    ).toBe("Generating previews 4/10");
+    ).toBe("Previews 4/10");
   });
 
   it("shows source health summary", () => {
@@ -167,7 +167,7 @@ describe("resolveSystemStatus", () => {
         notification: null,
         busy: false,
       }),
-    ).toBe("photos: Generating previews 4/10");
+    ).toBe("photos: Previews 4/10");
   });
 
   it("prefers focused root when multiple scans are active", () => {
@@ -189,7 +189,7 @@ describe("resolveSystemStatus", () => {
         notification: null,
         busy: false,
       }),
-    ).toBe("archive: Cataloging 3/8");
+    ).toBe("archive: Catalog 3/8");
   });
 
   it("falls back to the raw path when the root label is empty", () => {
@@ -204,7 +204,7 @@ describe("resolveSystemStatus", () => {
         notification: null,
         busy: false,
       }),
-    ).toBe("/: Generating previews 1/2");
+    ).toBe("/: Previews 1/2");
   });
 
   it("uses the root id when the scanning root is unknown", () => {
@@ -219,7 +219,7 @@ describe("resolveSystemStatus", () => {
         notification: null,
         busy: false,
       }),
-    ).toBe("#99: Generating previews 1/2");
+    ).toBe("#99: Previews 1/2");
   });
 
   it("shows plural scan summary when multiple scans are active", () => {
@@ -440,7 +440,7 @@ describe("resolveProgressStatus", () => {
 
   it("formats scan statuses without count segments", () => {
     expect(formatScanStatus("cataloging:")).toContain("Catalog");
-    expect(formatScanStatus("indexing:")).toContain("Generating previews");
+    expect(formatScanStatus("indexing:")).toContain("Previews");
     expect(formatScanStatus("scanning:")).toContain("Scanning");
   });
 
@@ -475,7 +475,7 @@ describe("resolveStatusLine", () => {
       notification: errorNotification("disk full"),
       busy: false,
     });
-    expect(resolveStatusLine(display)).toContain("Generating previews");
+    expect(resolveStatusLine(display)).toContain("Previews");
   });
 
   it("falls back through alert, flash, and context", () => {

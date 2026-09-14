@@ -68,10 +68,9 @@ One workspace open at a time. Close sends `shutdown_tx` to stop watcher/poller.
 ## Database
 
 - Schema: `migrations/001_init.sql` (edit in place; no incremental migrations)
-- Applied via `sqlx::migrate!` in `catalog/mod.rs`
 - Location: `{workspace}/catalog.db` (WAL, FK enabled)
-- `CatalogPools`: read pool (5 connections, read-only) + write pool (1 connection); repos use read for `SELECT`, write for mutations
-- Detail: [DATA_MODEL.md](../docs/spec/DATA_MODEL.md)
+- `CatalogPools`: read pool (5) + write pool (1)
+- Tables, DTOs, enums: [DATA_MODEL.md](../docs/spec/DATA_MODEL.md)
 
 ## Services
 
@@ -88,23 +87,7 @@ One workspace open at a time. Close sends `shutdown_tx` to stop watcher/poller.
 
 ## Testing
 
-| Command | Use |
-|---------|-----|
-| `npm run test:rust` | Full Rust suite (`--test-threads=1`) |
-| `npm run test:rust:coverage` | Coverage gate (nightly, 100% regions) |
-
-| File | Role |
-|------|------|
-| `tests/e2e_workflow.rs` | Full service paths: scan, filters, purge, rebuild, RAW link, duplicates |
-| `tests/command_handlers/command_workflows.rs` | Focused command workflows: tag/undo, smart collection, purge, rebuild, export, rescan, remove root |
-| `tests/command_handlers/multi_asset.rs` | Multi-asset batch meta, album filter, partial restore |
-| `tests/library_features.rs` | Albums, SMB, duplicates, relink |
-| `tests/collection_workflow.rs` | Smart collection roundtrip |
-| `tests/workspace_workflow.rs` | Workspace isolation |
-| `tests/workspace_state_edges.rs` | Workspace/state error paths |
-| `tests/command_handlers/` | Tauri command integration tests |
-
-Unit tests in `#[cfg(test)]` modules. Helpers: `AppState::test_with_fresh_workspace()`, `test_support.rs`. Scan/SMB tests use `MEMHG_TEST_*` env vars — reset hooks between tests. Coverage policy: [CONVENTIONS.md](../docs/spec/CONVENTIONS.md).
+Integration tests: `src-tauri/tests/`. Unit tests in `#[cfg(test)]` modules. Policy and coverage: [CONVENTIONS.md](../docs/spec/CONVENTIONS.md#testing).
 
 ## Paths
 
@@ -117,11 +100,9 @@ Unit tests in `#[cfg(test)]` modules. Helpers: `AppState::test_with_fresh_worksp
 ## Patterns
 
 - Thin handlers — logic in services/repos.
-- `JobPool` — up to 2 parallel scan jobs; pending scan queue; exclusive slot for export/rebuild.
 - Batch constants: `SCAN_BATCH_SIZE=250`, `INDEX_CHUNK_SIZE=8`.
-- SMB creds via keyring (never in DB).
-- `purge_delete` requires `confirm_token == "DELETE"`.
-- Sort strings: `field:dir` parsed in `sort.rs`.
+- Cross-stack naming, security, testing: [CONVENTIONS.md](../docs/spec/CONVENTIONS.md).
+- Workflows (scan, export, SMB): [WORKFLOWS.md](../docs/spec/WORKFLOWS.md).
 
 ## Do Not
 

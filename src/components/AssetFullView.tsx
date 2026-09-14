@@ -1,6 +1,7 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { useFullViewDisplayCard } from "../hooks/useFullViewDisplayCard";
 import { useZoomableMedia } from "../hooks/useZoomableMedia";
 import {
   handleImageViewerRotateKey,
@@ -41,6 +42,7 @@ function NavZone({
 
 export function AssetFullView({
   card,
+  items,
   index,
   total,
   rotation,
@@ -50,6 +52,7 @@ export function AssetFullView({
   onRotateCounterClockwise,
 }: {
   card: AssetCard;
+  items: AssetCard[];
   index: number;
   total: number;
   rotation?: number | null;
@@ -60,11 +63,24 @@ export function AssetFullView({
 }) {
   const { t } = useTranslation(["library", "common"]);
   const zoom = useZoomableMedia();
+  const neighborCards = useMemo(() => {
+    const neighbors: AssetCard[] = [];
+    if (index > 0) {
+      neighbors.push(items[index - 1]);
+    }
+    if (index < items.length - 1) {
+      neighbors.push(items[index + 1]);
+    }
+    return neighbors;
+  }, [index, items]);
+  const displayCard = useFullViewDisplayCard(card, neighborCards);
   const canRotate =
-    card.kind === "image" &&
+    displayCard.kind === "image" &&
     onRotateClockwise !== undefined &&
     onRotateCounterClockwise !== undefined;
-  const displayRotation = resolveRotation(rotation ?? card.rotation);
+  const displayRotation = resolveRotation(
+    displayCard.id === card.id ? (rotation ?? displayCard.rotation) : displayCard.rotation,
+  );
 
   const goPrev = useCallback(
     () => onNavigateRelative(-1),
@@ -97,7 +113,7 @@ export function AssetFullView({
     zoom.resetTransform,
   ]);
 
-  const mediaSrc = convertFileSrc(card.abs_path);
+  const mediaSrc = convertFileSrc(displayCard.abs_path);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col app-canvas">
@@ -107,7 +123,7 @@ export function AssetFullView({
             {t("fullView.counter", {
               index: index + 1,
               total,
-              fileName: card.file_name,
+              fileName: displayCard.file_name,
             })}
           </span>
         </div>
@@ -139,22 +155,27 @@ export function AssetFullView({
         <div className="absolute inset-0 z-0">
           <ZoomableMedia
             className="relative flex h-full min-h-0 w-full flex-col"
-            resetKey={card.id}
+            resetKey={displayCard.id}
             transformRef={zoom.ref}
             onTransform={zoom.onTransform}
           >
-            {card.kind === "video" ? (
+            {displayCard.kind === "video" ? (
               <video
+                key={displayCard.id}
                 src={mediaSrc}
                 controls
                 className="max-h-[calc(100vh-12rem)] max-w-full object-contain"
               />
             ) : (
               <img
+                key={displayCard.id}
                 src={mediaSrc}
-                alt={card.file_name}
+                alt={displayCard.file_name}
                 className="max-h-[calc(100vh-12rem)] max-w-full object-contain"
-                style={imageRotationStyle(displayRotation)}
+                style={{
+                  ...imageRotationStyle(displayRotation),
+                  viewTransitionName: "none",
+                }}
                 draggable={false}
               />
             )}

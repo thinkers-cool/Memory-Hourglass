@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   TransformComponent,
   TransformWrapper,
@@ -22,16 +23,20 @@ export function ZoomableMedia({
   onTransform: ZoomableMediaOnTransform;
   children: React.ReactNode;
 }) {
+  useEffect(() => {
+    void transformRef.current?.resetTransform(0);
+  }, [resetKey, transformRef]);
+
   return (
     <div className={className}>
       <TransformWrapper
-        key={resetKey}
         ref={transformRef}
         minScale={IMAGE_VIEWER_ZOOM_MIN}
         maxScale={IMAGE_VIEWER_ZOOM_MAX}
         initialScale={1}
         centerOnInit
         centerZoomedOut
+        autoAlignment={{ disabled: true }}
         onTransform={onTransform}
       >
         <TransformComponent wrapperClass="!h-full !w-full" contentClass="!p-2">

@@ -1,9 +1,10 @@
 import { useTranslation } from "react-i18next";
 import type { RootStats } from "../../../types";
-import { formatScanStatus, isActiveScan } from "../../../lib/statusBar";
+import type { ScanProgress } from "../../../lib/scanStatus";
 import { Folder, FolderInput, Network, RefreshCw, Trash2 } from "lucide-react";
 import { ItemCountSubtitle } from "./ItemCountSubtitle";
 import { PanelListRow, PanelRowActionButton } from "./PanelListRow";
+import { SourceScanProgress } from "./SourceScanProgress";
 import { iconClass, rootDisplayName } from "./panelStyles";
 
 export function SourceRow({
@@ -13,11 +14,11 @@ export function SourceRow({
   onSync,
   onRelink,
   onRemove,
-  scanStatus,
+  scanProgress,
 }: {
   root: RootStats;
   active?: boolean;
-  scanStatus?: string;
+  scanProgress?: ScanProgress | null;
   onSelect: () => void;
   onSync: () => void;
   onRelink: () => void;
@@ -26,7 +27,7 @@ export function SourceRow({
   const { t } = useTranslation(["library", "common"]);
   const name = rootDisplayName(root.path);
   const offline = root.status === "offline";
-  const scanning = scanStatus !== undefined && isActiveScan(scanStatus);
+  const scanning = scanProgress != null;
   const isSmb = root.kind === "smb";
   const Icon = isSmb ? Network : Folder;
 
@@ -47,11 +48,7 @@ export function SourceRow({
               {t("panel.offline")}
             </span>
           ) : null}
-          {scanning ? (
-            <span className="font-medium opacity-70">
-              {formatScanStatus(scanStatus!)}
-            </span>
-          ) : null}
+          {scanning ? <SourceScanProgress progress={scanProgress!} /> : null}
           <ItemCountSubtitle count={root.asset_count} />
         </>
       }

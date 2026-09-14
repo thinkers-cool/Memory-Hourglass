@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -45,7 +46,7 @@ export function Tooltip({
     };
   }, []);
 
-  const applyLayout = () => {
+  const applyLayout = useCallback(() => {
     const anchor = anchorRef.current?.getBoundingClientRect();
     const tipEl = tipRef.current;
     if (!anchor || !tipEl) {
@@ -69,31 +70,27 @@ export function Tooltip({
       left: coords.left,
       visibility: "visible",
     });
-  };
+  }, [placement]);
 
   useLayoutEffect(() => {
     if (!open) {
       return;
     }
     applyLayout();
-  }, [open, placement, tip, multiline]);
+  }, [open, tip, multiline, applyLayout]);
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    const reposition = () => {
-      applyLayout();
-    };
-
-    window.addEventListener("scroll", reposition, true);
-    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", applyLayout, true);
+    window.addEventListener("resize", applyLayout);
     return () => {
-      window.removeEventListener("scroll", reposition, true);
-      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", applyLayout, true);
+      window.removeEventListener("resize", applyLayout);
     };
-  }, [open, placement, tip, multiline]);
+  }, [open, applyLayout]);
 
   if (!tip) {
     return <>{children}</>;

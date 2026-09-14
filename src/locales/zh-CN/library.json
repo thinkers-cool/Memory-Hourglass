@@ -46,6 +46,11 @@
       "trash": "废纸篓"
     },
     "offline": "离线",
+    "scanPhase": {
+      "scanning": "扫描",
+      "cataloging": "编目",
+      "indexing": "预览"
+    },
     "items_one": "{{count}} 项",
     "items_other": "{{count}} 项",
     "empty": {
@@ -112,9 +117,9 @@
     "working": "处理中",
     "selected_one": "已选择 {{count}} 项",
     "selected_other": "已选择 {{count}} 项",
-    "scanning": "正在扫描 {{counts}}",
-    "cataloging": "正在编目 {{counts}}",
-    "generatingPreviews": "正在生成预览 {{counts}}",
+    "scanning": "扫描 {{counts}}",
+    "cataloging": "编目 {{counts}}",
+    "generatingPreviews": "预览 {{counts}}",
     "exportProgress": "导出 {{done}}/{{total}}",
     "exportFileProgress": "导出 {{message}}：{{fileName}} {{done}}/{{total}}",
     "scanningRoot": "{{root}}：{{progress}}",

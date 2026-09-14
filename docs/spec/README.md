@@ -9,6 +9,6 @@ Architecture and domain reference for MemHG. Operational commands and agent boun
 | [WORKFLOWS.md](WORKFLOWS.md)       | Scan, index, watch, export, SMB, workspace |
 | [CONVENTIONS.md](CONVENTIONS.md)   | Naming, testing, styling, i18n, security   |
 
-Keep specs dry and factual. Use tables and pointers to source files; avoid duplicating stack guides in [src/AGENTS.md](../../src/AGENTS.md) and [src-tauri/AGENTS.md](../../src-tauri/AGENTS.md).
+**Granularity:** Each file covers one layer. `docs/spec/` = domain reference. `AGENTS.md` = commands and boundaries. `src/AGENTS.md` / `src-tauri/AGENTS.md` = layer structure and patterns. Use tables and file pointers; link instead of repeating.
 
-**Source of truth:** Code wins when spec is stale. Update the relevant spec file when changing architecture, schema, or workflows.
+**Source of truth:** Code wins when spec is stale. Update the matching spec when changing architecture, schema, or workflows (see [AGENTS.md](../../AGENTS.md#doc-maintenance)).

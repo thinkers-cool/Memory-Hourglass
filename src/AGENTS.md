@@ -65,23 +65,15 @@ Styling and i18n rules: [CONVENTIONS.md](../docs/spec/CONVENTIONS.md).
 
 ## Patterns
 
-- Pure logic in `lib/`; thin components and hooks.
-- UI strings via `useTranslation` (components) or `i18n.t` (`lib/`, action factories).
+- UI strings: `useTranslation` (components) or `i18n.t` (`lib/`, action factories).
 - `filterRef` in `useLibraryQuery` for stable async filter reads.
-- Dialog state: `*DialogOpen` boolean + close callback.
 - Virtualized grid via `@tanstack/react-virtual`.
 - Read-only workspaces: purge UI and handlers disabled end-to-end.
+- Cross-stack naming, styling, i18n, testing: [CONVENTIONS.md](../docs/spec/CONVENTIONS.md).
 
 ## Testing
 
-Co-located `*.test.ts(x)`. Setup: `src/test/setup.ts` (Tauri mock, happy-dom). Fixtures: `src/test/fixtures.ts`.
-
-| Command                 | Use                 |
-| ----------------------- | ------------------- |
-| `npm test`              | Full frontend suite |
-| `npm run test:coverage` | Coverage report     |
-
-Prefer targeted runs: `npx vitest run path/to/file.test.ts`. Coverage policy: [CONVENTIONS.md](../docs/spec/CONVENTIONS.md).
+Co-located `*.test.ts(x)`. Policy and coverage: [CONVENTIONS.md](../docs/spec/CONVENTIONS.md#testing).
 
 ## Do Not
 

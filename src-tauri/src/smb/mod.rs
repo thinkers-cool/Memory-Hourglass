@@ -150,6 +150,7 @@ pub fn mount_point(base: &Path, host: &str, share: &str, username: &str) -> Path
     base.join(safe)
 }
 
+#[cfg(windows)]
 fn local_test_mounts_enabled() -> bool {
     #[cfg(test)]
     {

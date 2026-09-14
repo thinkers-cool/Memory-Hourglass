@@ -1,7 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetThumbLoadQueueForTests } from "../lib/thumbLoad";
-import { resetGridCardClickState } from "../lib/gridCardClick";
+import {
+  GRID_CARD_DOUBLE_CLICK_WINDOW_MS,
+  resetGridCardClickState,
+} from "../lib/gridCardClick";
 import { sampleCard, sampleVideoCard } from "../test/fixtures";
 import { AssetGridCard } from "./AssetGridCard";
 
@@ -50,7 +53,8 @@ describe("AssetGridCard", () => {
     expect(onOpenFullView).toHaveBeenCalledTimes(1);
   });
 
-  it("selects on single click immediately", () => {
+  it("selects on single click after the double-click window", () => {
+    vi.useFakeTimers();
     const onSelect = vi.fn();
     render(
       <AssetGridCard
@@ -61,6 +65,8 @@ describe("AssetGridCard", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button"));
+    expect(onSelect).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(GRID_CARD_DOUBLE_CLICK_WINDOW_MS);
     expect(onSelect).toHaveBeenCalledWith(false, false);
   });
 

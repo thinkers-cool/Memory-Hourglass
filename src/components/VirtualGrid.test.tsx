@@ -1,7 +1,10 @@
 import { StrictMode } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resetGridCardClickState } from "../lib/gridCardClick";
+import {
+  GRID_CARD_DOUBLE_CLICK_WINDOW_MS,
+  resetGridCardClickState,
+} from "../lib/gridCardClick";
 import { sampleCard } from "../test/fixtures";
 import { EMPTY_STAMP_CONFIG } from "../lib/stamp";
 import { VirtualGrid } from "./VirtualGrid";
@@ -28,6 +31,7 @@ describe("VirtualGrid", () => {
   afterEach(() => {
     resetGridCardClickState();
     scrollToIndex.mockClear();
+    vi.useRealTimers();
   });
 
   function renderGrid(
@@ -54,8 +58,11 @@ describe("VirtualGrid", () => {
   }
 
   it("renders grid cards and handles selection", () => {
+    vi.useFakeTimers();
     const { onSelect } = renderGrid();
     fireEvent.click(screen.getByRole("button"));
+    expect(onSelect).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(GRID_CARD_DOUBLE_CLICK_WINDOW_MS);
     expect(onSelect).toHaveBeenCalledWith(sampleCard, false, false);
   });
 

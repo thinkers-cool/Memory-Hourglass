@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api/client";
 import {
+  GRID_CARD_DOUBLE_CLICK_WINDOW_MS,
   handleGridCardClick,
   resetGridCardClickState,
 } from "../lib/gridCardClick";
@@ -732,20 +733,24 @@ describe("LibraryApp", () => {
   });
 
   it("selects grid asset and opens full view", () => {
+    vi.useFakeTimers();
     const library = createMockLibrary();
     useLibraryMock.mockReturnValue(library);
     render(<LibraryApp workspaceId="ws-test" onCloseWorkspace={vi.fn()} />);
     const gridButton = screen.getByRole("button", { name: "card" });
     fireEvent.click(gridButton);
+    vi.advanceTimersByTime(GRID_CARD_DOUBLE_CLICK_WINDOW_MS);
     expect(library.actions.selectAsset).toHaveBeenCalledWith(
       gridSampleCard,
       false,
       false,
     );
     fireEvent.click(gridButton);
+    fireEvent.click(gridButton);
     expect(library.actions.openFullViewFor).toHaveBeenCalledWith(
       gridSampleCard,
     );
+    vi.useRealTimers();
   });
 
   it("closes full view and navigates relative", async () => {

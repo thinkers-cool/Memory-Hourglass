@@ -7,6 +7,7 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.{ts,tsx}"],
     environment: "happy-dom",
+    execArgv: ["--no-experimental-webstorage"],
     setupFiles: ["src/test/setup.ts"],
     pool: "forks",
     maxWorkers: os.availableParallelism(),

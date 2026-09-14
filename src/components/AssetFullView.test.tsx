@@ -12,6 +12,7 @@ describe("AssetFullView", () => {
     render(
       <AssetFullView
         card={sampleCard}
+        items={[sampleCard]}
         index={0}
         total={3}
         onClose={onClose}
@@ -29,6 +30,7 @@ describe("AssetFullView", () => {
     render(
       <AssetFullView
         card={sampleCard}
+        items={[sampleCard, sampleCard, sampleCard]}
         index={1}
         total={3}
         onClose={vi.fn()}
@@ -45,6 +47,7 @@ describe("AssetFullView", () => {
     render(
       <AssetFullView
         card={sampleCard}
+        items={[sampleCard]}
         index={0}
         total={3}
         onClose={vi.fn()}
@@ -60,6 +63,7 @@ describe("AssetFullView", () => {
     render(
       <AssetFullView
         card={sampleVideoCard}
+        items={[sampleVideoCard]}
         index={0}
         total={1}
         onClose={vi.fn()}
@@ -73,6 +77,7 @@ describe("AssetFullView", () => {
     render(
       <AssetFullView
         card={sampleCard}
+        items={[sampleCard]}
         index={0}
         total={1}
         onClose={vi.fn()}
@@ -89,6 +94,7 @@ describe("AssetFullView", () => {
     render(
       <AssetFullView
         card={sampleCard}
+        items={[sampleCard]}
         index={0}
         total={1}
         onClose={vi.fn()}
@@ -116,6 +122,7 @@ describe("AssetFullView", () => {
     render(
       <AssetFullView
         card={sampleCard}
+        items={[sampleCard]}
         index={0}
         total={1}
         onClose={vi.fn()}
@@ -141,6 +148,7 @@ describe("AssetFullView", () => {
     render(
       <AssetFullView
         card={sampleCard}
+        items={[sampleCard]}
         index={0}
         total={1}
         onClose={vi.fn()}

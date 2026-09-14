@@ -117,7 +117,6 @@ export function LibraryApp({
     startExportFromDialog,
     confirmDialog,
     closeConfirmDialog,
-    dismissToast,
     undoActivity,
     stampConfig,
     stampArmed,
@@ -254,6 +253,7 @@ export function LibraryApp({
         main={
           <AssetFullView
             card={fullViewCard}
+            items={items}
             index={fullViewIndex}
             total={items.length}
             rotation={detail?.meta?.rotation}

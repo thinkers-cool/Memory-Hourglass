@@ -8,7 +8,7 @@ Local-first photo and video library for desktop. Organize media from local folde
 
 ## Features
 
-- Multiple workspaces (separate libraries per project)
+- Multiple workspaces
 - Local folders and SMB network shares as sources
 - Background scan and filesystem watch
 - EXIF metadata, thumbnails, RAW/JPEG pairing, duplicate detection
@@ -40,34 +40,25 @@ npm run tauri dev
 
 Frontend-only: `npm run dev`. Production build: `npm run tauri build`.
 
-## Scripts
-
-| Command               | Description               |
-| --------------------- | ------------------------- |
-| `npm run tauri dev`   | Desktop app (development) |
-| `npm run dev`         | Vite dev server only      |
-| `npm run tauri build` | Production desktop build  |
-| `npm test`            | Frontend tests            |
-| `npm run test:rust`   | Rust tests                |
-| `npm run test:all`    | Full test suite           |
-
 ## Project Layout
 
-```
-src/              React UI, hooks, lib utilities
-src-tauri/        Rust backend, Tauri commands, migrations
-docs/spec/        Architecture and domain reference
-AGENTS.md         Agent guide (commands, boundaries)
-```
+| Path         | Role                          |
+| ------------ | ----------------------------- |
+| `src/`       | React UI, hooks, lib          |
+| `src-tauri/` | Rust backend, Tauri commands  |
+| `docs/spec/` | Architecture and domain specs |
+| `AGENTS.md`  | Commands, boundaries, doc map |
 
 ## Documentation
 
-| Doc                                        | Audience                                         |
+| Doc                                        | Scope                                            |
 | ------------------------------------------ | ------------------------------------------------ |
 | [docs/spec/](docs/spec/README.md)          | Architecture, data model, workflows, conventions |
-| [AGENTS.md](AGENTS.md)                     | Build commands and doc maintenance               |
-| [src/AGENTS.md](src/AGENTS.md)             | Frontend patterns                                |
-| [src-tauri/AGENTS.md](src-tauri/AGENTS.md) | Backend patterns                                 |
+| [AGENTS.md](AGENTS.md)                     | Commands, boundaries, doc maintenance            |
+| [src/AGENTS.md](src/AGENTS.md)             | Frontend structure and patterns                  |
+| [src-tauri/AGENTS.md](src-tauri/AGENTS.md) | Backend structure and patterns                   |
+
+Commands and tests: [AGENTS.md](AGENTS.md#commands).
 
 ## License
 

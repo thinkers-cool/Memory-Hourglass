@@ -40,18 +40,9 @@ No client-side router. `useWorkspace` drives phase:
 
 Bootstrap calls `try_open_last_workspace`. On success, skips `StartPage`.
 
-## Frontend State
+## State
 
-No global store. `useWorkspace` (phase, workspace), `useLibrary` (facade), `createLibraryActions` (mutations). Detail: [src/AGENTS.md](../../src/AGENTS.md).
-
-## Backend State
-
-`AppState` (`src-tauri/src/state.rs`):
-
-- `workspaces` — app-data registry
-- `active: Option<Arc<ActiveWorkspace>>` — one open workspace at a time
-
-`ActiveWorkspace` holds catalog, library, jobs, scan status, watcher shutdown channel. Commands use `AppState::with_active`. Detail: [src-tauri/AGENTS.md](../../src-tauri/AGENTS.md).
+Phase and library state: [src/AGENTS.md](../../src/AGENTS.md). `AppState` / `ActiveWorkspace`: [src-tauri/AGENTS.md](../../src-tauri/AGENTS.md).
 
 ## IPC
 
@@ -94,7 +85,7 @@ All three share `correlation_id` per command.
 | `metadata`   | `src/metadata/`   | EXIF/XMP                                         |
 | `link`       | `src/link/`       | RAW↔JPEG, duplicates                             |
 | `thumb`      | `src/thumb/`      | Thumbnail generation                             |
-| `jobs`       | `src/jobs/`       | Single-job mutex                                 |
+| `jobs`       | `src/jobs/`       | Job pool (2 scan slots; exclusive export/rebuild) |
 | `activity`   | `src/activity/`   | Activity log, undo/revert                        |
 | `trace`      | `src/trace/`      | Correlation IDs, rotating logs                   |
 | `message`    | `src/message/`    | `message://notify` envelopes                     |

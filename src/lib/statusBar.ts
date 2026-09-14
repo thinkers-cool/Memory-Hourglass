@@ -4,6 +4,17 @@ import i18n from "../i18n";
 import type { ExportProgressState } from "./jobProgress";
 import { isJobFinished } from "./jobProgress";
 import { isErrorNotification, notificationText } from "./notification";
+import {
+  parseScanProgress,
+  scanProgressCounts,
+  type ScanProgressPhase,
+} from "./scanStatus";
+
+const STATUS_BAR_PHASE_KEY: Record<ScanProgressPhase, string> = {
+  scanning: "scanning",
+  cataloging: "cataloging",
+  indexing: "generatingPreviews",
+};
 
 export type ExportProgress = ExportProgressState;
 
@@ -72,25 +83,12 @@ export function isActiveScan(scanStatus: string): boolean {
 }
 
 export function formatScanStatus(scanStatus: string): string {
-  if (scanStatus.startsWith("cataloging:")) {
-    const [, counts] = scanStatus.split(": ");
-    return i18n
-      .t("library:statusBar.cataloging", { counts: counts ?? "" })
-      .trim();
-  }
-  if (scanStatus.startsWith("indexing:")) {
-    const [, counts] = scanStatus.split(": ");
-    return i18n
-      .t("library:statusBar.generatingPreviews", { counts: counts ?? "" })
-      .trim();
-  }
-  if (scanStatus.startsWith("scanning:")) {
-    const [, counts] = scanStatus.split(": ");
-    return i18n
-      .t("library:statusBar.scanning", { counts: counts ?? "" })
-      .trim();
-  }
-  return scanStatus;
+  const progress = parseScanProgress(scanStatus);
+  if (!progress) return scanStatus;
+  const counts = scanProgressCounts(progress);
+  return i18n
+    .t(`library:statusBar.${STATUS_BAR_PHASE_KEY[progress.phase]}`, { counts })
+    .trim();
 }
 
 export function isProgressActive({

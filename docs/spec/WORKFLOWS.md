@@ -1,5 +1,7 @@
 # Workflows
 
+Each section: behavior summary, then source files.
+
 ## Workspace
 
 1. **Create:** User picks folder → `create_workspace` → writes `workspace.json`, opens DB, registers in `workspaces.json`.
@@ -15,13 +17,13 @@ Files: `src-tauri/src/workspace/`, `src/hooks/useWorkspace.ts`.
 
 **SMB:** `add_smb_source(SmbSourceInput)` — pre-mounted path or `Connect` with keyring credentials (`com.memhg.app`, key `smb:{host}:{share}:{user}`).
 
-Mount dirs: `{app_data}/mounts/{ws-id}/_browse/` (browse), `_shares/` (library). Platforms: macOS (`mount_smbfs`), Linux (`mount -t cifs`), Windows (`net use`). Read-only workspaces mount SMB shares read-only on macOS (`-o ro`) and Linux (`ro` mount option); read-write workspaces mount without that restriction.
+Mount dirs: `{app_data}/mounts/{ws-id}/_browse/` (browse), `_shares/` (library). Platforms: macOS (`mount_smbfs`), Linux (`mount -t cifs`), Windows (`net use`). Read-only workspaces mount SMB read-only on macOS (`-o ro`) and Linux (`ro`).
 
 Files: `src-tauri/src/library/`, `src-tauri/src/smb/`, `src/components/layout/SmbConnectDialog.tsx`.
 
 ## Remove Source Root
 
-`remove_root(id)` cancels any running scan for that root, drops it from the pending scan queue, clears scan status, waits for the job slot to release, then deletes the `source_root` row (assets cascade). Notifies `roots_refresh` so the watcher rebuilds without the removed root.
+`remove_root(id)` cancels scan for that root, drops it from the pending queue, clears scan status, waits for the job slot, deletes `source_root` (assets cascade). Notifies `roots_refresh`.
 
 Files: `src-tauri/src/commands/library.rs`, `src-tauri/src/jobs/mod.rs`, `src-tauri/src/state.rs`.
 
@@ -33,17 +35,23 @@ Triggered by `start_scan(root_id)` or background watcher.
 Discovery (WalkDir)
   → Inventory upsert (batch 250)
   → Mark missing paths
-  → Index queue (chunks of 8; pipelined index + DB commit; one file read → hash + EXIF + embedded-thumb WebP; ExifTool reused per thread)
+  → Index queue (chunks of 8)
   → Link pass (RAW↔JPEG, duplicates)
 ```
 
-Sync states: `new`, `modified`, `ok`. Indexing: single read per file → SHA-256, one ExifTool pass (metadata + embedded `ThumbnailImage`/`PreviewImage`), WebP thumb from embedded JPEG when present (full decode fallback), → `asset_meta`, `asset_raw_tag`, `thumb_key`, `content_hash` (one write transaction per index chunk; next chunk indexes while prior chunk commits). `IoProfile::Network` (UNC, SMB, or mapped network drive) caps index parallelism at 2 threads. Progress: `scan://progress` (includes `root_id`); per-chunk thumb paths: `scan://thumbs`. Up to 2 scan jobs run in parallel (`JobPool`); additional roots queue until a slot frees. `resume_pending_scans` on library load rescans roots with `last_scan_at IS NULL` or incomplete indexing. Frontend maps progress per root in the source panel. Controls: `cancel_scan(root_id?)`, `get_scan_status(root_id?)`, `list_scan_statuses`; `pause_scan`, `resume_scan` (backend IPC, no UI yet). Export/rebuild use an exclusive job slot (blocks while scans run).
+**Indexing:** One read per file → SHA-256, EXIF, embedded-thumb WebP (full decode fallback). One write transaction per chunk. `IoProfile::Network` caps index parallelism at 2 threads.
 
-**Scan logging:** Rotating log at `{app_data}/logs/memhg.log` (default `memhg=debug`). Scan phases emit `info` lines: `scan job start/complete`, `scan discovery complete`, `scan catalog complete`, `scan index start/chunk/complete`, `index batch on disk`. Per-file breakdown (`read_ms`, `hash_ms`, `exif_ms`, `thumb_ms`, `used_exif_thumb`) at `debug`. Override with `RUST_LOG` (e.g. `memhg=info` to reduce noise).
+**Sync states:** `new`, `modified`, `ok`.
 
-**Catalog DB pools:** `CatalogPools` opens a read pool (5 connections, read-only) and a write pool (1 connection). Repos and services use the read pool for `SELECT` queries and the write pool for mutations. Activity logging and index-batch applies always go through the write pool.
+**Progress:** `scan://progress` (includes `root_id`); `scan://thumbs` per chunk. Frontend: per-root status in source panel (`scanStatus.ts` → `SourceScanProgress`); aggregate line in status bar (`statusBar.ts`).
 
-Files: `src-tauri/src/scan/`, `src-tauri/src/commands/scan.rs`.
+**Concurrency:** `JobPool` — up to 2 parallel scans; additional roots queue. Export/rebuild use an exclusive slot. `resume_pending_scans` on library load for roots with incomplete indexing.
+
+**Controls:** `cancel_scan(root_id?)`, `get_scan_status(root_id?)`, `list_scan_statuses`; `pause_scan`, `resume_scan` (backend only, no UI).
+
+**Logging:** `{app_data}/logs/memhg.log` (default `memhg=debug`). Override with `RUST_LOG`.
+
+Files: `src-tauri/src/scan/`, `src-tauri/src/commands/scan.rs`, `src/lib/scanStatus.ts`, `src/lib/statusBar.ts`.
 
 ## Filesystem Watch
 
@@ -57,13 +65,13 @@ Files: `src-tauri/src/watcher/mod.rs`.
 
 ## Asset Query
 
-`query_assets(filter, sort, offset, limit)` + `count_assets(filter)`. Filter: roots, tags, dates, rating, text, deleted, album/collection. Sort: `field:dir` in `sort.rs`. Frontend: `libraryFilters.ts`, `useLibraryQuery.ts`.
+`query_assets(filter, sort, offset, limit)` + `count_assets(filter)`. Filter: roots, tags, dates, rating, text, deleted, album/collection. Sort: `field:dir` in `sort.rs`.
 
-Files: `src-tauri/src/query/`.
+Files: `src-tauri/src/query/`, `src/lib/libraryFilters.ts`, `src/hooks/library/useLibraryQuery.ts`.
 
 ## Metadata Edit
 
-`update_asset_meta(id, patch)` or `batch_update_asset_meta(ids, patch)` patch rating only. Tags use `batch_append_tags` / `batch_remove_tags`.
+`update_asset_meta(id, patch)` or `batch_update_asset_meta(ids, patch)` patch rating only. Tags: `batch_append_tags` / `batch_remove_tags`.
 
 Files: `src-tauri/src/commands/asset.rs`, `src-tauri/src/metadata/`, `src/hooks/library/createLibraryActions.ts`.
 
@@ -71,11 +79,13 @@ Files: `src-tauri/src/commands/asset.rs`, `src-tauri/src/metadata/`, `src/hooks/
 
 1. `soft_delete_assets(ids)` — sets `deleted_at`.
 2. `restore_assets(ids)` — clears `deleted_at`.
-3. `purge_delete(ids, confirm_token)` — requires `"DELETE"`, removes files and DB rows. Blocked in read-only workspaces (UI hidden).
+3. `purge_delete(ids, confirm_token)` — requires `"DELETE"`, removes files and DB rows. Blocked in read-only workspaces.
+
+Files: `src-tauri/src/commands/asset.rs`.
 
 ## Export
 
-`start_export(asset_ids, destination, options?, job_id)`: parallel copy or convert (jpeg/webp/png). Options: `flat`, `rename_template`, `format`. Single job via `JobQueue`. Progress: `job://progress`. Manifest in `export_job`.
+`start_export(asset_ids, destination, options?, job_id)`: parallel copy or convert (jpeg/webp/png). Options: `flat`, `rename_template`, `format`. Exclusive job slot. Progress: `job://progress`. Manifest in `export_job`.
 
 Files: `src-tauri/src/export/`, `src/components/layout/ExportDialog.tsx`, `src/hooks/library/useLibraryExport.ts`.
 
@@ -102,3 +112,9 @@ Files: `src-tauri/src/message/`, `src/hooks/useMessageSystem.ts`, `src/lib/statu
 `preview_relink(id, new_path)` → `relink_root(id, new_path)`. Updates `source_root.path`; preserves assets by relative path.
 
 Files: `src-tauri/src/library/`, `src-tauri/src/commands/library.rs`.
+
+## Grid Interaction
+
+Single click selects (deferred 400ms to allow double-click). Double click opens full view. Re-clicking sole selection deselects after the defer window.
+
+Files: `src/lib/gridCardClick.ts`, `src/components/AssetGridCard.tsx`.

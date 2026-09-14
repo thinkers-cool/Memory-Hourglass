@@ -34,13 +34,14 @@
 - Errors: `crate::error::Result<T>` → `{ code, message }` JSON.
 - Serde: `rename_all = "snake_case"` on enums exposed to frontend.
 - Single job mutex via `JobQueue`.
-- Batch sizes: scan upsert 250, index 32.
+- Batch sizes: scan upsert 250, index chunk 8.
 
 ## Testing
 
 ### Frontend (Vitest)
 
 - Config: `vitest.config.ts`; setup: `src/test/setup.ts`.
+- Node 25+: `execArgv: ["--no-experimental-webstorage"]` (happy-dom compatibility).
 - Global Tauri mock; fixtures: `src/test/fixtures.ts`.
 - Default: `npm test`. Full stack: `npm run test:all`.
 

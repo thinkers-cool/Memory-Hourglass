@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { emptyFilterBar, mockLibraryActions } from "../../../test/fixtures";
 import type { RootStats } from "../../../types";
 import { SourcesPanel } from "./SourcesPanel";
@@ -51,6 +51,8 @@ describe("SourcesPanel", () => {
     );
 
     expect(screen.getByText("A")).toBeInTheDocument();
+    expect(screen.getByText("Previews")).toBeInTheDocument();
+    expect(screen.getByText("1/2")).toBeInTheDocument();
     expect(screen.getByText("B")).toBeInTheDocument();
     expect(screen.getByText("Offline")).toBeInTheDocument();
 
